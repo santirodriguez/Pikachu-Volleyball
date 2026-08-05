@@ -31,6 +31,8 @@ function normalizeKeyCodes(value) {
 
 function getPowerHitKeyCodes(powerHit) {
   const keyCodes = normalizeKeyCodes(powerHit);
+  if (Array.isArray(powerHit)) return keyCodes;
+
   for (const [primaryKey, alternateKey] of Object.entries(
     DEFAULT_POWER_HIT_ALTERNATES
   )) {
