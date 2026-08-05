@@ -16,6 +16,38 @@ const CONTROL_ACTIONS_EN = Object.freeze({
   'p2.powerAlternate': 'Power Hit · alternate',
 });
 
+const CONTROL_ACTIONS_KO = Object.freeze({
+  'p1.left': '왼쪽 이동',
+  'p1.right': '오른쪽 이동',
+  'p1.up': '점프',
+  'p1.down': '아래 이동',
+  'p1.downRight': '오른쪽 아래 단축키',
+  'p1.powerPrimary': '파워 히트 · 기본',
+  'p1.powerAlternate': '파워 히트 · 보조',
+  'p2.left': '왼쪽 이동',
+  'p2.right': '오른쪽 이동',
+  'p2.up': '점프',
+  'p2.down': '아래 이동',
+  'p2.powerPrimary': '파워 히트 · 기본',
+  'p2.powerAlternate': '파워 히트 · 보조',
+});
+
+const CONTROL_ACTIONS_ZH = Object.freeze({
+  'p1.left': '向左移动',
+  'p1.right': '向右移动',
+  'p1.up': '跳跃',
+  'p1.down': '向下移动',
+  'p1.downRight': '右下快捷键',
+  'p1.powerPrimary': '强力击球 · 主键',
+  'p1.powerAlternate': '强力击球 · 备用键',
+  'p2.left': '向左移动',
+  'p2.right': '向右移动',
+  'p2.up': '跳跃',
+  'p2.down': '向下移动',
+  'p2.powerPrimary': '强力击球 · 主键',
+  'p2.powerAlternate': '强力击球 · 备用键',
+});
+
 const CONTROL_EDITOR = Object.freeze({
   en: {
     actions: CONTROL_ACTIONS_EN,
@@ -56,13 +88,14 @@ const CONTROL_EDITOR = Object.freeze({
     captureBody: 'Elegí una tecla para {action}. Escape cancela.',
     proposedTitle: 'Confirmar control',
     proposedBody: '¿Usar {key} para {action}?',
-    reserved: 'Esa tecla está reservada para pausa, volver o reiniciar la pelota.',
+    reserved:
+      'Esa tecla está reservada para pausa, volver o reiniciar la pelota.',
     conflict: 'Esa tecla ya está asignada a {action}.',
     saved: 'Control actualizado.',
     resetDone: 'Controles predeterminados restaurados.',
   },
   ko: {
-    actions: CONTROL_ACTIONS_EN,
+    actions: CONTROL_ACTIONS_KO,
     change: '키 변경',
     resetPlayer1: '플레이어 1 초기화',
     resetPlayer2: '플레이어 2 초기화',
@@ -77,7 +110,7 @@ const CONTROL_EDITOR = Object.freeze({
     resetDone: '기본 조작을 복원했습니다.',
   },
   zh: {
-    actions: CONTROL_ACTIONS_EN,
+    actions: CONTROL_ACTIONS_ZH,
     change: '更改',
     resetPlayer1: '重置玩家 1',
     resetPlayer2: '重置玩家 2',
@@ -93,14 +126,14 @@ const CONTROL_EDITOR = Object.freeze({
   },
   ca: {
     actions: {
-      'p1.left': "Moure's a l'esquerra",
+      'p1.left': 'Moure’s a l’esquerra',
       'p1.right': 'Moure’s a la dreta',
       'p1.up': 'Saltar',
       'p1.down': 'Baixar',
       'p1.downRight': 'Drecera avall-dreta',
       'p1.powerPrimary': 'Cop potent · principal',
       'p1.powerAlternate': 'Cop potent · alternatiu',
-      'p2.left': "Moure's a l'esquerra",
+      'p2.left': 'Moure’s a l’esquerra',
       'p2.right': 'Moure’s a la dreta',
       'p2.up': 'Saltar',
       'p2.down': 'Baixar',
@@ -115,7 +148,8 @@ const CONTROL_EDITOR = Object.freeze({
     captureBody: 'Tria una tecla per a {action}. Escape cancel·la.',
     proposedTitle: 'Confirma el control',
     proposedBody: 'Vols usar {key} per a {action}?',
-    reserved: 'Aquesta tecla està reservada per a pausa, tornar o reiniciar la pilota.',
+    reserved:
+      'Aquesta tecla està reservada per a pausa, tornar o reiniciar la pilota.',
     conflict: 'Aquesta tecla ja està assignada a {action}.',
     saved: 'Control actualitzat.',
     resetDone: 'Controls predeterminats restaurats.',
@@ -161,7 +195,8 @@ const CATALAN = Object.freeze({
   controls: {
     kicker: 'ENTRADA',
     title: 'Controls',
-    body: 'Selecciona una acció i prem la tecla que vulguis. Els valors predeterminats continuen sent una bona idea.',
+    body:
+      'Selecciona una acció i prem la tecla que vulguis. Els valors predeterminats continuen sent una bona idea.',
     player1: 'JUGADOR 1',
     player2: 'JUGADOR 2',
     move: 'Moure',
@@ -173,7 +208,8 @@ const CATALAN = Object.freeze({
   audio: {
     kicker: 'PRESENTACIÓ',
     title: 'Àudio i gràfics',
-    body: 'El caràcter original, amb menys motius per obrir menús del sistema operatiu.',
+    body:
+      'El caràcter original, amb menys motius per obrir menús del sistema operatiu.',
     graphics: 'Gràfics',
     bgm: 'Música',
     sfx: 'Efectes',
@@ -183,14 +219,18 @@ const CATALAN = Object.freeze({
     title: 'Idioma',
     body: 'Tria amb el ratolí o prem Seleccionar i usa les fletxes.',
     current: 'Idioma actual',
-    restartWarning: 'Canviar l’idioma recarrega l’aplicació i reinicia el partit actual.',
+    restartWarning:
+      'Canviar l’idioma recarrega l’aplicació i reinicia el partit actual.',
   },
   about: {
     kicker: 'VERSIÓ 2.0',
     title: 'Una quantitat perfectament raonable d’enginyeria',
-    body: 'Pikachu Volleyball no tenia una edició d’escriptori Linux com calia, així que Santiago Rodríguez li va donar un AppImage, una interfície moderna i —perquè la moderació és opcional— un full de ruta 2.0.',
-    original: '<strong>Pikachu Volleyball (1997)</strong> — SACHI SOFT / SAWAYAKAN Programmers i Satoshi Takenouchi. Gràcies per crear el clàssic meravellosament innecessari que ho va començar tot.',
-    reverse: '<a href="https://github.com/gorisanson/pikachu-volleyball" target="_blank" rel="noopener"><strong>Reimplementació JavaScript mitjançant enginyeria inversa</strong></a> — Kyutae Lee. Gràcies per la feina minuciosa que ha fet possible aquesta edició per a Linux.',
+    body:
+      'Pikachu Volleyball no tenia una edició d’escriptori Linux com calia, així que Santiago Rodríguez li va donar un AppImage, una interfície moderna i —perquè la moderació és opcional— un full de ruta 2.0.',
+    original:
+      '<strong>Pikachu Volleyball (1997)</strong> — SACHI SOFT / SAWAYAKAN Programmers i Satoshi Takenouchi. Gràcies per crear el clàssic meravellosament innecessari que ho va començar tot.',
+    reverse:
+      '<a href="https://github.com/gorisanson/pikachu-volleyball" target="_blank" rel="noopener"><strong>Reimplementació JavaScript mitjançant enginyeria inversa</strong></a> — Kyutae Lee. Gràcies per la feina minuciosa que ha fet possible aquesta edició per a Linux.',
     fork: 'Implementació Linux/AppImage i direcció de 2.0: Santiago Rodríguez.',
     website: 'Visita santiagorodriguez.com',
     source: 'Veure el codi a GitHub',
@@ -222,15 +262,17 @@ const CATALAN = Object.freeze({
     changed: 'Configuració aplicada.',
     defaults: 'Valors predeterminats restaurats.',
     currentLanguage: 'Aquest idioma ja està actiu.',
-    practiceScore: 'La puntuació guanyadora no s’utilitza en mode pràctica.',
+    practiceScore:
+      'La puntuació guanyadora no s’utilitza en mode pràctica.',
     scoreReached: 'Aquesta puntuació ja s’ha assolit en el partit.',
-    quitUnavailable: 'Sortir només està disponible a l’AppImage d’escriptori.',
+    quitUnavailable:
+      'Sortir només està disponible a l’AppImage d’escriptori.',
   },
   values: {
     on: 'ACTIVAT',
     off: 'DESACTIVAT',
     sharp: 'NÍTID',
-    soft: 'SUau',
+    soft: 'SUAU',
     stereo: 'ESTÈREO',
     mono: 'MONO',
     slow: 'LENTA',
