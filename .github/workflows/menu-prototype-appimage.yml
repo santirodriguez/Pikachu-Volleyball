@@ -1,0 +1,55 @@
+name: Build Menu Prototype AppImage
+
+on:
+  push:
+    branches:
+      - v2-menu-prototype-appimage
+
+permissions:
+  contents: read
+
+concurrency:
+  group: menu-prototype-appimage-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  appimage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22.12.0
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run repository quality checks
+        run: npm run quality:check
+
+      - name: Build Linux AppImage
+        run: npm run build:desktop:linux -- --publish=never
+
+      - name: Verify AppImage artifact
+        run: |
+          set -euo pipefail
+          appimage_path="$(find release -maxdepth 1 -type f -name '*.AppImage' | head -n 1)"
+          test -n "$appimage_path"
+          test -s "$appimage_path"
+          chmod +x "$appimage_path"
+          sha256sum "$appimage_path"
+          ls -lh "$appimage_path"
+
+      - name: Upload AppImage workflow artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: pikachu-volleyball-menu-prototype-appimage
+          path: release/*.AppImage
+          if-no-files-found: error
+          retention-days: 14
