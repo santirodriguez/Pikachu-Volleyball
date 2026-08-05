@@ -14,7 +14,7 @@
 
 <p align="center">
   <a href="https://github.com/santirodriguez/pikachu-volleyball/releases"><img alt="Linux AppImage" src="https://img.shields.io/badge/Linux-AppImage-F7C948?style=for-the-badge&logo=linux&logoColor=111827"></a>
-  <img alt="Version 2.0 alpha" src="https://img.shields.io/badge/Version-2.0%20alpha-E63946?style=for-the-badge">
+  <img alt="Version 2.0" src="https://img.shields.io/badge/Version-2.0-E63946?style=for-the-badge">
   <img alt="Five languages" src="https://img.shields.io/badge/Languages-5-4EA8DE?style=for-the-badge">
 </p>
 
@@ -53,10 +53,10 @@ This edition is simply my way of looking after a game I remember fondly. The ori
 ### Linux AppImage
 
 1. Open [GitHub Releases](https://github.com/santirodriguez/pikachu-volleyball/releases).
-2. Download the latest `.AppImage` for `x86_64`.
-3. Allow the file to run as a program and open it.
+2. Download the latest `.AppImage` for `x86_64` and `SHA256SUMS.txt`.
+3. Verify the checksum, allow the AppImage to run as a program and open it.
 
-Pre-release builds may also appear in the [Build Linux AppImage workflow](https://github.com/santirodriguez/pikachu-volleyball/actions/workflows/release-appimage.yml).
+See the concise [2.0.0 release notes](docs/releases/v2.0.0.md). Pre-release builds may also appear in the [Build Linux AppImage workflow](https://github.com/santirodriguez/pikachu-volleyball/actions/workflows/release-appimage.yml).
 
 ## Controls
 
