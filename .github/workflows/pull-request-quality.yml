@@ -44,10 +44,14 @@ jobs:
             dist/en/update-history/index.html
             dist/es-ar/index.html
             dist/es-ar/update-history/index.html
+            dist/ca/index.html
+            dist/ca/manifest.json
+            dist/ca/update-history/index.html
             dist/ko/index.html
             dist/ko/update-history/index.html
             dist/zh/index.html
             dist/zh/update-history/index.html
+            dist/resources/phase3-menu.css
           )
 
           for file in "${expected_files[@]}"; do
@@ -56,3 +60,8 @@ jobs:
               exit 1
             fi
           done
+
+          if ! grep -q 'lang="ca"' dist/ca/index.html; then
+            echo "Catalan index output does not declare lang=ca" >&2
+            exit 1
+          fi
