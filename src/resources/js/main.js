@@ -90,7 +90,21 @@ renderer.render(stage); // To make the initial canvas painting stable in the Fir
 
 loader.add(ASSETS_PATH.SPRITE_SHEET);
 
+prepareIntegratedMenuShell();
 setUpInitialUI();
+
+/**
+ * Hide the legacy toolbar before game assets finish loading.
+ */
+function prepareIntegratedMenuShell() {
+  document.documentElement.classList.add('integrated-menu-enabled');
+  if (document.getElementById('integrated-menu-stylesheet') !== null) return;
+  const link = document.createElement('link');
+  link.id = 'integrated-menu-stylesheet';
+  link.rel = 'stylesheet';
+  link.href = '../resources/integrated-menu.css';
+  document.head.appendChild(link);
+}
 
 /**
  * Set up the initial UI.
