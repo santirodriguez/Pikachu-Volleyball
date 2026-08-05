@@ -9,6 +9,8 @@ const {
   INPUT_ACTIONS,
   PLAYER_ONE_PRIMARY_POWER_HIT_KEY,
   PLAYER_ONE_ALTERNATE_POWER_HIT_KEY,
+  PLAYER_TWO_PRIMARY_POWER_HIT_KEY,
+  PLAYER_TWO_ALTERNATE_POWER_HIT_KEY,
   InputActionState,
   getPowerHitKeyCodes,
 } = inputActionsModule;
@@ -17,6 +19,8 @@ export {
   INPUT_ACTIONS,
   PLAYER_ONE_PRIMARY_POWER_HIT_KEY,
   PLAYER_ONE_ALTERNATE_POWER_HIT_KEY,
+  PLAYER_TWO_PRIMARY_POWER_HIT_KEY,
+  PLAYER_TWO_ALTERNATE_POWER_HIT_KEY,
 };
 
 /**
@@ -26,8 +30,8 @@ export class PikaKeyboard extends PikaUserInput {
   /**
    * Create a keyboard used for game controller.
    * Each argument accepts a KeyboardEvent.code string. Power Hit also accepts
-   * an array of codes. The existing Player 1 KeyZ binding automatically keeps
-   * ControlLeft as an additional binding for backward-compatible construction.
+   * an array of codes. Default KeyZ and Enter bindings automatically include
+   * their approved alternate keys for backward-compatible construction.
    * @param {string} left KeyboardEvent.code value for moving left
    * @param {string} right KeyboardEvent.code value for moving right
    * @param {string} up KeyboardEvent.code value for moving up
@@ -52,7 +56,7 @@ export class PikaKeyboard extends PikaUserInput {
       [INPUT_ACTIONS.POWER_HIT]: powerHitKeyCodes,
       [INPUT_ACTIONS.CONFIRM]: powerHitKeyCodes,
       [INPUT_ACTIONS.BACK]: 'Escape',
-      [INPUT_ACTIONS.PAUSE]: 'Escape',
+      [INPUT_ACTIONS.PAUSE]: null,
       [INPUT_ACTIONS.PRACTICE_RESET]: isPlayerOneDefaultBinding
         ? 'KeyB'
         : null,
