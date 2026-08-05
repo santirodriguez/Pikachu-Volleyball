@@ -24,7 +24,7 @@ function loadLocale(locale) {
   }
   const safeLocale = SUPPORTED_LOCALES.includes(locale) ? locale : 'en';
   mainWindow.loadFile(path.join(__dirname, '..', 'dist', safeLocale, 'index.html'), {
-    query: { desktop: '1' },
+    query: { desktop: '1', menuPrototype: '1' },
   });
 }
 
