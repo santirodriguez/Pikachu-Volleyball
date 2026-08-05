@@ -29,8 +29,25 @@ jobs:
           node-version: 22.12.0
           cache: npm
 
+      - name: Validate package versions
+        shell: bash
+        run: |
+          set -euo pipefail
+          package_version="$(node -p "require('./package.json').version")"
+          lock_version="$(node -p "require('./package-lock.json').version")"
+
+          if [[ "$package_version" != "$lock_version" ]]; then
+            echo "package.json version ($package_version) does not match package-lock.json ($lock_version)" >&2
+            exit 1
+          fi
+
+          echo "Validated package version: $package_version"
+
       - name: Install dependencies
         run: npm ci
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=critical
 
       - name: Run repository quality checks
         run: npm run quality:check
@@ -63,5 +80,17 @@ jobs:
 
           if ! grep -q 'lang="ca"' dist/ca/index.html; then
             echo "Catalan index output does not declare lang=ca" >&2
+            exit 1
+          fi
+
+          for locale in en es-ar ca ko zh; do
+            if ! grep -q '2.0.0' "dist/$locale/update-history/index.html"; then
+              echo "Release history for $locale does not mention 2.0.0" >&2
+              exit 1
+            fi
+          done
+
+          if grep -q '2.0%20alpha' README.md; then
+            echo "README still advertises an alpha release" >&2
             exit 1
           fi
