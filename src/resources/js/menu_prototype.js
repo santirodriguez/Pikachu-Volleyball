@@ -208,27 +208,27 @@ function setUpMenuPrototype() {
     (event) => {
       if (overlay.hidden) {
         if (event.code === 'Escape') {
-          event.preventDefault();
+          consumeMenuEvent(event);
           openPrototype();
         }
         return;
       }
 
       if (event.code === 'ArrowDown') {
-        event.preventDefault();
+        consumeMenuEvent(event);
         selectIndex(selectedIndex + 1, { focus: true, playSound: true });
       } else if (event.code === 'ArrowUp') {
-        event.preventDefault();
+        consumeMenuEvent(event);
         selectIndex(selectedIndex - 1, { focus: true, playSound: true });
       } else if (
         event.code === 'Enter' ||
         event.code === 'KeyZ' ||
         event.code === 'ControlLeft'
       ) {
-        event.preventDefault();
+        consumeMenuEvent(event);
         activateSelectedItem();
       } else if (event.code === 'Escape') {
-        event.preventDefault();
+        consumeMenuEvent(event);
         closePrototype();
       }
     },
@@ -237,6 +237,11 @@ function setUpMenuPrototype() {
 
   renderSelectedItem();
   openPrototype();
+}
+
+function consumeMenuEvent(event) {
+  event.preventDefault();
+  event.stopImmediatePropagation();
 }
 
 function addPrototypeStylesheet() {
