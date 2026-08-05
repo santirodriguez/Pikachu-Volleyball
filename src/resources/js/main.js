@@ -138,6 +138,13 @@ function setUpPauseShortcut() {
       return;
     }
 
+    const blockingUi = document.querySelector(
+      '.fade-in-box:not(.hidden), .dropdown.show, .submenu.show'
+    );
+    if (blockingUi !== null) {
+      return;
+    }
+
     const pauseBtn = document.getElementById('pause-btn');
     if (pauseBtn === null || pauseBtn.disabled) {
       return;
