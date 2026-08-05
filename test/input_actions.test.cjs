@@ -50,7 +50,7 @@ test('normalizes key bindings and removes duplicates', () => {
   assert.deepEqual(normalizeKeyCodes('ControlLeft'), ['ControlLeft']);
 });
 
-test('maps both default Power Hit bindings to their approved alternates', () => {
+test('maps scalar default Power Hit bindings to approved alternates', () => {
   assert.deepEqual(getPowerHitKeyCodes(PLAYER_ONE_PRIMARY_POWER_HIT_KEY), [
     PLAYER_ONE_PRIMARY_POWER_HIT_KEY,
     PLAYER_ONE_ALTERNATE_POWER_HIT_KEY,
@@ -61,7 +61,12 @@ test('maps both default Power Hit bindings to their approved alternates', () => 
   ]);
 });
 
-test('does not add alternate keys to custom Power Hit bindings', () => {
+test('respects explicit remapped Power Hit arrays exactly', () => {
+  assert.deepEqual(getPowerHitKeyCodes(['KeyZ', 'KeyQ']), ['KeyZ', 'KeyQ']);
+  assert.deepEqual(getPowerHitKeyCodes(['Enter', 'Space']), ['Enter', 'Space']);
+});
+
+test('does not add alternate keys to custom scalar bindings', () => {
   assert.deepEqual(getPowerHitKeyCodes('Space'), ['Space']);
 });
 

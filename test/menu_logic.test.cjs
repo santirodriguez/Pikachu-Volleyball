@@ -3,6 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
+  SUPPORTED_LOCALES,
   MENU_CONFIRM_KEYS,
   wrapIndex,
   isMenuConfirmKey,
@@ -33,19 +34,20 @@ test('accepts every approved menu confirmation key', () => {
 test('normalizes document language codes to built locales', () => {
   assert.equal(normalizeLocale('en-US'), 'en');
   assert.equal(normalizeLocale('es-AR'), 'es-ar');
+  assert.equal(normalizeLocale('ca-ES'), 'ca');
   assert.equal(normalizeLocale('ko'), 'ko');
   assert.equal(normalizeLocale('zh-Hans'), 'zh');
-  assert.equal(normalizeLocale('ca'), 'en');
+  assert.deepEqual(SUPPORTED_LOCALES, ['en', 'es-ar', 'ca', 'ko', 'zh']);
 });
 
 test('builds browser locale URLs without carrying stale query state', () => {
   assert.equal(
     buildLocaleUrl(
       'https://example.test/en/index.html?desktop=1#old',
-      'es-ar',
+      'ca',
       false
     ),
-    'https://example.test/es-ar/index.html'
+    'https://example.test/ca/index.html'
   );
 });
 
@@ -53,16 +55,16 @@ test('builds packaged locale URLs and preserves desktop mode explicitly', () => 
   assert.equal(
     buildLocaleUrl(
       'file:///opt/pikachu/dist/en/index.html?desktop=1',
-      'ko',
+      'ca',
       true
     ),
-    'file:///opt/pikachu/dist/ko/index.html?desktop=1'
+    'file:///opt/pikachu/dist/ca/index.html?desktop=1'
   );
 });
 
-test('rejects locales that do not have production output yet', () => {
+test('rejects locales without production output', () => {
   assert.throws(
-    () => buildLocaleUrl('https://example.test/en/', 'ca'),
+    () => buildLocaleUrl('https://example.test/en/', 'fr'),
     /Unsupported locale/
   );
 });

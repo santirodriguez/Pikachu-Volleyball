@@ -30,8 +30,8 @@ export class PikaKeyboard extends PikaUserInput {
   /**
    * Create a keyboard used for game controller.
    * Each argument accepts a KeyboardEvent.code string. Power Hit also accepts
-   * an array of codes. Default KeyZ and Enter bindings automatically include
-   * their approved alternate keys for backward-compatible construction.
+   * an array of codes. Scalar default bindings retain their approved alternate
+   * keys, while explicit arrays are applied exactly as supplied.
    * @param {string} left KeyboardEvent.code value for moving left
    * @param {string} right KeyboardEvent.code value for moving right
    * @param {string} up KeyboardEvent.code value for moving up
@@ -41,26 +41,6 @@ export class PikaKeyboard extends PikaUserInput {
    */
   constructor(left, right, up, down, powerHit, downRight = null) {
     super();
-
-    const powerHitKeyCodes = getPowerHitKeyCodes(powerHit);
-    const isPlayerOneDefaultBinding = powerHitKeyCodes.includes(
-      PLAYER_ONE_PRIMARY_POWER_HIT_KEY
-    );
-
-    this.actionState = new InputActionState({
-      [INPUT_ACTIONS.MOVE_LEFT]: left,
-      [INPUT_ACTIONS.MOVE_RIGHT]: right,
-      [INPUT_ACTIONS.MOVE_UP]: up,
-      [INPUT_ACTIONS.MOVE_DOWN]: down,
-      [INPUT_ACTIONS.MOVE_DOWN_RIGHT]: downRight,
-      [INPUT_ACTIONS.POWER_HIT]: powerHitKeyCodes,
-      [INPUT_ACTIONS.CONFIRM]: powerHitKeyCodes,
-      [INPUT_ACTIONS.BACK]: 'Escape',
-      [INPUT_ACTIONS.PAUSE]: null,
-      [INPUT_ACTIONS.PRACTICE_RESET]: isPlayerOneDefaultBinding
-        ? 'KeyB'
-        : null,
-    });
 
     this.actionSnapshot = { down: {}, pressed: {} };
     this.isSubscribed = false;
@@ -74,7 +54,31 @@ export class PikaKeyboard extends PikaUserInput {
     this.pause = 0;
     this.practiceReset = 0;
 
+    this.setBindings({ left, right, up, down, powerHit, downRight });
     this.subscribe();
+  }
+
+  /**
+   * Replace semantic bindings without replacing global listeners.
+   * @param {{left:string,right:string,up:string,down:string,powerHit:string|string[],downRight?:string|null}} bindings
+   */
+  setBindings(bindings) {
+    const powerHitKeyCodes = getPowerHitKeyCodes(bindings.powerHit);
+    const isPlayerOne = bindings.downRight !== null && bindings.downRight !== undefined;
+
+    this.actionState = new InputActionState({
+      [INPUT_ACTIONS.MOVE_LEFT]: bindings.left,
+      [INPUT_ACTIONS.MOVE_RIGHT]: bindings.right,
+      [INPUT_ACTIONS.MOVE_UP]: bindings.up,
+      [INPUT_ACTIONS.MOVE_DOWN]: bindings.down,
+      [INPUT_ACTIONS.MOVE_DOWN_RIGHT]: bindings.downRight || null,
+      [INPUT_ACTIONS.POWER_HIT]: powerHitKeyCodes,
+      [INPUT_ACTIONS.CONFIRM]: powerHitKeyCodes,
+      [INPUT_ACTIONS.BACK]: 'Escape',
+      [INPUT_ACTIONS.PAUSE]: null,
+      [INPUT_ACTIONS.PRACTICE_RESET]: isPlayerOne ? 'KeyB' : null,
+    });
+    this.reset();
   }
 
   /**
