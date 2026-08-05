@@ -25,7 +25,9 @@
  *  - "audio.js": The game audio or sounds. It depends on pixi-sound (https://github.com/pixi-sound) library.
  *  - "rand.js": For the random function used in the Models ("physics.js", "cloud_and_wave.js").
  *  - "assets_path.js": For the assets (image files, sound files) locations.
- *  - "ui.js": For the user interface (menu bar, buttons etc.) of the html page.
+ *  - "ui.js": For the legacy web controls that initialize persisted settings.
+ *  - "game_commands.js": Operational commands shared by the integrated menu.
+ *  - "integrated_menu.js": Production pause menu for web and desktop.
  */
 'use strict';
 import { settings } from '@pixi/settings';
@@ -43,9 +45,8 @@ import '@pixi/canvas-display';
 import { PikachuVolleyball } from './pikavolley.js';
 import { ASSETS_PATH } from './assets_path.js';
 import { setUpUI } from './ui.js';
-import inputActionsModule from './input_actions.cjs';
-
-const { shouldHandlePauseShortcut } = inputActionsModule;
+import { createGameCommands } from './game_commands.js';
+import { setUpIntegratedMenu } from './integrated_menu.js';
 
 // Reference for how to use Renderer.registerPlugin:
 // https://github.com/pixijs/pixijs/blob/af3c0c6bb15aeb1049178c972e4a14bb4cabfce4/bundles/pixi.js/src/index.ts#L27-L34
@@ -118,46 +119,15 @@ function setUpInitialUI() {
 }
 
 /**
- * Set up the game and the full UI, and start the game.
+ * Set up the game, persisted settings and integrated menu.
  */
 function setup() {
   const pikaVolley = new PikachuVolleyball(stage, loader.resources);
   setUpUI(pikaVolley, ticker);
-  setUpPauseShortcut();
+  const commands = createGameCommands(pikaVolley, ticker);
+  setUpIntegratedMenu(commands);
   warmUpAudioAssets();
   start(pikaVolley);
-}
-
-/**
- * Toggle the existing pause command with the global P shortcut.
- * The integrated menu will subscribe to the emitted event in the next phase.
- */
-function setUpPauseShortcut() {
-  window.addEventListener('keydown', (event) => {
-    if (!shouldHandlePauseShortcut(event)) {
-      return;
-    }
-
-    const blockingUi = document.querySelector(
-      '.fade-in-box:not(.hidden), .dropdown.show, .submenu.show'
-    );
-    if (blockingUi !== null) {
-      return;
-    }
-
-    const pauseBtn = document.getElementById('pause-btn');
-    if (pauseBtn === null || pauseBtn.disabled) {
-      return;
-    }
-
-    event.preventDefault();
-    pauseBtn.click();
-    window.dispatchEvent(
-      new CustomEvent('pv-pause-changed', {
-        detail: { paused: pauseBtn.classList.contains('selected') },
-      })
-    );
-  });
 }
 
 /**
