@@ -22,7 +22,7 @@
  *  - "cloud_and_wave.js": This is also a Model part which takes charge of the clouds and wave motion in the game. Of course, it is also rendered by "view.js".
  *                         It is also gained by reverse engineering the original machine code.
  *  - "keyboard.js": Support the Controller("pikavolley.js") to get a user input via keyboard.
- *  - "audio.js": The game audio or sounds. It depends on pixi-sound (https://github.com/pixi-sound) library.
+ *  - "audio.js": The game audio or sounds. It depends on pixi-sound (https://github.com/pixijs/pixi-sound) library.
  *  - "rand.js": For the random function used in the Models ("physics.js", "cloud_and_wave.js").
  *  - "assets_path.js": For the assets (image files, sound files) locations.
  *  - "ui.js": For the user interface (menu bar, buttons etc.) of the html page.
