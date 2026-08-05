@@ -35,6 +35,10 @@ module.exports = {
         { from: 'src/ko/manifest.json', to: 'ko/manifest.json' },
         { from: 'src/zh/manifest.json', to: 'zh/manifest.json' },
         { from: 'src/resources/style.css', to: 'resources/style.css' },
+        {
+          from: 'src/resources/menu-prototype.css',
+          to: 'resources/menu-prototype.css',
+        },
         { from: 'src/index.html', to: 'index.html' },
       ],
     }),
