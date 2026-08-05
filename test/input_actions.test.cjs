@@ -4,7 +4,10 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
   INPUT_ACTIONS,
+  PLAYER_ONE_PRIMARY_POWER_HIT_KEY,
+  PLAYER_ONE_ALTERNATE_POWER_HIT_KEY,
   InputActionState,
+  getPowerHitKeyCodes,
   normalizeKeyCodes,
 } = require('../src/resources/js/input_actions.cjs');
 
@@ -14,14 +17,33 @@ function createPlayerOneState() {
     [INPUT_ACTIONS.MOVE_RIGHT]: 'KeyG',
     [INPUT_ACTIONS.MOVE_UP]: 'KeyR',
     [INPUT_ACTIONS.MOVE_DOWN]: 'KeyV',
-    [INPUT_ACTIONS.POWER_HIT]: ['KeyZ', 'ControlLeft'],
-    [INPUT_ACTIONS.CONFIRM]: ['KeyZ', 'ControlLeft'],
+    [INPUT_ACTIONS.POWER_HIT]: getPowerHitKeyCodes(
+      PLAYER_ONE_PRIMARY_POWER_HIT_KEY
+    ),
+    [INPUT_ACTIONS.CONFIRM]: getPowerHitKeyCodes(
+      PLAYER_ONE_PRIMARY_POWER_HIT_KEY
+    ),
   });
 }
 
 test('normalizes key bindings and removes duplicates', () => {
   assert.deepEqual(normalizeKeyCodes(['KeyZ', 'KeyZ', null, '']), ['KeyZ']);
   assert.deepEqual(normalizeKeyCodes('ControlLeft'), ['ControlLeft']);
+});
+
+test('adds ControlLeft only to the historical Player 1 Power Hit binding', () => {
+  assert.deepEqual(getPowerHitKeyCodes(PLAYER_ONE_PRIMARY_POWER_HIT_KEY), [
+    PLAYER_ONE_PRIMARY_POWER_HIT_KEY,
+    PLAYER_ONE_ALTERNATE_POWER_HIT_KEY,
+  ]);
+  assert.deepEqual(getPowerHitKeyCodes('Enter'), ['Enter']);
+  assert.deepEqual(
+    getPowerHitKeyCodes([
+      PLAYER_ONE_PRIMARY_POWER_HIT_KEY,
+      PLAYER_ONE_ALTERNATE_POWER_HIT_KEY,
+    ]),
+    [PLAYER_ONE_PRIMARY_POWER_HIT_KEY, PLAYER_ONE_ALTERNATE_POWER_HIT_KEY]
+  );
 });
 
 test('ignores keys that are not bound', () => {
