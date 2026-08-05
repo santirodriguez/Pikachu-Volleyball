@@ -1,193 +1,63 @@
 const path = require('path');
-const { app, BrowserWindow, Menu, shell } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain, shell } = require('electron');
 
 const APP_NAME = 'Pikachu Volleyball';
-const FORK_SOURCE_URL = 'https://github.com/santirodriguez/pikachu-volleyball';
-const SUPPORTED_LOCALES = ['en', 'ko', 'zh', 'es-ar'];
+const ALLOWED_EXTERNAL_URLS = new Set([
+  'https://github.com/santirodriguez/pikachu-volleyball',
+  'https://github.com/gorisanson/pikachu-volleyball',
+]);
+const ALLOWED_WEBSITE_ORIGINS = new Set([
+  'https://santiagorodriguez.com',
+  'https://www.santiagorodriguez.com',
+]);
 
 /** @type {BrowserWindow | null} */
 let mainWindow = null;
 
-function getLocaleFromURL(urlString) {
-  try {
-    const url = new URL(urlString);
-    const locale = url.pathname.split('/').filter(Boolean).at(-2);
-    return SUPPORTED_LOCALES.includes(locale) ? locale : 'en';
-  } catch {
-    return 'en';
-  }
-}
-
-function loadLocale(locale) {
-  if (!mainWindow || mainWindow.isDestroyed()) {
-    return;
-  }
-  const safeLocale = SUPPORTED_LOCALES.includes(locale) ? locale : 'en';
-  mainWindow.loadFile(path.join(__dirname, '..', 'dist', safeLocale, 'index.html'), {
-    query: { desktop: '1' },
-  });
-}
-
-function openAboutOverlay() {
-  if (!mainWindow || mainWindow.isDestroyed()) {
-    return;
-  }
-  mainWindow.webContents.executeJavaScript(
-    "window.dispatchEvent(new CustomEvent('pv-desktop-open-about'));",
-    true
-  );
-}
-
 function isAllowedExternalUrl(urlString) {
-  return urlString === FORK_SOURCE_URL;
-}
-
-function isLocalAppUrl(urlString) {
   try {
     const url = new URL(urlString);
-    return url.protocol === 'file:';
+    if (ALLOWED_WEBSITE_ORIGINS.has(url.origin)) return true;
+    return ALLOWED_EXTERNAL_URLS.has(`${url.origin}${url.pathname}`);
   } catch {
     return false;
   }
 }
 
-function buildViewSubmenu() {
-  const submenu = [{ role: 'togglefullscreen' }];
-
-  if (!app.isPackaged) {
-    submenu.push(
-      { type: 'separator' },
-      {
-        label: 'Reload',
-        click: () => {
-          if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.webContents.reload();
-          }
-        },
-      },
-      {
-        label: 'Force Reload',
-        click: () => {
-          if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.webContents.reloadIgnoringCache();
-          }
-        },
-      },
-      {
-        label: 'Toggle Developer Tools',
-        accelerator: 'F12',
-        click: () => {
-          if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.webContents.toggleDevTools();
-          }
-        },
-      }
-    );
+function isLocalAppUrl(urlString) {
+  try {
+    return new URL(urlString).protocol === 'file:';
+  } catch {
+    return false;
   }
-
-  return submenu;
 }
 
-function buildAppMenu() {
-  const locale = mainWindow ? getLocaleFromURL(mainWindow.webContents.getURL()) : 'en';
+function installApplicationMenu() {
+  if (app.isPackaged) {
+    Menu.setApplicationMenu(null);
+    return;
+  }
 
-  const template = [
-    ...(process.platform === 'darwin'
-      ? [
-          {
-            label: APP_NAME,
-            submenu: [
-              { role: 'about', label: `About ${APP_NAME}` },
-              { type: 'separator' },
-              { role: 'services' },
-              { type: 'separator' },
-              { role: 'hide' },
-              { role: 'hideOthers' },
-              { role: 'unhide' },
-              { type: 'separator' },
-              { role: 'quit' },
-            ],
-          },
-        ]
-      : []),
-    {
-      label: 'Game',
-      submenu: [
-        {
-          label: 'Restart Match',
-          click: () => {
-            if (!mainWindow || mainWindow.isDestroyed()) {
-              return;
-            }
-            mainWindow.webContents.executeJavaScript(
-              "document.getElementById('restart-btn')?.click();",
-              true
-            );
-          },
-        },
-        {
-          label: 'Pause / Resume',
-          accelerator: 'Space',
-          click: () => {
-            if (!mainWindow || mainWindow.isDestroyed()) {
-              return;
-            }
-            mainWindow.webContents.executeJavaScript(
-              "document.getElementById('pause-btn')?.click();",
-              true
-            );
-          },
-        },
-        { type: 'separator' },
-        process.platform === 'darwin' ? { role: 'close' } : { role: 'quit' },
-      ],
-    },
-    {
-      label: 'Language',
-      submenu: [
-        {
-          label: 'English',
-          type: 'radio',
-          checked: locale === 'en',
-          click: () => loadLocale('en'),
-        },
-        {
-          label: '한국어',
-          type: 'radio',
-          checked: locale === 'ko',
-          click: () => loadLocale('ko'),
-        },
-        {
-          label: '中文',
-          type: 'radio',
-          checked: locale === 'zh',
-          click: () => loadLocale('zh'),
-        },
-        {
-          label: 'Español',
-          type: 'radio',
-          checked: locale === 'es-ar',
-          click: () => loadLocale('es-ar'),
-        },
-      ],
-    },
+  const developmentMenu = Menu.buildFromTemplate([
     {
       label: 'View',
-      submenu: buildViewSubmenu(),
-    },
-    {
-      role: 'help',
       submenu: [
-        {
-          label: `About ${APP_NAME}`,
-          click: () => openAboutOverlay(),
-        },
+        { role: 'reload' },
+        { role: 'forceReload' },
+        { role: 'toggleDevTools', accelerator: 'F12' },
+        { type: 'separator' },
+        { role: 'togglefullscreen' },
       ],
     },
-  ];
+  ]);
+  Menu.setApplicationMenu(developmentMenu);
+}
 
-  const menu = Menu.buildFromTemplate(template);
-  Menu.setApplicationMenu(menu);
+function loadEnglishApplication() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.loadFile(path.join(__dirname, '..', 'dist', 'en', 'index.html'), {
+    query: { desktop: '1' },
+  });
 }
 
 function createMainWindow() {
@@ -197,17 +67,22 @@ function createMainWindow() {
     height: 768,
     minWidth: 800,
     minHeight: 600,
-    autoHideMenuBar: false,
+    autoHideMenuBar: app.isPackaged,
     backgroundColor: '#101010',
     show: false,
     webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
     },
   });
 
-  loadLocale('en');
+  if (app.isPackaged) {
+    mainWindow.setMenuBarVisibility(false);
+  }
+
+  loadEnglishApplication();
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (isAllowedExternalUrl(url)) {
@@ -217,9 +92,7 @@ function createMainWindow() {
   });
 
   mainWindow.webContents.on('will-navigate', (event, url) => {
-    if (isLocalAppUrl(url)) {
-      return;
-    }
+    if (isLocalAppUrl(url)) return;
     event.preventDefault();
     if (isAllowedExternalUrl(url)) {
       shell.openExternal(url);
@@ -227,17 +100,12 @@ function createMainWindow() {
   });
 
   mainWindow.webContents.on('did-finish-load', () => {
-    if (!mainWindow || mainWindow.isDestroyed()) {
-      return;
-    }
+    if (!mainWindow || mainWindow.isDestroyed()) return;
     mainWindow.setTitle(APP_NAME);
-    buildAppMenu();
   });
 
   mainWindow.once('ready-to-show', () => {
-    if (!mainWindow || mainWindow.isDestroyed()) {
-      return;
-    }
+    if (!mainWindow || mainWindow.isDestroyed()) return;
     mainWindow.show();
   });
 
@@ -246,7 +114,13 @@ function createMainWindow() {
   });
 }
 
+ipcMain.handle('pv:quit', () => {
+  app.quit();
+  return true;
+});
+
 app.whenReady().then(() => {
+  installApplicationMenu();
   createMainWindow();
 
   app.on('activate', () => {
