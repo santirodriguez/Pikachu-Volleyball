@@ -1,8 +1,18 @@
 'use strict';
 
 import { localStorageWrapper } from './utils/local_storage_wrapper.js';
+import { loadControlBindings, saveControlBindings } from './control_bindings.js';
+import controlBindingsModule from './control_bindings.cjs';
 import menuLogicModule from './menu_logic.cjs';
 
+const {
+  CONTROL_BINDING_DEFINITIONS,
+  sanitizeControlBindings,
+  validateControlBinding,
+  resetControlBindings,
+  getPlayerKeyboardConfig,
+  formatKeyboardCode,
+} = controlBindingsModule;
 const { buildLocaleUrl, normalizeLocale } = menuLogicModule;
 
 const STORAGE_KEYS = Object.freeze({
@@ -30,12 +40,28 @@ const DEFAULT_SETTINGS = Object.freeze({
  */
 export function createGameCommands(pikaVolley, ticker) {
   const pauseButton = document.getElementById('pause-btn');
+  let controlBindings = loadControlBindings();
 
   function resetInputs() {
     for (const keyboard of pikaVolley.keyboardArray) {
       keyboard.reset();
     }
   }
+
+  function applyControlBindingsToGame(bindings, persist = false) {
+    controlBindings = sanitizeControlBindings(bindings);
+    pikaVolley.keyboardArray[0].setBindings(
+      getPlayerKeyboardConfig(controlBindings, 1)
+    );
+    pikaVolley.keyboardArray[1].setBindings(
+      getPlayerKeyboardConfig(controlBindings, 2)
+    );
+    resetInputs();
+    if (persist) saveControlBindings(controlBindings);
+    return { ...controlBindings };
+  }
+
+  applyControlBindingsToGame(controlBindings);
 
   function emitPauseState() {
     window.dispatchEvent(
@@ -92,6 +118,10 @@ export function createGameCommands(pikaVolley, ticker) {
       practiceMode: pikaVolley.isPracticeMode,
       colorScheme: document.documentElement.dataset.colorScheme || 'light',
       locale: getCurrentLocale(),
+      controlBindings: { ...controlBindings },
+      controlDefinitions: CONTROL_BINDING_DEFINITIONS.map((definition) => ({
+        ...definition,
+      })),
     };
   }
 
@@ -190,6 +220,29 @@ export function createGameCommands(pikaVolley, ticker) {
     );
   }
 
+  function previewControlBinding(bindingId, code) {
+    return validateControlBinding(controlBindings, bindingId, code);
+  }
+
+  function setControlBinding(bindingId, code) {
+    const result = validateControlBinding(controlBindings, bindingId, code);
+    if (!result.ok) return result;
+    applyControlBindingsToGame(result.bindings, true);
+    return {
+      ok: true,
+      bindingId,
+      code,
+      label: formatKeyboardCode(code),
+      bindings: { ...controlBindings },
+    };
+  }
+
+  function resetControlBindingScope(scope) {
+    const next = resetControlBindings(controlBindings, scope);
+    applyControlBindingsToGame(next, true);
+    return { ok: true, scope, bindings: { ...controlBindings } };
+  }
+
   function isDesktop() {
     const queryDesktop =
       new URLSearchParams(window.location.search).get('desktop') === '1';
@@ -223,6 +276,10 @@ export function createGameCommands(pikaVolley, ticker) {
     setWinningScore,
     setPracticeMode,
     resetDefaults,
+    previewControlBinding,
+    setControlBinding,
+    resetControlBindingScope,
+    formatControlCode: formatKeyboardCode,
     isMatchInProgress,
     getCurrentLocale,
     isDesktop,
