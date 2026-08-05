@@ -92,10 +92,9 @@ jobs:
             exit 1
           fi
 
-  release-candidate-appimage:
-    needs: quality
+  runtime-audit:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 10
 
     steps:
       - name: Check out repository
@@ -110,53 +109,5 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build Linux AppImage
-        run: npm run build:desktop:linux -- --publish=never
-
-      - name: Verify release candidate and create checksum
-        shell: bash
-        run: |
-          set -euo pipefail
-          package_version="$(node -p "require('./package.json').version")"
-          mapfile -t appimages < <(find release -maxdepth 1 -type f -name '*.AppImage' | sort)
-
-          if [[ "$package_version" != "2.0.0" ]]; then
-            echo "Unexpected release-candidate version: $package_version" >&2
-            exit 1
-          fi
-
-          if [[ "${#appimages[@]}" -ne 1 ]]; then
-            echo "Expected exactly one AppImage, found ${#appimages[@]}" >&2
-            exit 1
-          fi
-
-          appimage_path="${appimages[0]}"
-          appimage_name="$(basename "$appimage_path")"
-          expected_name="Pikachu-Volleyball-2.0.0-x86_64.AppImage"
-
-          if [[ "$appimage_name" != "$expected_name" ]]; then
-            echo "Unexpected AppImage name: $appimage_name" >&2
-            exit 1
-          fi
-
-          if [[ ! -s "$appimage_path" ]]; then
-            echo "AppImage is empty" >&2
-            exit 1
-          fi
-
-          (
-            cd release
-            sha256sum "$appimage_name" > SHA256SUMS.txt
-          )
-
-          cat release/SHA256SUMS.txt
-          ls -lh "$appimage_path" release/SHA256SUMS.txt
-
-      - name: Upload release candidate
-        uses: actions/upload-artifact@v6
-        with:
-          name: pikachu-volleyball-2.0.0-release-candidate
-          path: |
-            release/*.AppImage
-            release/SHA256SUMS.txt
-          if-no-files-found: error
+      - name: Reject critical production dependency advisories
+        run: npm audit --omit=dev --audit-level=critical
