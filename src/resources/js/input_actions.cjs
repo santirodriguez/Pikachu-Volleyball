@@ -13,9 +13,23 @@ const INPUT_ACTIONS = Object.freeze({
   PRACTICE_RESET: 'practiceReset',
 });
 
+const PLAYER_ONE_PRIMARY_POWER_HIT_KEY = 'KeyZ';
+const PLAYER_ONE_ALTERNATE_POWER_HIT_KEY = 'ControlLeft';
+
 function normalizeKeyCodes(value) {
   const values = Array.isArray(value) ? value : [value];
   return [...new Set(values.filter((code) => typeof code === 'string' && code))];
+}
+
+function getPowerHitKeyCodes(powerHit) {
+  const keyCodes = normalizeKeyCodes(powerHit);
+  if (
+    keyCodes.includes(PLAYER_ONE_PRIMARY_POWER_HIT_KEY) &&
+    !keyCodes.includes(PLAYER_ONE_ALTERNATE_POWER_HIT_KEY)
+  ) {
+    keyCodes.push(PLAYER_ONE_ALTERNATE_POWER_HIT_KEY);
+  }
+  return keyCodes;
 }
 
 function normalizeBindings(bindings) {
@@ -81,6 +95,9 @@ class InputActionState {
 
 module.exports = {
   INPUT_ACTIONS,
+  PLAYER_ONE_PRIMARY_POWER_HIT_KEY,
+  PLAYER_ONE_ALTERNATE_POWER_HIT_KEY,
   InputActionState,
+  getPowerHitKeyCodes,
   normalizeKeyCodes,
 };
