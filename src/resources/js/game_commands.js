@@ -11,6 +11,7 @@ const STORAGE_KEYS = Object.freeze({
   sfx: 'pv-offline-sfx',
   speed: 'pv-offline-speed',
   winningScore: 'pv-offline-winningScore',
+  colorScheme: 'colorScheme',
 });
 
 const DEFAULT_SETTINGS = Object.freeze({
@@ -89,6 +90,7 @@ export function createGameCommands(pikaVolley, ticker) {
       speed: getStoredValue('speed', getSpeedName()),
       winningScore: String(pikaVolley.winningScore),
       practiceMode: pikaVolley.isPracticeMode,
+      colorScheme: document.documentElement.dataset.colorScheme || 'light',
       locale: getCurrentLocale(),
     };
   }
@@ -99,6 +101,19 @@ export function createGameCommands(pikaVolley, ticker) {
       .getElementById('game-canvas')
       ?.classList.toggle('graphic-soft', value === 'soft');
     localStorageWrapper.set(STORAGE_KEYS.graphic, value);
+    return true;
+  }
+
+  function setColorScheme(value) {
+    if (!['light', 'dark'].includes(value)) return false;
+    document.documentElement.dataset.colorScheme = value;
+    document
+      .querySelector('meta[name="theme-color"]')
+      ?.setAttribute('content', value === 'dark' ? '#202124' : '#FFFFFF');
+    document.querySelectorAll('.dark-color-scheme-checkbox').forEach((element) => {
+      element.checked = value === 'dark';
+    });
+    localStorageWrapper.set(STORAGE_KEYS.colorScheme, value);
     return true;
   }
 
@@ -201,6 +216,7 @@ export function createGameCommands(pikaVolley, ticker) {
     resetInputs,
     getSettings,
     setGraphic,
+    setColorScheme,
     setBgm,
     setSfx,
     setSpeed,
