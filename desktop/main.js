@@ -51,6 +51,43 @@ function isLocalAppUrl(urlString) {
   }
 }
 
+function buildViewSubmenu() {
+  const submenu = [{ role: 'togglefullscreen' }];
+
+  if (!app.isPackaged) {
+    submenu.push(
+      { type: 'separator' },
+      {
+        label: 'Reload',
+        click: () => {
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.reload();
+          }
+        },
+      },
+      {
+        label: 'Force Reload',
+        click: () => {
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.reloadIgnoringCache();
+          }
+        },
+      },
+      {
+        label: 'Toggle Developer Tools',
+        accelerator: 'F12',
+        click: () => {
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.toggleDevTools();
+          }
+        },
+      }
+    );
+  }
+
+  return submenu;
+}
+
 function buildAppMenu() {
   const locale = mainWindow ? getLocaleFromURL(mainWindow.webContents.getURL()) : 'en';
 
@@ -78,7 +115,6 @@ function buildAppMenu() {
       submenu: [
         {
           label: 'Restart Match',
-          accelerator: 'CmdOrCtrl+R',
           click: () => {
             if (!mainWindow || mainWindow.isDestroyed()) {
               return;
@@ -137,13 +173,7 @@ function buildAppMenu() {
     },
     {
       label: 'View',
-      submenu: [
-        { role: 'reload' },
-        { role: 'forceReload' },
-        { role: 'togglefullscreen' },
-        { type: 'separator' },
-        { role: 'toggleDevTools' },
-      ],
+      submenu: buildViewSubmenu(),
     },
     {
       role: 'help',
