@@ -1,6 +1,6 @@
 'use strict';
 
-const SUPPORTED_LOCALES = Object.freeze(['en', 'es-ar', 'ko', 'zh']);
+const SUPPORTED_LOCALES = Object.freeze(['en', 'es-ar', 'ca', 'ko', 'zh']);
 const MENU_CONFIRM_KEYS = Object.freeze([
   'Enter',
   'KeyZ',
@@ -22,6 +22,7 @@ function isMenuConfirmKey(code) {
 function normalizeLocale(locale) {
   const normalized = String(locale || '').toLowerCase();
   if (normalized.startsWith('es')) return 'es-ar';
+  if (normalized.startsWith('ca')) return 'ca';
   if (normalized.startsWith('ko')) return 'ko';
   if (normalized.startsWith('zh')) return 'zh';
   return 'en';
