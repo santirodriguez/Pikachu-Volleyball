@@ -11,9 +11,10 @@ permissions:
 jobs:
   appimage:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
-      - name: Checkout repository
+      - name: Check out repository
         uses: actions/checkout@v5
 
       - name: Set up Node.js
@@ -22,40 +23,92 @@ jobs:
           node-version: 22.12.0
           cache: npm
 
+      - name: Validate release metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          package_version="$(node -p "require('./package.json').version")"
+          lock_version="$(node -p "require('./package-lock.json').version")"
+
+          if [[ "$package_version" != "$lock_version" ]]; then
+            echo "package.json version ($package_version) does not match package-lock.json ($lock_version)" >&2
+            exit 1
+          fi
+
+          if [[ "${{ github.event_name }}" == "release" ]]; then
+            expected_tag="v${package_version}"
+            actual_tag="${{ github.event.release.tag_name }}"
+            if [[ "$actual_tag" != "$expected_tag" ]]; then
+              echo "Release tag $actual_tag does not match package version $expected_tag" >&2
+              exit 1
+            fi
+          fi
+
+          echo "Release version: $package_version"
+
       - name: Install dependencies
         run: npm ci
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=critical
+
+      - name: Run repository quality checks
+        run: npm run quality:check
 
       - name: Build Linux AppImage
         run: npm run build:desktop:linux -- --publish=never
 
-      - name: Report AppImage artifact size
+      - name: Verify AppImage and create checksum
+        shell: bash
         run: |
           set -euo pipefail
-          appimage_path="$(find release -maxdepth 1 -type f -name '*.AppImage' | head -n 1)"
+          mapfile -t appimages < <(find release -maxdepth 1 -type f -name '*.AppImage' | sort)
+
+          if [[ "${#appimages[@]}" -ne 1 ]]; then
+            echo "Expected exactly one AppImage, found ${#appimages[@]}" >&2
+            exit 1
+          fi
+
+          appimage_path="${appimages[0]}"
+          if [[ ! -s "$appimage_path" ]]; then
+            echo "AppImage is empty: $appimage_path" >&2
+            exit 1
+          fi
+
           appimage_name="$(basename "$appimage_path")"
           appimage_bytes="$(stat -c%s "$appimage_path")"
           appimage_mib="$(awk -v bytes="$appimage_bytes" 'BEGIN { printf "%.2f", bytes / 1024 / 1024 }')"
 
+          (
+            cd release
+            sha256sum "$appimage_name" > SHA256SUMS.txt
+          )
+
           echo "Built artifact: $appimage_name"
           echo "Artifact size: $appimage_bytes bytes (${appimage_mib} MiB)"
-          ls -lh release/*.AppImage
+          cat release/SHA256SUMS.txt
 
           {
-            echo "## AppImage size report"
+            echo "## AppImage release report"
             echo ""
             echo "- Artifact: \`$appimage_name\`"
             echo "- Size: \`$appimage_bytes\` bytes (\`${appimage_mib}\` MiB)"
+            echo "- Checksum file: \`SHA256SUMS.txt\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload AppImage workflow artifact
         uses: actions/upload-artifact@v6
         with:
-          name: pikachu-volleyball-appimage
-          path: release/*.AppImage
+          name: pikachu-volleyball-linux-x86_64
+          path: |
+            release/*.AppImage
+            release/SHA256SUMS.txt
           if-no-files-found: error
 
-      - name: Attach AppImage to GitHub release
+      - name: Attach AppImage and checksum to GitHub release
         if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
         with:
-          files: release/*.AppImage
+          files: |
+            release/*.AppImage
+            release/SHA256SUMS.txt

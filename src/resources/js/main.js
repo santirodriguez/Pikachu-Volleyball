@@ -22,10 +22,12 @@
  *  - "cloud_and_wave.js": This is also a Model part which takes charge of the clouds and wave motion in the game. Of course, it is also rendered by "view.js".
  *                         It is also gained by reverse engineering the original machine code.
  *  - "keyboard.js": Support the Controller("pikavolley.js") to get a user input via keyboard.
- *  - "audio.js": The game audio or sounds. It depends on pixi-sound (https://github.com/pixijs/pixi-sound) library.
+ *  - "audio.js": The game audio or sounds. It depends on pixi-sound (https://github.com/pixijs/sound) library.
  *  - "rand.js": For the random function used in the Models ("physics.js", "cloud_and_wave.js").
  *  - "assets_path.js": For the assets (image files, sound files) locations.
- *  - "ui.js": For the user interface (menu bar, buttons etc.) of the html page.
+ *  - "ui.js": For the legacy web controls that initialize persisted settings.
+ *  - "game_commands.js": Operational commands shared by the integrated menu.
+ *  - "integrated_menu.js": Production pause menu for web and desktop.
  */
 'use strict';
 import { settings } from '@pixi/settings';
@@ -43,20 +45,16 @@ import '@pixi/canvas-display';
 import { PikachuVolleyball } from './pikavolley.js';
 import { ASSETS_PATH } from './assets_path.js';
 import { setUpUI } from './ui.js';
+import { createGameCommands } from './game_commands.js';
+import { setUpIntegratedMenu } from './integrated_menu.js';
+import { setUpIntegratedMenuTheme } from './integrated_menu_theme.js';
 
-// Reference for how to use Renderer.registerPlugin:
-// https://github.com/pixijs/pixijs/blob/af3c0c6bb15aeb1049178c972e4a14bb4cabfce4/bundles/pixi.js/src/index.ts#L27-L34
 Renderer.registerPlugin('prepare', Prepare);
 Renderer.registerPlugin('batch', BatchRenderer);
-// Reference for how to use CanvasRenderer.registerPlugin:
-// https://github.com/pixijs/pixijs/blob/af3c0c6bb15aeb1049178c972e4a14bb4cabfce4/bundles/pixi.js-legacy/src/index.ts#L13-L19
 CanvasRenderer.registerPlugin('prepare', CanvasPrepare);
 CanvasRenderer.registerPlugin('sprite', CanvasSpriteRenderer);
 Loader.registerPlugin(SpritesheetLoader);
 
-// Set settings.RESOLUTION to 2 instead of 1 to make the game screen do not look
-// much blurry in case of the image rendering mode of 'image-rendering: auto',
-// which is like bilinear interpolation, which is used in "soft" game graphic option.
 settings.RESOLUTION = 2;
 settings.SCALE_MODE = SCALE_MODES.NEAREST;
 settings.ROUND_PIXELS = true;
@@ -67,11 +65,6 @@ const renderer = autoDetectRenderer({
   antialias: false,
   backgroundColor: 0x000000,
   backgroundAlpha: 1,
-  // Decided to use only Canvas for compatibility reason. One player had reported that
-  // on their browser, where pixi chooses to use WebGL renderer, the graphics are not fine.
-  // And the issue had been fixed by using Canvas renderer. And also for the sake of testing,
-  // it is more comfortable just to stick with Canvas renderer so that it is unnecessary to switch
-  // between WebGL renderer and Canvas renderer.
   forceCanvas: true,
 });
 
@@ -81,11 +74,31 @@ const loader = new Loader();
 
 renderer.view.setAttribute('id', 'game-canvas');
 document.getElementById('game-canvas-container').appendChild(renderer.view);
-renderer.render(stage); // To make the initial canvas painting stable in the Firefox browser.
+renderer.render(stage);
 
 loader.add(ASSETS_PATH.SPRITE_SHEET);
 
+prepareIntegratedMenuShell();
 setUpInitialUI();
+
+/**
+ * Hide the legacy toolbar and load integrated menu styles before assets finish.
+ */
+function prepareIntegratedMenuShell() {
+  document.documentElement.classList.add('integrated-menu-enabled');
+  const stylesheets = [
+    ['integrated-menu-stylesheet', '../resources/integrated-menu.css'],
+    ['phase3-menu-stylesheet', '../resources/phase3-menu.css'],
+  ];
+  for (const [id, href] of stylesheets) {
+    if (document.getElementById(id) !== null) continue;
+    const link = document.createElement('link');
+    link.id = id;
+    link.rel = 'stylesheet';
+    link.href = href;
+    document.head.appendChild(link);
+  }
+}
 
 /**
  * Set up the initial UI.
@@ -110,23 +123,25 @@ function setUpInitialUI() {
   if (!aboutBox.classList.contains('hidden')) {
     aboutBox.classList.add('hidden');
   }
-  loader.load(setup); // setup is called after loader finishes loading
+  loader.load(setup);
   loadingBox.classList.remove('hidden');
 }
 
 /**
- * Set up the game and the full UI, and start the game.
+ * Set up the game, persisted settings and integrated menu.
  */
 function setup() {
   const pikaVolley = new PikachuVolleyball(stage, loader.resources);
   setUpUI(pikaVolley, ticker);
+  const commands = createGameCommands(pikaVolley, ticker);
+  setUpIntegratedMenu(commands);
+  setUpIntegratedMenuTheme(commands);
   warmUpAudioAssets();
   start(pikaVolley);
 }
 
 /**
  * Start non-critical audio loading after the game becomes interactive.
- * This improves startup responsiveness, especially in desktop mode.
  */
 function warmUpAudioAssets() {
   const idleCallback =

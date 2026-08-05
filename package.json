@@ -1,22 +1,23 @@
 {
   "name": "pikachu-volleyball",
-  "version": "1.1.0",
-  "description": "Pikachu Volleyball implemented into JavaScript by reverse engineering the original game",
+  "version": "2.0.0",
+  "description": "Pikachu Volleyball implemented in JavaScript by reverse engineering the original game",
   "private": true,
   "scripts": {
     "test": "npm run quality:check",
+    "test:unit": "node --test test/**/*.test.cjs",
     "start": "webpack serve --config webpack.dev.js",
     "build": "npm run build:web",
     "build:web": "webpack --config webpack.prod.js",
     "start:desktop": "npm run build:web && electron .",
     "build:appimage": "npm run build:desktop:linux",
     "build:desktop:linux": "npm run build:web && electron-builder --linux AppImage",
-    "lint": "node ./node_modules/eslint/bin/eslint.js \"src/resources/js/**/*.js\" \"desktop/**/*.js\" \"webpack.*.js\"",
-    "quality:check": "npm run lint && npm run build:web"
+    "lint": "node ./node_modules/eslint/bin/eslint.js \"src/resources/js/**/*.{js,cjs}\" \"test/**/*.cjs\" \"desktop/**/*.js\" \"webpack.*.js\"",
+    "quality:check": "npm run lint && npm run test:unit && npm run build:web"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/gorisanson/pikachu-volleyball.git"
+    "url": "git+https://github.com/santirodriguez/pikachu-volleyball.git"
   },
   "keywords": [
     "game"
@@ -24,9 +25,9 @@
   "author": "Kyutae Lee",
   "license": "UNLICENSED",
   "bugs": {
-    "url": "https://github.com/gorisanson/pikachu-volleyball/issues"
+    "url": "https://github.com/santirodriguez/pikachu-volleyball/issues"
   },
-  "homepage": "https://github.com/gorisanson/pikachu-volleyball#readme",
+  "homepage": "https://github.com/santirodriguez/pikachu-volleyball#readme",
   "devDependencies": {
     "clean-webpack-plugin": "^4.0.0",
     "copy-webpack-plugin": "^11.0.0",
@@ -61,9 +62,9 @@
   },
   "main": "desktop/main.js",
   "build": {
-    "appId": "io.github.gorisanson.pikachu-volleyball",
+    "appId": "com.santirodriguez.pikachu-volleyball",
     "productName": "Pikachu Volleyball",
-    "artifactName": "Pikachu-Volleyball-1.1x86_64.${ext}",
+    "artifactName": "Pikachu-Volleyball-${version}-${arch}.${ext}",
     "compression": "maximum",
     "directories": {
       "output": "release"

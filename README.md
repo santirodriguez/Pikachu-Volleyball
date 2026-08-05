@@ -1,116 +1,127 @@
-# Pikachu Volleyball for Linux (AppImage)
+<p align="center">
+  <img src="src/resources/assets/images/IDI_PIKAICON-1_gap_filled_192.png" width="96" alt="Pikachu Volleyball icon">
+</p>
 
-✓ English | Español (Argentina) | Korean (한국어) | Chinese (中文)
+<h1 align="center">Pikachu Volleyball 2.0</h1>
 
-Pikachu Volleyball (対戦ぴかちゅ～　ﾋﾞｰﾁﾊﾞﾚｰ編) is an old Windows game that was developed by "(C) SACHI SOFT / SAWAYAKAN Programmers" and "(C) Satoshi Takenouchi" in 1997.
+<p align="center">
+  <strong>A tiny beach-volleyball classic, carefully brought into a modern Linux desktop.</strong>
+</p>
 
-This repository is a fork of the JavaScript reimplementation created by https://github.com/gorisanson/pikachu-volleyball.
-This fork keeps that work as its foundation, while focusing on a version that works cleanly on Linux through AppImage, with desktop UX improvements, offline-safe behavior, accessibility fixes, and ongoing gameplay and interface improvements, while still maintaining the web version.
+<p align="center">
+  Fast to launch. Easy to learn. Suspiciously hard to stop playing.
+</p>
 
-<img src="src/resources/assets/images/screenshot.png" alt="Pikachu Volleyball game screenshot" width="648">
+<p align="center">
+  <a href="https://github.com/santirodriguez/pikachu-volleyball/releases"><img alt="Linux AppImage" src="https://img.shields.io/badge/Linux-AppImage-F7C948?style=for-the-badge&logo=linux&logoColor=111827"></a>
+  <img alt="Version 2.0" src="https://img.shields.io/badge/Version-2.0-E63946?style=for-the-badge">
+  <img alt="Five languages" src="https://img.shields.io/badge/Languages-5-4EA8DE?style=for-the-badge">
+</p>
 
-## How to run locally
+<p align="center">
+  <a href="#download">Download</a> ·
+  <a href="#whats-inside">What’s inside</a> ·
+  <a href="#controls">Controls</a> ·
+  <a href="#credits">Credits</a>
+</p>
 
-1. Clone this repository and get into the directory.
+<p align="center">
+  <img src="src/resources/assets/images/screenshot.png" alt="Pikachu Volleyball match" width="760">
+</p>
 
-git clone https://github.com/santirodriguez/pikachu-volleyball.git
-cd pikachu-volleyball
+## A small game with a long memory
 
-2. Install dependencies.
+When I was a kid, I had a modest computer. Game Boy Color emulators and simple, joyful games like this one became my way into the Pokémon world: colorful, welcoming and endlessly replayable.
 
-npm install
+This edition is simply my way of looking after a game I remember fondly. The original feel stays at the center, while the interface, controls and Linux desktop experience receive the care they deserve.
 
-3. Bundle the code.
+> Some childhood games are always worth one more match.
 
-npm run build
+## What’s inside
 
-4. Run a local web server.
+| | |
+|---|---|
+| **A proper Linux edition** | Portable AppImage packaging with a focused desktop experience. |
+| **One coherent menu** | Pause, restart, match settings, audio, graphics, language and About in one place. |
+| **Editable controls** | Remap both players, detect conflicts and restore defaults whenever needed. |
+| **Five languages** | English, Español, Català, 한국어 and 中文. |
+| **Web foundation preserved** | The browser build remains part of the project rather than becoming an abandoned side quest. |
+| **Classic gameplay protected** | Physics, AI, scoring and timing remain faithful to the reverse-engineered implementation. |
 
-npx http-server dist
+## Download
 
-5. Open the game in your browser. In most cases, the URL will be http://localhost:8080.
+### Linux AppImage
 
-## Linux desktop packaging (AppImage)
+1. Open [GitHub Releases](https://github.com/santirodriguez/pikachu-volleyball/releases).
+2. Download the latest `.AppImage` for `x86_64` and `SHA256SUMS.txt`.
+3. Verify the checksum, allow the AppImage to run as a program and open it.
 
-This repository includes an Electron wrapper under desktop/ and uses electron-builder for Linux packaging.
+See the concise [2.0.0 release notes](docs/releases/v2.0.0.md). Pre-release builds may also appear in the [Build Linux AppImage workflow](https://github.com/santirodriguez/pikachu-volleyball/actions/workflows/release-appimage.yml).
 
-1. Build the web assets:
+## Controls
 
-npm run build:web
+These are the defaults. Player controls can be changed from the in-game **Controls** menu.
 
-2. Start the desktop app:
+| Action | Player 1 | Player 2 |
+|---|---|---|
+| Move left / right | `D` / `G` | `←` / `→` |
+| Jump | `R` | `↑` |
+| Move down | `V` | `↓` |
+| Down-right shortcut | `F` | — |
+| Power Hit | `Z` or `Left Shift` | `Enter` or `Left Control` |
+| Pause menu | `P` | `P` |
+| Practice ball reset | `B` | `B` |
 
-npm run start:desktop
+## Languages
 
-3. Build the AppImage:
+<p>
+  <strong>English</strong> ·
+  <strong>Español</strong> ·
+  <strong>Català</strong> ·
+  <strong>한국어</strong> ·
+  <strong>中文</strong>
+</p>
 
-npm run build:desktop:linux
+## Credits
 
-The Linux packaging target is restricted to AppImage only.
+**Pikachu Volleyball (1997)** was created by SACHI SOFT / SAWAYAKAN Programmers and Satoshi Takenouchi. Thank you for making the wonderfully simple classic that started everything.
 
-### AppImage release artifact details
+The browser foundation comes from [Kyutae Lee’s JavaScript reverse-engineering reimplementation](https://github.com/gorisanson/pikachu-volleyball). This edition would not exist without that careful work.
 
-For convenience, you can also run:
+The Linux desktop edition, integrated interface, controls, localization and 2.0 work are maintained by [Santiago Rodríguez](https://santiagorodriguez.com).
 
-npm run build:appimage
+<details>
+<summary><strong>Development and packaging</strong></summary>
 
-After a successful build, release artifacts are written to:
+### Requirements
 
-- release/Pikachu-Volleyball-1.1x86_64.AppImage
-- release/latest-linux.yml
+- Node.js `22.12.0`
+- npm
 
-For repeatable CI builds, this fork includes .github/workflows/release-appimage.yml:
-- workflow_dispatch: manually build and upload a pikachu-volleyball-appimage workflow artifact.
-- release.published: build the AppImage and automatically attach it to the published GitHub Release.
+### Common commands
 
-## Quality-check baseline
-
-This fork now includes a small, reproducible quality-check baseline that matches the current web-first project and Linux/AppImage flow.
-
-Run this command after installing dependencies:
-
+```bash
+npm ci
+npm run start
 npm run quality:check
+npm run build:desktop:linux
+```
 
-What it does:
+- `npm run start` launches the development web server.
+- `npm run quality:check` runs lint, unit tests and the production web build.
+- `npm run build:desktop:linux` creates the Linux AppImage under `release/`.
 
-- npm run lint: runs ESLint on the web game JavaScript, webpack config files, and Electron entry file.
-- npm run build:web: verifies that the production web bundle still builds correctly.
+### Extension guides
 
-For convenience, npm test now runs the same baseline check.
+- [Game presentation and graphical extension guide](docs/game-presentation-extension-guide.md)
+- [Control binding extension guide](docs/control-binding-extension-guide.md)
 
-## Game structure
+The project keeps simulation, input, presentation and desktop integration separated so future visual work does not accidentally rewrite the game itself.
 
-- Physics Engine: src/resources/js/physics.js
-- Rendering: PixiJS (https://github.com/pixijs/pixi.js)
+</details>
 
-Refer to src/resources/js/main.js for more details.
+---
 
-## About this fork
-
-This fork focuses on:
-
-- keeping the game working on the web
-- adding native Linux support via AppImage
-- improving the desktop experience so it feels like a proper standalone app
-- introducing careful improvements without breaking the original gameplay feel
-
-The project is based on the JavaScript reverse-engineering and reimplementation work published by Kyutae Lee, and continues that foundation with Linux support, release automation, UI/UX fixes, accessibility improvements, and fork-specific cleanup.
-
-Source code for this fork:
-https://github.com/santirodriguez/pikachu-volleyball
-
-## Tips
-
-- In 1-player mode, press Z to play as Player 1 or Enter to play as Player 2.
-- Player 1 has an extra down input on the V key. It behaves differently from F, so you can use whichever feels more comfortable.
-- Press Esc to hide or show the menu bar.
-- Practice mode is available at Options → Practice mode.
-- In practice mode, press B to reset the ball quickly.
-- After a match ends, use Power Hit for a quick rematch.
-- For offline browser play, you can still install the web version as an app from your browser.
-
-## An intended deviation from the original game
-
-If there is no keyboard input, AI vs AI match starts automatically.
-
-Unlike the original game, there is no time limit, so matches can run indefinitely.
+<p align="center">
+  Unofficial fan project. Not affiliated with or endorsed by the Pokémon rights holders.
+</p>

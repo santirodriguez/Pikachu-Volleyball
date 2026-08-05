@@ -1,31 +1,60 @@
 # Repository Working Agreements
 
-These rules apply to all future Codex tasks in this repository.
+These rules apply to all future work in this repository.
 
-## Scope and change discipline
-- Prefer small, focused changes that solve one task.
-- Use one branch per task.
-- Avoid unrelated refactors or formatting-only churn.
-- Modify only the files needed for the requested outcome.
+## Technical language
 
-## English-only technical artifacts
-- Write all new code, comments, identifiers, filenames, branch names, commit messages, PR titles, and technical documentation in English.
-- Keep end-user and reviewer explanations in simple English.
+- Write code, comments, identifiers, filenames, branch names, commit messages, pull request titles, prompts, blueprints, and technical documentation in English.
+- End-user interface text must follow the locale being edited.
 
-## Web-first stability requirements
-- Keep the current web version working for all supported locales under `src/` (`en`, `ko`, `zh`, and shared resources).
-- For changes that affect runtime behavior, assets, or build configuration, run `npm run build` before finishing.
-- If a change cannot be validated locally, state that clearly in the PR notes with the reason.
+## Development model
 
-## Web and desktop boundary
-- This repository is currently a web project (Webpack + static assets); keep web implementation and build flow intact.
-- Place web game code and assets under the existing web paths (`src/`, `webpack.*.js`) and do not introduce desktop-specific runtime coupling into them.
-- If desktop packaging/support is added later, keep it separated from web code in its own top-level area and leave web entry points unchanged unless the task explicitly requires it.
+- Prefer direct repository work for focused and reasonably scoped changes.
+- Use Codex only when a change is genuinely broad, repetitive, or requires a coordinated multi-file refactor.
+- Treat Codex output as an implementation proposal that still requires repository, diff, and validation review.
+- Keep changes small and focused. Use one task branch and one pull request per task.
+- Avoid unrelated refactors and formatting-only churn.
 
-## Linux packaging policy
-- Linux packaging target is AppImage only.
-- Do not add or document Snap, Flatpak, `.deb`, or other Linux package targets unless requirements are explicitly changed.
+## Version 2 integration
 
-## Review expectations
-- In PR descriptions, include: what changed, why it changed, and how it was validated.
-- Keep validation steps reproducible with repository-supported commands.
+- `v2` is the integration branch for Pikachu Volleyball 2.0.
+- Task branches use the `v2-<task>` naming pattern and target `v2`.
+- The final release pull request will target `main` from `v2`.
+- Review relevant changes made to `main` during development and selectively bring them into `v2`.
+
+## Preservation requirements
+
+- Preserve the original physics, AI, timing, rendering, game states, scoring, and default controls unless a task explicitly requires a change.
+- Preserve all accepted fork improvements listed in `docs/2.0-preservation-matrix.md`.
+- Do not modify physics, AI, or timing without an explicit requirement and regression evidence.
+- Do not remove a feature merely because its implementation is reorganized.
+
+## Web and desktop boundaries
+
+- Keep the web build and static locale outputs working.
+- Keep desktop-only code under `desktop/` and expose only narrow, secure APIs to the renderer.
+- Keep `contextIsolation`, sandboxing, and external-navigation restrictions enabled.
+- Linux packaging remains AppImage-only unless requirements explicitly change.
+
+## Validation
+
+- Run `npm run quality:check` for runtime, asset, build, or configuration changes.
+- Run additional tests introduced by the affected area.
+- Validate every supported locale output after localization or build-template changes.
+- State clearly in the pull request when a check could not be run and why.
+- Packaging-sensitive changes require a real AppImage build and manual Linux validation before release.
+
+## Pull request expectations
+
+Every implementation pull request must explain:
+
+- what changed;
+- why it changed;
+- affected preservation items;
+- validation performed;
+- validation not performed;
+- remaining manual checks;
+- screenshots for visible changes;
+- bundle or artifact size impact when relevant.
+
+Do not merge when unrelated changes are present, required validation is missing without explanation, accessibility regresses, locale coverage is incomplete, or web and Electron behavior diverge unintentionally.
