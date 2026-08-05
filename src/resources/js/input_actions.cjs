@@ -14,7 +14,15 @@ const INPUT_ACTIONS = Object.freeze({
 });
 
 const PLAYER_ONE_PRIMARY_POWER_HIT_KEY = 'KeyZ';
-const PLAYER_ONE_ALTERNATE_POWER_HIT_KEY = 'ControlLeft';
+const PLAYER_ONE_ALTERNATE_POWER_HIT_KEY = 'ShiftLeft';
+const PLAYER_TWO_PRIMARY_POWER_HIT_KEY = 'Enter';
+const PLAYER_TWO_ALTERNATE_POWER_HIT_KEY = 'ControlLeft';
+const GLOBAL_PAUSE_KEY = 'KeyP';
+
+const DEFAULT_POWER_HIT_ALTERNATES = Object.freeze({
+  [PLAYER_ONE_PRIMARY_POWER_HIT_KEY]: PLAYER_ONE_ALTERNATE_POWER_HIT_KEY,
+  [PLAYER_TWO_PRIMARY_POWER_HIT_KEY]: PLAYER_TWO_ALTERNATE_POWER_HIT_KEY,
+});
 
 function normalizeKeyCodes(value) {
   const values = Array.isArray(value) ? value : [value];
@@ -23,11 +31,12 @@ function normalizeKeyCodes(value) {
 
 function getPowerHitKeyCodes(powerHit) {
   const keyCodes = normalizeKeyCodes(powerHit);
-  if (
-    keyCodes.includes(PLAYER_ONE_PRIMARY_POWER_HIT_KEY) &&
-    !keyCodes.includes(PLAYER_ONE_ALTERNATE_POWER_HIT_KEY)
-  ) {
-    keyCodes.push(PLAYER_ONE_ALTERNATE_POWER_HIT_KEY);
+  for (const [primaryKey, alternateKey] of Object.entries(
+    DEFAULT_POWER_HIT_ALTERNATES
+  )) {
+    if (keyCodes.includes(primaryKey) && !keyCodes.includes(alternateKey)) {
+      keyCodes.push(alternateKey);
+    }
   }
   return keyCodes;
 }
@@ -38,6 +47,29 @@ function normalizeBindings(bindings) {
     normalized[action] = normalizeKeyCodes(codes);
   }
   return normalized;
+}
+
+function isEditableTarget(target) {
+  if (target === null || typeof target !== 'object') {
+    return false;
+  }
+  const tagName =
+    typeof target.tagName === 'string' ? target.tagName.toUpperCase() : '';
+  return (
+    target.isContentEditable === true ||
+    tagName === 'INPUT' ||
+    tagName === 'TEXTAREA' ||
+    tagName === 'SELECT'
+  );
+}
+
+function shouldHandlePauseShortcut(event) {
+  return Boolean(
+    event &&
+      event.code === GLOBAL_PAUSE_KEY &&
+      event.repeat !== true &&
+      !isEditableTarget(event.target)
+  );
 }
 
 class InputActionState {
@@ -51,17 +83,13 @@ class InputActionState {
   }
 
   handleKeyDown(code) {
-    if (!this.boundCodes.has(code)) {
-      return false;
-    }
+    if (!this.boundCodes.has(code)) return false;
     this.downCodes.add(code);
     return true;
   }
 
   handleKeyUp(code) {
-    if (!this.boundCodes.has(code)) {
-      return false;
-    }
+    if (!this.boundCodes.has(code)) return false;
     this.downCodes.delete(code);
     return true;
   }
@@ -74,14 +102,12 @@ class InputActionState {
   createSnapshot() {
     const down = {};
     const pressed = {};
-
     for (const action of Object.keys(this.bindings)) {
       const isDown = this.isActionDown(action);
       down[action] = isDown;
       pressed[action] = isDown && !this.previousActionDown.get(action);
       this.previousActionDown.set(action, isDown);
     }
-
     return { down, pressed };
   }
 
@@ -97,7 +123,11 @@ module.exports = {
   INPUT_ACTIONS,
   PLAYER_ONE_PRIMARY_POWER_HIT_KEY,
   PLAYER_ONE_ALTERNATE_POWER_HIT_KEY,
+  PLAYER_TWO_PRIMARY_POWER_HIT_KEY,
+  PLAYER_TWO_ALTERNATE_POWER_HIT_KEY,
+  GLOBAL_PAUSE_KEY,
   InputActionState,
   getPowerHitKeyCodes,
   normalizeKeyCodes,
+  shouldHandlePauseShortcut,
 };

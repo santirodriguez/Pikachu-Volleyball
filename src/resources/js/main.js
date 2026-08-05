@@ -22,7 +22,7 @@
  *  - "cloud_and_wave.js": This is also a Model part which takes charge of the clouds and wave motion in the game. Of course, it is also rendered by "view.js".
  *                         It is also gained by reverse engineering the original machine code.
  *  - "keyboard.js": Support the Controller("pikavolley.js") to get a user input via keyboard.
- *  - "audio.js": The game audio or sounds. It depends on pixi-sound (https://github.com/pixijs/pixi-sound) library.
+ *  - "audio.js": The game audio or sounds. It depends on pixi-sound (https://github.com/pixi-sound) library.
  *  - "rand.js": For the random function used in the Models ("physics.js", "cloud_and_wave.js").
  *  - "assets_path.js": For the assets (image files, sound files) locations.
  *  - "ui.js": For the user interface (menu bar, buttons etc.) of the html page.
@@ -43,6 +43,9 @@ import '@pixi/canvas-display';
 import { PikachuVolleyball } from './pikavolley.js';
 import { ASSETS_PATH } from './assets_path.js';
 import { setUpUI } from './ui.js';
+import inputActionsModule from './input_actions.cjs';
+
+const { shouldHandlePauseShortcut } = inputActionsModule;
 
 // Reference for how to use Renderer.registerPlugin:
 // https://github.com/pixijs/pixijs/blob/af3c0c6bb15aeb1049178c972e4a14bb4cabfce4/bundles/pixi.js/src/index.ts#L27-L34
@@ -120,8 +123,41 @@ function setUpInitialUI() {
 function setup() {
   const pikaVolley = new PikachuVolleyball(stage, loader.resources);
   setUpUI(pikaVolley, ticker);
+  setUpPauseShortcut();
   warmUpAudioAssets();
   start(pikaVolley);
+}
+
+/**
+ * Toggle the existing pause command with the global P shortcut.
+ * The integrated menu will subscribe to the emitted event in the next phase.
+ */
+function setUpPauseShortcut() {
+  window.addEventListener('keydown', (event) => {
+    if (!shouldHandlePauseShortcut(event)) {
+      return;
+    }
+
+    const blockingUi = document.querySelector(
+      '.fade-in-box:not(.hidden), .dropdown.show, .submenu.show'
+    );
+    if (blockingUi !== null) {
+      return;
+    }
+
+    const pauseBtn = document.getElementById('pause-btn');
+    if (pauseBtn === null || pauseBtn.disabled) {
+      return;
+    }
+
+    event.preventDefault();
+    pauseBtn.click();
+    window.dispatchEvent(
+      new CustomEvent('pv-pause-changed', {
+        detail: { paused: pauseBtn.classList.contains('selected') },
+      })
+    );
+  });
 }
 
 /**
