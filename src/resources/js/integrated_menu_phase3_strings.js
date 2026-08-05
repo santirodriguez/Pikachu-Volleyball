@@ -156,6 +156,79 @@ const CONTROL_EDITOR = Object.freeze({
   },
 });
 
+const ABOUT_COPY = Object.freeze({
+  en: {
+    kicker: 'VERSION 2.0',
+    title: 'One more match, years later',
+    body:
+      'As a child, this game meant a great deal to me. On a low-powered computer, Game Boy Color emulators and simple, joyful, hard-to-put-down games like this became my doorway into the Pokémon world—and the beginning of an affection that never really left.',
+    original:
+      '<strong>Pikachu Volleyball (1997)</strong> — SACHI SOFT / SAWAYAKAN Programmers and Satoshi Takenouchi. Thanks for creating the small, unforgettable classic that started it all.',
+    reverse:
+      '<a href="https://github.com/gorisanson/pikachu-volleyball" target="_blank" rel="noopener"><strong>JavaScript reverse-engineering reimplementation</strong></a> — Kyutae Lee. Thanks for the painstaking work that kept the game alive on the web and made this edition possible.',
+    fork: 'This edition is simply my way of caring for a game I remember fondly.',
+    website: 'Visit santiagorodriguez.com',
+    source: 'View source on GitHub',
+    punchline: 'Some childhood games always deserve one more match.',
+  },
+  'es-ar': {
+    kicker: 'VERSIÓN 2.0',
+    title: 'Un partido más, tantos años después',
+    body:
+      'De chico, este juego me hacía mucha ilusión. En una computadora con pocos recursos, los emuladores de Game Boy Color y estos juegos sencillos, alegres y difíciles de soltar fueron mi puerta de entrada al universo Pokémon y el comienzo de un cariño que todavía conservo.',
+    original:
+      '<strong>Pikachu Volleyball (1997)</strong> — SACHI SOFT / SAWAYAKAN Programmers y Satoshi Takenouchi. Gracias por crear el pequeño e inolvidable clásico que empezó todo.',
+    reverse:
+      '<a href="https://github.com/gorisanson/pikachu-volleyball" target="_blank" rel="noopener"><strong>Reimplementación en JavaScript mediante ingeniería inversa</strong></a> — Kyutae Lee. Gracias por el trabajo minucioso que mantuvo vivo el juego en la web e hizo posible esta edición.',
+    fork: 'Esta edición es, simplemente, mi manera de cuidar un juego que recuerdo con mucho cariño.',
+    website: 'Visitar santiagorodriguez.com',
+    source: 'Ver código en GitHub',
+    punchline: 'Hay juegos de la infancia que siempre merecen un partido más.',
+  },
+  ko: {
+    kicker: '버전 2.0',
+    title: '세월이 흘러도, 한 경기 더',
+    body:
+      '어릴 적 이 게임은 제게 큰 설렘이었습니다. 성능이 낮은 컴퓨터에서 Game Boy Color 에뮬레이터와 이처럼 단순하지만 즐겁고 좀처럼 손을 놓기 힘든 게임들은 포켓몬 세계로 들어가는 문이 되었고, 지금까지 이어지는 애정의 시작이 되었습니다.',
+    original:
+      '<strong>Pikachu Volleyball (1997)</strong> — SACHI SOFT / SAWAYAKAN Programmers와 Satoshi Takenouchi. 이 모든 것의 시작이 된 작지만 잊을 수 없는 고전을 만들어 주셔서 감사합니다.',
+    reverse:
+      '<a href="https://github.com/gorisanson/pikachu-volleyball" target="_blank" rel="noopener"><strong>JavaScript 리버스 엔지니어링 재구현</strong></a> — Kyutae Lee. 웹에서 이 게임을 이어 가고 이번 에디션을 가능하게 한 세심한 작업에 감사드립니다.',
+    fork: '이 에디션은 좋은 추억으로 간직한 게임을 조심스럽게 돌보는 저만의 작은 방식일 뿐입니다.',
+    website: 'santiagorodriguez.com 방문',
+    source: 'GitHub 소스 보기',
+    punchline: '어린 시절의 어떤 게임은 언제나 한 경기를 더 할 가치가 있습니다.',
+  },
+  zh: {
+    kicker: '版本 2.0',
+    title: '多年以后，再来一局',
+    body:
+      '小时候，这款游戏曾让我满怀期待。那时电脑性能有限，Game Boy Color 模拟器和这类简单、快乐又让人舍不得放下的游戏，成了我走进宝可梦世界的入口，也开启了一份延续至今的喜爱。',
+    original:
+      '<strong>Pikachu Volleyball (1997)</strong> — SACHI SOFT / SAWAYAKAN Programmers 与 Satoshi Takenouchi。感谢你们创造了这个小巧却令人难忘的经典，一切由此开始。',
+    reverse:
+      '<a href="https://github.com/gorisanson/pikachu-volleyball" target="_blank" rel="noopener"><strong>JavaScript 逆向工程重实现</strong></a> — Kyutae Lee。感谢这项细致工作，让游戏在网页上延续，也让这个版本成为可能。',
+    fork: '这个版本只是我珍惜一款童年游戏、认真照看它的一种方式。',
+    website: '访问 santiagorodriguez.com',
+    source: '在 GitHub 查看源码',
+    punchline: '有些童年游戏，总值得再来一局。',
+  },
+  ca: {
+    kicker: 'VERSIÓ 2.0',
+    title: 'Un partit més, tants anys després',
+    body:
+      'De petit, aquest joc em feia molta il·lusió. En un ordinador amb pocs recursos, els emuladors de Game Boy Color i jocs senzills, alegres i difícils de deixar com aquest van ser la meva porta d’entrada a l’univers Pokémon i l’inici d’un afecte que encara conservo.',
+    original:
+      '<strong>Pikachu Volleyball (1997)</strong> — SACHI SOFT / SAWAYAKAN Programmers i Satoshi Takenouchi. Gràcies per crear el petit clàssic inoblidable que ho va començar tot.',
+    reverse:
+      '<a href="https://github.com/gorisanson/pikachu-volleyball" target="_blank" rel="noopener"><strong>Reimplementació JavaScript mitjançant enginyeria inversa</strong></a> — Kyutae Lee. Gràcies per la feina minuciosa que va mantenir el joc viu al web i va fer possible aquesta edició.',
+    fork: 'Aquesta edició és, simplement, la meva manera de cuidar un joc que recordo amb molt d’afecte.',
+    website: 'Visita santiagorodriguez.com',
+    source: 'Veure el codi a GitHub',
+    punchline: 'Hi ha jocs de la infància que sempre mereixen un partit més.',
+  },
+});
+
 const CATALAN = Object.freeze({
   paused: 'EN PAUSA',
   chip: '2.0 · ENCARA REMATANT',
@@ -222,20 +295,7 @@ const CATALAN = Object.freeze({
     restartWarning:
       'Canviar l’idioma recarrega l’aplicació i reinicia el partit actual.',
   },
-  about: {
-    kicker: 'VERSIÓ 2.0',
-    title: 'Una quantitat perfectament raonable d’enginyeria',
-    body:
-      'Pikachu Volleyball no tenia una edició d’escriptori Linux com calia, així que Santiago Rodríguez li va donar un AppImage, una interfície moderna i —perquè la moderació és opcional— un full de ruta 2.0.',
-    original:
-      '<strong>Pikachu Volleyball (1997)</strong> — SACHI SOFT / SAWAYAKAN Programmers i Satoshi Takenouchi. Gràcies per crear el clàssic meravellosament innecessari que ho va començar tot.',
-    reverse:
-      '<a href="https://github.com/gorisanson/pikachu-volleyball" target="_blank" rel="noopener"><strong>Reimplementació JavaScript mitjançant enginyeria inversa</strong></a> — Kyutae Lee. Gràcies per la feina minuciosa que ha fet possible aquesta edició per a Linux.',
-    fork: 'Implementació Linux/AppImage i direcció de 2.0: Santiago Rodríguez.',
-    website: 'Visita santiagorodriguez.com',
-    source: 'Veure el codi a GitHub',
-    punchline: 'Dos ratolins elèctrics. Una pilota. Linux ja feia tard.',
-  },
+  about: ABOUT_COPY.ca,
   quit: {
     kicker: 'ESCRIPTORI',
     title: 'Sortir del joc',
@@ -284,15 +344,18 @@ const CATALAN = Object.freeze({
 
 export function getPhase3MenuStrings(locale, baseStrings) {
   const editor = CONTROL_EDITOR[locale] || CONTROL_EDITOR.en;
+  const about = ABOUT_COPY[locale] || ABOUT_COPY.en;
   if (locale === 'ca') {
     return {
       ...baseStrings,
       ...CATALAN,
+      about,
       controls: { ...CATALAN.controls, ...editor },
     };
   }
   return {
     ...baseStrings,
+    about,
     controls: { ...baseStrings.controls, ...editor },
   };
 }
