@@ -73,6 +73,10 @@ export function createGameCommands(pikaVolley, ticker) {
     return 'medium';
   }
 
+  function getCurrentLocale() {
+    return normalizeLocale(document.documentElement.lang);
+  }
+
   function getSettings() {
     const canvas = document.getElementById('game-canvas');
     return {
@@ -85,6 +89,7 @@ export function createGameCommands(pikaVolley, ticker) {
       speed: getStoredValue('speed', getSpeedName()),
       winningScore: String(pikaVolley.winningScore),
       practiceMode: pikaVolley.isPracticeMode,
+      locale: getCurrentLocale(),
     };
   }
 
@@ -168,10 +173,6 @@ export function createGameCommands(pikaVolley, ticker) {
       STORAGE_KEYS.winningScore,
       DEFAULT_SETTINGS.winningScore
     );
-  }
-
-  function getCurrentLocale() {
-    return normalizeLocale(document.documentElement.lang);
   }
 
   function isDesktop() {
