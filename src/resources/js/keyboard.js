@@ -5,23 +5,19 @@
 import { PikaUserInput } from './physics.js';
 import inputActionsModule from './input_actions.cjs';
 
-const { INPUT_ACTIONS, InputActionState, normalizeKeyCodes } =
-  inputActionsModule;
+const {
+  INPUT_ACTIONS,
+  PLAYER_ONE_PRIMARY_POWER_HIT_KEY,
+  PLAYER_ONE_ALTERNATE_POWER_HIT_KEY,
+  InputActionState,
+  getPowerHitKeyCodes,
+} = inputActionsModule;
 
-export { INPUT_ACTIONS };
-
-export const PLAYER_ONE_ALTERNATE_POWER_HIT_KEY = 'ControlLeft';
-
-function getPowerHitKeyCodes(powerHit) {
-  const keyCodes = normalizeKeyCodes(powerHit);
-  if (
-    keyCodes.includes('KeyZ') &&
-    !keyCodes.includes(PLAYER_ONE_ALTERNATE_POWER_HIT_KEY)
-  ) {
-    keyCodes.push(PLAYER_ONE_ALTERNATE_POWER_HIT_KEY);
-  }
-  return keyCodes;
-}
+export {
+  INPUT_ACTIONS,
+  PLAYER_ONE_PRIMARY_POWER_HIT_KEY,
+  PLAYER_ONE_ALTERNATE_POWER_HIT_KEY,
+};
 
 /**
  * Class representing a keyboard used to control a player
@@ -43,7 +39,9 @@ export class PikaKeyboard extends PikaUserInput {
     super();
 
     const powerHitKeyCodes = getPowerHitKeyCodes(powerHit);
-    const isPlayerOneDefaultBinding = powerHitKeyCodes.includes('KeyZ');
+    const isPlayerOneDefaultBinding = powerHitKeyCodes.includes(
+      PLAYER_ONE_PRIMARY_POWER_HIT_KEY
+    );
 
     this.actionState = new InputActionState({
       [INPUT_ACTIONS.MOVE_LEFT]: left,
