@@ -66,6 +66,9 @@
     "productName": "Pikachu Volleyball",
     "artifactName": "Pikachu-Volleyball-${version}-${arch}.${ext}",
     "compression": "maximum",
+    "electronLanguages": [
+      "en-US"
+    ],
     "directories": {
       "output": "release"
     },
