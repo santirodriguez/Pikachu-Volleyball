@@ -15,12 +15,12 @@ These rules apply to all future work in this repository.
 - Keep changes small and focused. Use one task branch and one pull request per task.
 - Avoid unrelated refactors and formatting-only churn.
 
-## Version 2 integration
+## Version 2.1 integration
 
-- `v2` is the integration branch for Pikachu Volleyball 2.0.
-- Task branches use the `v2-<task>` naming pattern and target `v2`.
-- The final release pull request will target `main` from `v2`.
-- Review relevant changes made to `main` during development and selectively bring them into `v2`.
+- `v2.1` is the integration branch for Pikachu Volleyball 2.1.
+- Task branches use the `v2.1-<task>` naming pattern and target `v2.1`.
+- The final release pull request will target `main` from `v2.1`.
+- Review relevant changes made to `main` during development and selectively bring them into `v2.1`.
 
 ## Preservation requirements
 
