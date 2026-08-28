@@ -71,6 +71,12 @@ jobs:
           fi
 
           mapfile -t locale_paks < <(find "$app_dir/locales" -maxdepth 1 -type f -name '*.pak' | sort)
+          if [[ "${#locale_paks[@]}" -ne 1 || "$(basename "${locale_paks[0]}")" != "en-US.pak" ]]; then
+            echo "Expected only Electron locale en-US.pak" >&2
+            printf 'Found: %s\n' "${locale_paks[@]}" >&2
+            exit 1
+          fi
+
           locale_bytes=0
           for locale_file in "${locale_paks[@]}"; do
             locale_bytes=$((locale_bytes + $(stat -c%s "$locale_file")))
