@@ -69,6 +69,7 @@
     "electronLanguages": [
       "en-US"
     ],
+    "afterPack": "./scripts/prune-packaged-node-modules.cjs",
     "directories": {
       "output": "release"
     },
