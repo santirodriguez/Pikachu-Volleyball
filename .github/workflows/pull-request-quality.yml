@@ -78,6 +78,12 @@ jobs:
             fi
           done
 
+          if find dist -type f -name '*.map' -print -quit | grep -q .; then
+            echo "Production build contains source maps" >&2
+            find dist -type f -name '*.map' -print >&2
+            exit 1
+          fi
+
           if ! grep -q 'lang="ca"' dist/ca/index.html; then
             echo "Catalan index output does not declare lang=ca" >&2
             exit 1
