@@ -58,6 +58,52 @@ jobs:
       - name: Build Linux AppImage
         run: npm run build:desktop:linux -- --publish=never
 
+      - name: Inspect packaged application
+        shell: bash
+        run: |
+          set -euo pipefail
+          app_dir="release/linux-unpacked"
+          asar_path="$app_dir/resources/app.asar"
+
+          if [[ ! -d "$app_dir" ]]; then
+            echo "Missing unpacked application directory: $app_dir" >&2
+            exit 1
+          fi
+
+          mapfile -t locale_paks < <(find "$app_dir/locales" -maxdepth 1 -type f -name '*.pak' | sort)
+          locale_bytes=0
+          for locale_file in "${locale_paks[@]}"; do
+            locale_bytes=$((locale_bytes + $(stat -c%s "$locale_file")))
+          done
+
+          if [[ ! -f "$asar_path" ]]; then
+            echo "Missing packaged app archive: $asar_path" >&2
+            exit 1
+          fi
+
+          asar_listing="$(mktemp)"
+          npx --no-install asar list "$asar_path" > "$asar_listing"
+          packaged_node_modules="$(grep -c '^/node_modules/' "$asar_listing" || true)"
+          packaged_pixi_files="$(grep -c '^/node_modules/@pixi/' "$asar_listing" || true)"
+          app_asar_bytes="$(stat -c%s "$asar_path")"
+
+          echo "Electron locale packs: ${#locale_paks[@]}"
+          printf '  %s\n' "${locale_paks[@]}"
+          echo "Electron locale bytes: $locale_bytes"
+          echo "app.asar bytes: $app_asar_bytes"
+          echo "node_modules files in app.asar: $packaged_node_modules"
+          echo "@pixi files in app.asar: $packaged_pixi_files"
+
+          {
+            echo "## Packaged application inspection"
+            echo ""
+            echo "- Electron locale packs: \`${#locale_paks[@]}\`"
+            echo "- Electron locale bytes: \`$locale_bytes\`"
+            echo "- app.asar size: \`$app_asar_bytes\` bytes"
+            echo "- node_modules files in app.asar: \`$packaged_node_modules\`"
+            echo "- @pixi files in app.asar: \`$packaged_pixi_files\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Verify AppImage and create checksum
         shell: bash
         run: |
