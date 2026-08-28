@@ -108,6 +108,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          baseline_bytes=90911841
           mapfile -t appimages < <(find release -maxdepth 1 -type f -name '*.AppImage' | sort)
 
           if [[ "${#appimages[@]}" -ne 1 ]]; then
@@ -124,6 +125,8 @@ jobs:
           appimage_name="$(basename "$appimage_path")"
           appimage_bytes="$(stat -c%s "$appimage_path")"
           appimage_mib="$(awk -v bytes="$appimage_bytes" 'BEGIN { printf "%.2f", bytes / 1024 / 1024 }')"
+          delta_bytes=$((appimage_bytes - baseline_bytes))
+          delta_percent="$(awk -v delta="$delta_bytes" -v baseline="$baseline_bytes" 'BEGIN { printf "%+.2f", (delta / baseline) * 100 }')"
 
           (
             cd release
@@ -132,6 +135,7 @@ jobs:
 
           echo "Built artifact: $appimage_name"
           echo "Artifact size: $appimage_bytes bytes (${appimage_mib} MiB)"
+          echo "Delta vs v2.0.0: $delta_bytes bytes (${delta_percent}%)"
           cat release/SHA256SUMS.txt
 
           {
@@ -139,6 +143,8 @@ jobs:
             echo ""
             echo "- Artifact: \`$appimage_name\`"
             echo "- Size: \`$appimage_bytes\` bytes (\`${appimage_mib}\` MiB)"
+            echo "- v2.0.0 baseline: \`$baseline_bytes\` bytes"
+            echo "- Delta vs v2.0.0: \`$delta_bytes\` bytes (\`${delta_percent}%\`)"
             echo "- Checksum file: \`SHA256SUMS.txt\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
