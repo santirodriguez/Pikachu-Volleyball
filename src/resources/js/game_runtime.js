@@ -59,6 +59,7 @@ let runtimeStarted = false;
 export function startGameRuntime() {
   if (runtimeStarted) return;
   runtimeStarted = true;
+  markPerformance('pv-runtime-start');
 
   Renderer.registerPlugin('prepare', Prepare);
   Renderer.registerPlugin('batch', BatchRenderer);
@@ -69,6 +70,7 @@ export function startGameRuntime() {
   settings.RESOLUTION = 2;
   settings.SCALE_MODE = SCALE_MODES.NEAREST;
   settings.ROUND_PIXELS = true;
+  markPerformance('pv-pixi-ready');
 
   const renderer = autoDetectRenderer({
     width: 432,
@@ -85,10 +87,15 @@ export function startGameRuntime() {
   renderer.view.setAttribute('id', 'game-canvas');
   document.getElementById('game-canvas-container').appendChild(renderer.view);
   renderer.render(stage);
+  markPerformance('pv-renderer-ready');
 
   loader.add(ASSETS_PATH.SPRITE_SHEET);
   setUpLoaderUI(loader);
-  loader.load(() => setupGame(renderer, stage, ticker, loader));
+  markPerformance('pv-sprite-load-start');
+  loader.load(() => {
+    markPerformance('pv-sprite-load-ready');
+    setupGame(renderer, stage, ticker, loader);
+  });
 }
 
 /**
@@ -118,15 +125,18 @@ function setUpLoaderUI(loader) {
  */
 function setupGame(renderer, stage, ticker, loader) {
   const pikaVolley = new PikachuVolleyball(stage, loader.resources);
+  markPerformance('pv-game-controller-ready');
   hydrateGameSettings(
     settingsStore.getSettings(),
     pikaVolley,
     ticker,
     document
   );
+  markPerformance('pv-settings-ready');
   setUpVisibilityAudio(pikaVolley);
   const commands = createGameCommands(pikaVolley, ticker);
   setUpIntegratedMenu(commands);
+  markPerformance('pv-menu-mounted');
   warmUpAudioAssets();
   markPerformance('pv-runtime-ready');
   startGameLoop(renderer, stage, ticker, pikaVolley);
