@@ -118,7 +118,12 @@ function setUpLoaderUI(loader) {
  */
 function setupGame(renderer, stage, ticker, loader) {
   const pikaVolley = new PikachuVolleyball(stage, loader.resources);
-  hydrateGameSettings(settingsStore.getSettings(), pikaVolley, ticker, document);
+  hydrateGameSettings(
+    settingsStore.getSettings(),
+    pikaVolley,
+    ticker,
+    document
+  );
   setUpVisibilityAudio(pikaVolley);
   const commands = createGameCommands(pikaVolley, ticker);
   setUpIntegratedMenu(commands);
