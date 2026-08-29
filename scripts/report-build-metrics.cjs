@@ -2,17 +2,33 @@
 
 const fs = require('fs');
 const path = require('path');
+const zlib = require('zlib');
 
 const ROOT = path.resolve(__dirname, '..');
 const RELEASE_DIR = path.join(ROOT, 'release');
 const DIST_DIR = path.join(ROOT, 'dist');
 const APP_DIR = path.join(RELEASE_DIR, 'linux-unpacked');
 const ASAR_PATH = path.join(APP_DIR, 'resources', 'app.asar');
+const SQUASHFS_MAGIC = Buffer.from('hsqs');
+const SQUASHFS_SCAN_BYTES = 2 * 1024 * 1024;
+const DEFAULT_SQUASHFS_BLOCK_BYTES = 128 * 1024;
+const TOP_FILE_LIMIT = 25;
+const TOP_DIRECTORY_LIMIT = 25;
 
 const BASELINES = Object.freeze({
   v200: 90911841,
   previousOptimizationCheckpoint: 83297939,
   preObservabilityCandidate: 81834404,
+  normalCompressionValidated: 104271158,
+});
+
+const SQUASHFS_COMPRESSION = Object.freeze({
+  1: 'gzip',
+  2: 'lzma',
+  3: 'lzo',
+  4: 'xz',
+  5: 'lz4',
+  6: 'zstd',
 });
 
 function fileSize(filePath) {
@@ -49,8 +65,28 @@ function listFiles(directoryPath, predicate = () => true) {
   return files.sort();
 }
 
+function listDirectories(directoryPath) {
+  if (!fs.existsSync(directoryPath)) return [];
+  const directories = [];
+  const stack = [directoryPath];
+  while (stack.length > 0) {
+    const current = stack.pop();
+    for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      const entryPath = path.join(current, entry.name);
+      directories.push(entryPath);
+      stack.push(entryPath);
+    }
+  }
+  return directories;
+}
+
 function relativeFromRoot(filePath) {
   return path.relative(ROOT, filePath).split(path.sep).join('/');
+}
+
+function relativeFromApp(filePath) {
+  return path.relative(APP_DIR, filePath).split(path.sep).join('/');
 }
 
 function bytesDelta(value, baseline) {
@@ -60,6 +96,11 @@ function bytesDelta(value, baseline) {
     bytes,
     percent: Number(((bytes / baseline) * 100).toFixed(2)),
   };
+}
+
+function mib(bytes) {
+  if (bytes === null || bytes === undefined) return null;
+  return Number((bytes / 1024 / 1024).toFixed(2));
 }
 
 function topLevelBreakdown(directoryPath) {
@@ -76,6 +117,99 @@ function topLevelBreakdown(directoryPath) {
     .sort((a, b) => b.bytes - a.bytes);
 }
 
+function largestFiles(directoryPath, limit = TOP_FILE_LIMIT) {
+  return listFiles(directoryPath)
+    .map((filePath) => ({
+      path: relativeFromApp(filePath),
+      bytes: fileSize(filePath),
+    }))
+    .sort((a, b) => b.bytes - a.bytes)
+    .slice(0, limit);
+}
+
+function largestDirectories(directoryPath, limit = TOP_DIRECTORY_LIMIT) {
+  return listDirectories(directoryPath)
+    .map((dirPath) => ({
+      path: relativeFromApp(dirPath),
+      bytes: directorySize(dirPath),
+    }))
+    .sort((a, b) => b.bytes - a.bytes)
+    .slice(0, limit);
+}
+
+function readSquashfsMetadata(appImagePath) {
+  if (!appImagePath || !fs.existsSync(appImagePath)) return null;
+
+  const fd = fs.openSync(appImagePath, 'r');
+  try {
+    const scanLength = Math.min(fileSize(appImagePath), SQUASHFS_SCAN_BYTES);
+    const prefix = Buffer.alloc(scanLength);
+    fs.readSync(fd, prefix, 0, scanLength, 0);
+    const offset = prefix.indexOf(SQUASHFS_MAGIC);
+    if (offset < 0 || offset + 48 > prefix.length) return null;
+
+    const blockSize = prefix.readUInt32LE(offset + 12);
+    const compressionId = prefix.readUInt16LE(offset + 20);
+    const major = prefix.readUInt16LE(offset + 28);
+    const minor = prefix.readUInt16LE(offset + 30);
+    const bytesUsed = Number(prefix.readBigUInt64LE(offset + 40));
+    const appImageBytes = fileSize(appImagePath);
+
+    return {
+      offsetBytes: offset,
+      runtimeBytes: offset,
+      version: `${major}.${minor}`,
+      compressionId,
+      compression: SQUASHFS_COMPRESSION[compressionId] || `unknown-${compressionId}`,
+      blockSizeBytes: blockSize,
+      bytesUsed,
+      trailingBytes: Math.max(0, appImageBytes - offset - bytesUsed),
+    };
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
+function estimateGzipSquashfsFileBytes(filePath, blockSizeBytes) {
+  const fd = fs.openSync(filePath, 'r');
+  const buffer = Buffer.alloc(blockSizeBytes);
+  let total = 0;
+  try {
+    while (true) {
+      const bytesRead = fs.readSync(fd, buffer, 0, buffer.length, null);
+      if (bytesRead === 0) break;
+      const block = bytesRead === buffer.length ? buffer : buffer.subarray(0, bytesRead);
+      const compressed = zlib.deflateRawSync(block, { level: 9 });
+      total += Math.min(bytesRead, compressed.length);
+    }
+  } finally {
+    fs.closeSync(fd);
+  }
+  return total;
+}
+
+function compressedContributionEstimate(directoryPath, squashfs) {
+  if (!squashfs || squashfs.compression !== 'gzip') return null;
+  const blockSizeBytes = squashfs.blockSizeBytes || DEFAULT_SQUASHFS_BLOCK_BYTES;
+  const files = listFiles(directoryPath).map((filePath) => {
+    const bytes = fileSize(filePath);
+    const estimatedCompressedBytes = estimateGzipSquashfsFileBytes(filePath, blockSizeBytes);
+    return {
+      path: relativeFromApp(filePath),
+      bytes,
+      estimatedCompressedBytes,
+      estimatedRatio: bytes === 0 ? 0 : Number((estimatedCompressedBytes / bytes).toFixed(4)),
+    };
+  });
+
+  files.sort((a, b) => b.estimatedCompressedBytes - a.estimatedCompressedBytes);
+  return {
+    method: 'gzip level 9 independently per SquashFS-sized file block; excludes filesystem metadata and cross-file packing effects',
+    topFiles: files.slice(0, TOP_FILE_LIMIT),
+    estimatedFilesTotalBytes: files.reduce((sum, item) => sum + item.estimatedCompressedBytes, 0),
+  };
+}
+
 function buildReport() {
   const appImages = listFiles(
     RELEASE_DIR,
@@ -83,6 +217,7 @@ function buildReport() {
   );
   const appImagePath = appImages.length === 1 ? appImages[0] : null;
   const appImageBytes = appImagePath ? fileSize(appImagePath) : null;
+  const squashfs = readSquashfsMetadata(appImagePath);
   const jsChunks = listFiles(DIST_DIR, (filePath) => filePath.endsWith('.js')).map(
     (filePath) => ({ path: relativeFromRoot(filePath), bytes: fileSize(filePath) })
   );
@@ -97,22 +232,18 @@ function buildReport() {
     appAsarBytes: fs.existsSync(ASAR_PATH) ? fileSize(ASAR_PATH) : null,
     linuxUnpackedBytes: directorySize(APP_DIR),
     linuxUnpackedBreakdown: topLevelBreakdown(APP_DIR),
+    linuxUnpackedLargestFiles: largestFiles(APP_DIR),
+    linuxUnpackedLargestDirectories: largestDirectories(APP_DIR),
+    squashfs,
+    compressedContributionEstimate: compressedContributionEstimate(APP_DIR, squashfs),
     appImage: appImagePath
-      ? { path: relativeFromRoot(appImagePath), bytes: appImageBytes }
+      ? { path: relativeFromRoot(appImagePath), bytes: appImageBytes, mib: mib(appImageBytes) }
       : null,
     baselines: BASELINES,
     appImageDeltas: appImageBytes
-      ? {
-          v200: bytesDelta(appImageBytes, BASELINES.v200),
-          previousOptimizationCheckpoint: bytesDelta(
-            appImageBytes,
-            BASELINES.previousOptimizationCheckpoint
-          ),
-          preObservabilityCandidate: bytesDelta(
-            appImageBytes,
-            BASELINES.preObservabilityCandidate
-          ),
-        }
+      ? Object.fromEntries(
+          Object.entries(BASELINES).map(([name, baseline]) => [name, bytesDelta(appImageBytes, baseline)])
+        )
       : null,
   };
 }
@@ -126,14 +257,52 @@ function markdown(report) {
     `- JavaScript total: \`${report.jsTotalBytes}\` bytes`,
     `- app.asar: \`${report.appAsarBytes ?? 'n/a'}\` bytes`,
     `- linux-unpacked logical size: \`${report.linuxUnpackedBytes ?? 'n/a'}\` bytes`,
-    `- AppImage: \`${report.appImage?.bytes ?? 'n/a'}\` bytes`,
+    `- AppImage: \`${report.appImage?.bytes ?? 'n/a'}\` bytes${report.appImage ? ` (\`${report.appImage.mib}\` MiB)` : ''}`,
+  ];
+
+  if (report.squashfs) {
+    lines.push(
+      `- AppImage runtime prefix: \`${report.squashfs.runtimeBytes}\` bytes`,
+      `- SquashFS: \`${report.squashfs.compression}\`, block \`${report.squashfs.blockSizeBytes}\` bytes, filesystem \`${report.squashfs.bytesUsed}\` bytes`,
+      `- AppImage trailing data: \`${report.squashfs.trailingBytes}\` bytes`
+    );
+  }
+
+  lines.push(
+    '',
+    '### Largest linux-unpacked files',
+    '',
+    '| File | Logical bytes |',
+    '|---|---:|',
+    ...report.linuxUnpackedLargestFiles.map((item) => `| \`${item.path}\` | ${item.bytes} |`),
+    '',
+    '### Largest linux-unpacked directories',
+    '',
+    '| Directory | Logical bytes |',
+    '|---|---:|',
+    ...report.linuxUnpackedLargestDirectories.map((item) => `| \`${item.path}\` | ${item.bytes} |`),
     '',
     '### JavaScript chunks',
     '',
     '| Chunk | Bytes |',
     '|---|---:|',
-    ...report.jsChunks.map((chunk) => `| \`${chunk.path}\` | ${chunk.bytes} |`),
-  ];
+    ...report.jsChunks.map((chunk) => `| \`${chunk.path}\` | ${chunk.bytes} |`)
+  );
+
+  if (report.compressedContributionEstimate) {
+    lines.push(
+      '',
+      '### Estimated compressed contribution',
+      '',
+      `Method: ${report.compressedContributionEstimate.method}.`,
+      '',
+      '| File | Logical bytes | Estimated compressed bytes |',
+      '|---|---:|---:|',
+      ...report.compressedContributionEstimate.topFiles.map(
+        (item) => `| \`${item.path}\` | ${item.bytes} | ${item.estimatedCompressedBytes} |`
+      )
+    );
+  }
 
   if (report.appImageDeltas) {
     lines.push(
@@ -142,7 +311,8 @@ function markdown(report) {
       '',
       `- v2.0.0 (90,911,841 bytes): \`${report.appImageDeltas.v200.bytes}\` bytes (${report.appImageDeltas.v200.percent >= 0 ? '+' : ''}${report.appImageDeltas.v200.percent}%)`,
       `- previous optimization checkpoint (83,297,939 bytes): \`${report.appImageDeltas.previousOptimizationCheckpoint.bytes}\` bytes (${report.appImageDeltas.previousOptimizationCheckpoint.percent >= 0 ? '+' : ''}${report.appImageDeltas.previousOptimizationCheckpoint.percent}%)`,
-      `- pre-observability v2.1 candidate (81,834,404 bytes): \`${report.appImageDeltas.preObservabilityCandidate.bytes}\` bytes (${report.appImageDeltas.preObservabilityCandidate.percent >= 0 ? '+' : ''}${report.appImageDeltas.preObservabilityCandidate.percent}%)`
+      `- pre-observability v2.1 candidate (81,834,404 bytes): \`${report.appImageDeltas.preObservabilityCandidate.bytes}\` bytes (${report.appImageDeltas.preObservabilityCandidate.percent >= 0 ? '+' : ''}${report.appImageDeltas.preObservabilityCandidate.percent}%)`,
+      `- validated normal-compression baseline (104,271,158 bytes): \`${report.appImageDeltas.normalCompressionValidated.bytes}\` bytes (${report.appImageDeltas.normalCompressionValidated.percent >= 0 ? '+' : ''}${report.appImageDeltas.normalCompressionValidated.percent}%)`
     );
   }
 
