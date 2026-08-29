@@ -65,7 +65,7 @@
     "appId": "com.santirodriguez.pikachu-volleyball",
     "productName": "Pikachu Volleyball",
     "artifactName": "Pikachu-Volleyball-${version}-${arch}.${ext}",
-    "compression": "maximum",
+    "compression": "normal",
     "electronLanguages": [
       "en-US"
     ],
