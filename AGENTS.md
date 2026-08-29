@@ -25,7 +25,8 @@ These rules apply to all future work in this repository.
 ## Preservation requirements
 
 - Preserve the original physics, AI, timing, rendering, game states, scoring, and default controls unless a task explicitly requires a change.
-- Preserve all accepted fork improvements listed in `docs/2.0-preservation-matrix.md`.
+- Preserve all accepted 2.1 behavior listed in `docs/v2.1-preservation-baseline.md`.
+- Keep `docs/2.0-preservation-matrix.md` as historical 2.0 documentation rather than an active 2.1 authority.
 - Do not modify physics, AI, or timing without an explicit requirement and regression evidence.
 - Do not remove a feature merely because its implementation is reorganized.
 
