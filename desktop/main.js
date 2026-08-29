@@ -4,6 +4,8 @@ const { app, BrowserWindow, Menu, ipcMain, shell } = require('electron');
 
 const APP_NAME = 'Pikachu Volleyball';
 const STARTUP_METRICS_FILE = process.env.PV_STARTUP_METRICS_FILE || null;
+const PERFORMANCE_METRICS_FILE =
+  process.env.PV_PERFORMANCE_METRICS_FILE || null;
 const STARTUP_USER_DATA_DIR = process.env.PV_STARTUP_USER_DATA_DIR || null;
 const PROCESS_STARTED_AT_MS = Date.now() - process.uptime() * 1000;
 const startupMarks = {
@@ -27,6 +29,10 @@ let mainWindow = null;
 
 function markStartup(name) {
   startupMarks[name] = Number((Date.now() - PROCESS_STARTED_AT_MS).toFixed(2));
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function isAllowedExternalUrl(urlString) {
@@ -70,8 +76,12 @@ function installApplicationMenu() {
 
 function loadEnglishApplication() {
   if (!mainWindow || mainWindow.isDestroyed()) return;
+  const query = { desktop: '1' };
+  if (PERFORMANCE_METRICS_FILE) {
+    query.performanceDiagnostics = '1';
+  }
   mainWindow.loadFile(path.join(__dirname, '..', 'dist', 'en', 'index.html'), {
-    query: { desktop: '1' },
+    query,
   });
 }
 
@@ -86,6 +96,13 @@ async function getRendererMarks() {
   `);
 }
 
+async function getPerformanceDiagnosticsSnapshot() {
+  if (!mainWindow || mainWindow.isDestroyed()) return null;
+  return mainWindow.webContents.executeJavaScript(`
+    window.__pvPerformanceDiagnostics?.snapshot?.() || null
+  `);
+}
+
 async function waitForRendererCondition(expression, timeoutMs = 10000) {
   const started = Date.now();
   while (Date.now() - started < timeoutMs) {
@@ -94,9 +111,18 @@ async function waitForRendererCondition(expression, timeoutMs = 10000) {
       `Boolean(${expression})`
     );
     if (matched) return true;
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await delay(20);
   }
   return false;
+}
+
+async function pressKeyForFrame(keyCode, holdMs = 80) {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.webContents.sendInputEvent({ type: 'keyDown', keyCode });
+  await delay(holdMs);
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.webContents.sendInputEvent({ type: 'keyUp', keyCode });
+  await delay(60);
 }
 
 async function runStartupMeasurement() {
@@ -153,6 +179,87 @@ async function runStartupMeasurement() {
   app.quit();
 }
 
+async function runPerformanceMeasurement() {
+  if (
+    !PERFORMANCE_METRICS_FILE ||
+    !mainWindow ||
+    mainWindow.isDestroyed()
+  ) {
+    return;
+  }
+
+  const hasFirstFrame = await waitForRendererCondition(
+    `performance.getEntriesByName('pv-first-game-frame', 'mark').length`
+  );
+  if (!hasFirstFrame) throw new Error('Timed out waiting for first game frame');
+  markStartup('pv-first-game-frame-observed');
+
+  const diagnosticsReady = await waitForRendererCondition(
+    `window.__pvPerformanceDiagnostics?.ready === true`,
+    3000
+  );
+  if (!diagnosticsReady) {
+    throw new Error('Timed out waiting for renderer performance diagnostics');
+  }
+
+  await pressKeyForFrame('Z');
+  const menuReady = await waitForRendererCondition(
+    `window.__pvPerformanceDiagnostics?.currentState === 'menu'`,
+    3000
+  );
+  if (!menuReady) throw new Error('Timed out waiting for game menu state');
+
+  await pressKeyForFrame('Z');
+  await pressKeyForFrame('Z');
+
+  const roundReady = await waitForRendererCondition(
+    `window.__pvPerformanceDiagnostics?.currentState === 'round'`,
+    12000
+  );
+  if (!roundReady) throw new Error('Timed out waiting for active round state');
+  markStartup('pv-round-observed');
+
+  const baselineSnapshot = await getPerformanceDiagnosticsSnapshot();
+  const baselineRoundSamples = baselineSnapshot?.roundSampleCount || 0;
+  const enoughRoundSamples = await waitForRendererCondition(
+    `window.__pvPerformanceDiagnostics?.roundSampleCount >= ${
+      baselineRoundSamples + 100
+    }`,
+    20000
+  );
+  if (!enoughRoundSamples) {
+    throw new Error('Timed out collecting active-round frame samples');
+  }
+  markStartup('pv-round-sample-complete');
+
+  const rendererMarks = await getRendererMarks();
+  const rendererDiagnostics = await getPerformanceDiagnosticsSnapshot();
+  markStartup('pv-performance-report-write');
+  const report = {
+    generatedAt: new Date().toISOString(),
+    note: 'Opt-in packaged diagnostic run. Gameplay rules and normal runtime behavior are unchanged. Main-process observation points include up to one 20 ms polling interval.',
+    mainProcessMarksMs: startupMarks,
+    rendererMarks,
+    rendererDiagnostics,
+    endToEndMs: {
+      processStartToFirstGameFrame:
+        startupMarks['pv-first-game-frame-observed'],
+      processStartToRound: startupMarks['pv-round-observed'],
+      processStartToSampleComplete:
+        startupMarks['pv-round-sample-complete'],
+      processStartToReportWrite:
+        startupMarks['pv-performance-report-write'],
+    },
+  };
+
+  fs.mkdirSync(path.dirname(PERFORMANCE_METRICS_FILE), { recursive: true });
+  fs.writeFileSync(
+    PERFORMANCE_METRICS_FILE,
+    `${JSON.stringify(report, null, 2)}\n`
+  );
+  app.quit();
+}
+
 function createMainWindow() {
   markStartup('pv-window-create-start');
   mainWindow = new BrowserWindow({
@@ -198,8 +305,11 @@ function createMainWindow() {
     if (!mainWindow || mainWindow.isDestroyed()) return;
     markStartup('pv-did-finish-load');
     mainWindow.setTitle(APP_NAME);
-    runStartupMeasurement().catch((error) => {
-      console.error('Startup measurement failed.', error);
+    const measurement = PERFORMANCE_METRICS_FILE
+      ? runPerformanceMeasurement()
+      : runStartupMeasurement();
+    measurement.catch((error) => {
+      console.error('Packaged measurement failed.', error);
       app.exit(1);
     });
   });
