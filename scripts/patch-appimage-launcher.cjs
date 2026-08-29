@@ -100,6 +100,7 @@ const failClosedSandboxBlock = [
   'for arg in "\\${args[@]}" ; do',
   '  if [ "$arg" = --no-sandbox ] ; then',
   '    echo "ERROR: --no-sandbox is disabled by this AppImage security policy." >&2',
+  '    trap - EXIT',
   '    exit 1',
   '  fi',
   'done',
@@ -108,6 +109,7 @@ const failClosedSandboxBlock = [
   '# Never downgrade to --no-sandbox.',
   'if ! command -v unshare >/dev/null 2>&1 || ! unshare -Ur true 2>/dev/null ; then',
   '  echo "ERROR: Chromium sandbox prerequisites are unavailable; refusing to launch unsandboxed." >&2',
+  '  trap - EXIT',
   '  exit 1',
   'fi',
 ].join('\n');
@@ -165,6 +167,7 @@ for (const requiredFragment of [
   'export LD_LIBRARY_PATH="\\${APPDIR}/usr/lib\\${LD_LIBRARY_PATH:+:\\${LD_LIBRARY_PATH}}"',
   'ERROR: --no-sandbox is disabled by this AppImage security policy.',
   'ERROR: Chromium sandbox prerequisites are unavailable; refusing to launch unsandboxed.',
+  'trap - EXIT',
   'exec "$BIN"',
   'args[@]',
 ]) {
