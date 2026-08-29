@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: pull-request-quality-${{ github.event.pull_request.number || github.ref }}
@@ -68,7 +68,7 @@ jobs:
             dist/ko/update-history/index.html
             dist/zh/index.html
             dist/zh/update-history/index.html
-            dist/resources/phase3-menu.css
+            dist/resources/integrated-menu.css
           )
 
           for file in "${expected_files[@]}"; do
@@ -113,47 +113,3 @@ jobs:
             echo "README still advertises an alpha release" >&2
             exit 1
           fi
-
-  consolidate-phase2:
-    if: github.event_name == 'pull_request' && github.head_ref == 'v2.1-build-ui-consolidation' && github.event.pull_request.head.repo.full_name == github.repository && github.actor == 'santirodriguez'
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-
-    steps:
-      - name: Check out consolidation branch
-        uses: actions/checkout@v5
-        with:
-          ref: v2.1-build-ui-consolidation
-          fetch-depth: 0
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v5
-        with:
-          node-version: 22.12.0
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Apply deterministic consolidation
-        run: node scripts/phase2-consolidate.cjs
-
-      - name: Format changed sources
-        run: npx prettier --write webpack.common.js src/ca/index.html src/resources/integrated-menu.css src/resources/js/integrated_menu.js src/resources/js/integrated_menu_strings.js
-
-      - name: Validate transformed tree
-        run: npm run quality:check
-
-      - name: Remove temporary transform
-        run: rm scripts/phase2-consolidate.cjs
-
-      - name: Commit consolidated sources
-        shell: bash
-        run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A -- ':!.github/workflows/pull-request-quality.yml'
-          git diff --cached --check
-          git commit -m "Consolidate build localization and menu UI"
-          git push origin HEAD:v2.1-build-ui-consolidation
