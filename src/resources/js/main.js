@@ -6,6 +6,10 @@
  */
 'use strict';
 
+import { settingsStore } from './settings_store.js';
+import gameSettingsModule from './game_settings.cjs';
+
+const { applyColorScheme } = gameSettingsModule;
 const BOOTSTRAP_ERROR_MESSAGES = Object.freeze({
   en: 'Unable to start the game.',
   'es-ar': 'No se pudo iniciar el juego.',
@@ -15,13 +19,11 @@ const BOOTSTRAP_ERROR_MESSAGES = Object.freeze({
 });
 
 markPerformance('pv-bootstrap-start');
+applyColorScheme(settingsStore.getSettings().colorScheme, document);
 prepareIntegratedMenuShell();
 prepareLoadingShell();
 scheduleGameRuntime();
 
-/**
- * Hide the legacy toolbar and load integrated menu styles before the game runtime.
- */
 function prepareIntegratedMenuShell() {
   document.documentElement.classList.add('integrated-menu-enabled');
   const stylesheets = [
@@ -38,24 +40,10 @@ function prepareIntegratedMenuShell() {
   }
 }
 
-/**
- * Prepare the existing loading shell without initializing the game runtime.
- */
 function prepareLoadingShell() {
-  const loadingBox = document.getElementById('loading-box');
-  const aboutBox = document.getElementById('about-box');
-  const gameDropdownBtn = document.getElementById('game-dropdown-btn');
-  const optionsDropdownBtn = document.getElementById('options-dropdown-btn');
-
-  if (gameDropdownBtn !== null) gameDropdownBtn.disabled = true;
-  if (optionsDropdownBtn !== null) optionsDropdownBtn.disabled = true;
-  aboutBox?.classList.add('hidden');
-  loadingBox?.classList.remove('hidden');
+  document.getElementById('loading-box')?.classList.remove('hidden');
 }
 
-/**
- * Wait for the initial shell paint before importing the heavy game runtime.
- */
 function scheduleGameRuntime() {
   window.requestAnimationFrame(() => {
     markPerformance('pv-shell-ready');
@@ -71,35 +59,19 @@ function scheduleGameRuntime() {
   });
 }
 
-/**
- * Keep startup failures visible instead of leaving the loading shell hanging.
- * @param {unknown} error
- */
 function showBootstrapError(error) {
   console.error('Failed to start Pikachu Volleyball runtime.', error);
   const loadingBox = document.getElementById('loading-box');
   const message = loadingBox?.querySelector('p');
-  if (message !== null && message !== undefined) {
-    message.textContent = getBootstrapErrorMessage();
-  }
+  if (message !== null && message !== undefined) message.textContent = getBootstrapErrorMessage();
   loadingBox?.classList.remove('hidden');
 }
 
-/**
- * Return the localized startup failure message for the current page.
- * @returns {string}
- */
 function getBootstrapErrorMessage() {
   const locale = document.documentElement.lang.toLowerCase();
   return BOOTSTRAP_ERROR_MESSAGES[locale] || BOOTSTRAP_ERROR_MESSAGES.en;
 }
 
-/**
- * Add a performance mark when supported by the current runtime.
- * @param {string} name
- */
 function markPerformance(name) {
-  if (typeof performance !== 'undefined' && performance.mark) {
-    performance.mark(name);
-  }
+  if (typeof performance !== 'undefined' && performance.mark) performance.mark(name);
 }
