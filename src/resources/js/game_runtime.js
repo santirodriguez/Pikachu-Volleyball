@@ -181,12 +181,12 @@ function startGameLoop(renderer, stage, ticker, pikaVolley) {
   let firstFrame = true;
   ticker.maxFPS = pikaVolley.normalFPS;
   ticker.add(() => {
+    pikaVolley.gameLoop();
+    renderer.render(stage);
     if (firstFrame) {
       firstFrame = false;
       markPerformance('pv-first-game-frame');
     }
-    pikaVolley.gameLoop();
-    renderer.render(stage);
   });
   ticker.start();
 }
