@@ -39,8 +39,6 @@ function isMatchInProgress(stateId) {
 
 module.exports = {
   GAME_STATE_IDS,
-  GAME_STATE_HANDLER_NAMES,
-  MATCH_IN_PROGRESS_STATE_IDS,
   getGameStateHandlerName,
   isMatchInProgress,
 };
