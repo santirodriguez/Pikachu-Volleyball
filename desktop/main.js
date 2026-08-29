@@ -4,6 +4,7 @@ const { app, BrowserWindow, Menu, ipcMain, shell } = require('electron');
 
 const APP_NAME = 'Pikachu Volleyball';
 const STARTUP_METRICS_FILE = process.env.PV_STARTUP_METRICS_FILE || null;
+const STARTUP_USER_DATA_DIR = process.env.PV_STARTUP_USER_DATA_DIR || null;
 const PROCESS_STARTED_AT_MS = Date.now() - process.uptime() * 1000;
 const startupMarks = {
   'pv-electron-process-start': 0,
@@ -16,6 +17,10 @@ const ALLOWED_WEBSITE_ORIGINS = new Set([
   'https://santiagorodriguez.com',
   'https://www.santiagorodriguez.com',
 ]);
+
+if (STARTUP_USER_DATA_DIR) {
+  app.setPath('userData', STARTUP_USER_DATA_DIR);
+}
 
 /** @type {BrowserWindow | null} */
 let mainWindow = null;
