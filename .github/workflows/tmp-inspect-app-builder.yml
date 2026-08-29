@@ -1,0 +1,90 @@
+name: Temporary AppImage Launcher Inspection
+
+on:
+  pull_request:
+    branches:
+      - v2.1
+
+permissions:
+  contents: read
+
+jobs:
+  inspect-app-builder:
+    if: github.head_ref == 'v2.1-appimage-footprint' && github.event.pull_request.head.repo.full_name == github.repository && github.actor == 'santirodriguez'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22.12.0
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Inspect installed AppImage launcher implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('fs');
+          const path = require('path');
+          const crypto = require('crypto');
+
+          const packagePath = require.resolve('app-builder-lib/package.json');
+          const packageDir = path.dirname(packagePath);
+          const packageJson = JSON.parse(fs.readFileSync(packagePath, 'utf8'));
+          console.log(`app-builder-lib package: ${packagePath}`);
+          console.log(`app-builder-lib version: ${packageJson.version}`);
+
+          const markers = [
+            'unshare -Ur true',
+            'NO_SANDBOX=(--no-sandbox)',
+            'LD_LIBRARY_PATH',
+          ];
+          const matches = [];
+
+          function walk(dir) {
+            for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+              const absolute = path.join(dir, entry.name);
+              if (entry.isDirectory()) {
+                walk(absolute);
+                continue;
+              }
+              if (!entry.isFile()) continue;
+              const buffer = fs.readFileSync(absolute);
+              if (buffer.includes(0)) continue;
+              const text = buffer.toString('utf8');
+              const found = markers.filter((marker) => text.includes(marker));
+              if (found.length === 0) continue;
+              const relative = path.relative(process.cwd(), absolute);
+              const sha256 = crypto.createHash('sha256').update(buffer).digest('hex');
+              matches.push({ relative, sha256, found, text });
+            }
+          }
+
+          walk(packageDir);
+          if (matches.length === 0) {
+            console.error('No launcher implementation markers found in installed app-builder-lib.');
+            process.exit(1);
+          }
+
+          for (const match of matches) {
+            console.log(`MATCH ${match.relative}`);
+            console.log(`SHA256 ${match.sha256}`);
+            console.log(`MARKERS ${match.found.join(' | ')}`);
+            for (const marker of match.found) {
+              const index = match.text.indexOf(marker);
+              const start = Math.max(0, index - 700);
+              const end = Math.min(match.text.length, index + marker.length + 1200);
+              console.log(`--- EXCERPT ${marker} ---`);
+              console.log(match.text.slice(start, end));
+              console.log('--- END EXCERPT ---');
+            }
+          }
+          NODE
