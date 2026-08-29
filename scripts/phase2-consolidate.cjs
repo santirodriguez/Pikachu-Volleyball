@@ -180,13 +180,16 @@ const productionFiles = [
   stringsPath,
   integratedCssPath,
   'webpack.common.js',
-  '.github/workflows/pull-request-quality.yml',
 ];
 for (const file of productionFiles) {
   const content = read(file);
   if (content.includes('integrated_menu_phase3_strings') || content.includes('phase3-menu.css')) {
     throw new Error(`Residual Phase 3 production reference in ${file}`);
   }
+}
+
+if (!quality.includes('dist/resources/integrated-menu.css') || quality.includes('dist/resources/phase3-menu.css')) {
+  throw new Error('Quality workflow stylesheet gate was not migrated');
 }
 
 console.log('Phase 2 build/localization/UI consolidation applied successfully.');
