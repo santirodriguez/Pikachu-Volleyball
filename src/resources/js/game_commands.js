@@ -34,8 +34,12 @@ export function createGameCommands(pikaVolley, ticker) {
 
   function applyControlBindingsToGame(bindings, persist = false) {
     controlBindings = sanitizeControlBindings(bindings);
-    pikaVolley.keyboardArray[0].setBindings(getPlayerKeyboardConfig(controlBindings, 1));
-    pikaVolley.keyboardArray[1].setBindings(getPlayerKeyboardConfig(controlBindings, 2));
+    pikaVolley.keyboardArray[0].setBindings(
+      getPlayerKeyboardConfig(controlBindings, 1)
+    );
+    pikaVolley.keyboardArray[1].setBindings(
+      getPlayerKeyboardConfig(controlBindings, 2)
+    );
     resetInputs();
     if (persist) saveControlBindings(controlBindings);
     return { ...controlBindings };
@@ -44,7 +48,11 @@ export function createGameCommands(pikaVolley, ticker) {
   applyControlBindingsToGame(controlBindings);
 
   function emitPauseState() {
-    window.dispatchEvent(new CustomEvent('pv-pause-changed', { detail: { paused: pikaVolley.paused } }));
+    window.dispatchEvent(
+      new CustomEvent('pv-pause-changed', {
+        detail: { paused: pikaVolley.paused },
+      })
+    );
   }
 
   function setPaused(paused) {
@@ -75,21 +83,33 @@ export function createGameCommands(pikaVolley, ticker) {
       practiceMode: pikaVolley.isPracticeMode,
       locale: getCurrentLocale(),
       controlBindings: { ...controlBindings },
-      controlDefinitions: CONTROL_BINDING_DEFINITIONS.map((definition) => ({ ...definition })),
+      controlDefinitions: CONTROL_BINDING_DEFINITIONS.map((definition) => ({
+        ...definition,
+      })),
     };
   }
 
   function setPersistedGameSetting(name, value) {
     if (!settingsStore.set(name, value)) return false;
-    if (!applyGameSetting(name, value, pikaVolley, ticker, document)) return false;
+    if (!applyGameSetting(name, value, pikaVolley, ticker, document)) {
+      return false;
+    }
     appSettings = { ...appSettings, [name]: value };
     return true;
   }
 
-  function setGraphic(value) { return setPersistedGameSetting('graphic', value); }
-  function setBgm(value) { return setPersistedGameSetting('bgm', value); }
-  function setSfx(value) { return setPersistedGameSetting('sfx', value); }
-  function setSpeed(value) { return setPersistedGameSetting('speed', value); }
+  function setGraphic(value) {
+    return setPersistedGameSetting('graphic', value);
+  }
+  function setBgm(value) {
+    return setPersistedGameSetting('bgm', value);
+  }
+  function setSfx(value) {
+    return setPersistedGameSetting('sfx', value);
+  }
+  function setSpeed(value) {
+    return setPersistedGameSetting('speed', value);
+  }
 
   function setColorScheme(value) {
     if (!settingsStore.set('colorScheme', value)) return false;
@@ -109,9 +129,16 @@ export function createGameCommands(pikaVolley, ticker) {
 
   function setWinningScore(value) {
     const numericValue = Number(value);
-    if (![5, 10, 15].includes(numericValue)) return { ok: false, reason: 'invalid' };
-    if (pikaVolley.isPracticeMode) return { ok: false, reason: 'practice-mode' };
-    if (isMatchInProgress() && pikaVolley.scores.some((score) => score >= numericValue)) {
+    if (![5, 10, 15].includes(numericValue)) {
+      return { ok: false, reason: 'invalid' };
+    }
+    if (pikaVolley.isPracticeMode) {
+      return { ok: false, reason: 'practice-mode' };
+    }
+    if (
+      isMatchInProgress() &&
+      pikaVolley.scores.some((score) => score >= numericValue)
+    ) {
       return { ok: false, reason: 'score-reached' };
     }
     if (!setPersistedGameSetting('winningScore', String(numericValue))) {
@@ -142,7 +169,13 @@ export function createGameCommands(pikaVolley, ticker) {
     const result = validateControlBinding(controlBindings, bindingId, code);
     if (!result.ok) return result;
     applyControlBindingsToGame(result.bindings, true);
-    return { ok: true, bindingId, code, label: formatKeyboardCode(code), bindings: { ...controlBindings } };
+    return {
+      ok: true,
+      bindingId,
+      code,
+      label: formatKeyboardCode(code),
+      bindings: { ...controlBindings },
+    };
   }
 
   function resetControlBindingScope(scope) {
@@ -152,12 +185,15 @@ export function createGameCommands(pikaVolley, ticker) {
   }
 
   function isDesktop() {
-    const queryDesktop = new URLSearchParams(window.location.search).get('desktop') === '1';
+    const queryDesktop =
+      new URLSearchParams(window.location.search).get('desktop') === '1';
     return Boolean(window.pvDesktop?.isDesktop || queryDesktop);
   }
 
   function changeLanguage(locale) {
-    window.location.assign(buildLocaleUrl(window.location.href, locale, isDesktop()));
+    window.location.assign(
+      buildLocaleUrl(window.location.href, locale, isDesktop())
+    );
   }
 
   async function quit() {
@@ -167,10 +203,28 @@ export function createGameCommands(pikaVolley, ticker) {
   }
 
   return Object.freeze({
-    setPaused, togglePaused, isPaused: () => pikaVolley.paused, restartMatch, resetInputs,
-    getSettings, setGraphic, setColorScheme, setBgm, setSfx, setSpeed, setWinningScore,
-    setPracticeMode, resetDefaults, previewControlBinding, setControlBinding,
-    resetControlBindingScope, formatControlCode: formatKeyboardCode, isMatchInProgress,
-    getCurrentLocale, isDesktop, changeLanguage, quit,
+    setPaused,
+    togglePaused,
+    isPaused: () => pikaVolley.paused,
+    restartMatch,
+    resetInputs,
+    getSettings,
+    setGraphic,
+    setColorScheme,
+    setBgm,
+    setSfx,
+    setSpeed,
+    setWinningScore,
+    setPracticeMode,
+    resetDefaults,
+    previewControlBinding,
+    setControlBinding,
+    resetControlBindingScope,
+    formatControlCode: formatKeyboardCode,
+    isMatchInProgress,
+    getCurrentLocale,
+    isDesktop,
+    changeLanguage,
+    quit,
   });
 }
