@@ -37,7 +37,7 @@ jobs:
           lock_version="$(node -p "require('./package-lock.json').version")"
 
           if [[ "$package_version" != "$lock_version" ]]; then
-            echo "package.json version ($package_version) does not match package-lock.json ($lock_version)" >&2
+            echo "package.json version ($package_version) does not match package-lock.json version ($lock_version)" >&2
             exit 1
           fi
 
@@ -113,3 +113,101 @@ jobs:
             echo "README still advertises an alpha release" >&2
             exit 1
           fi
+
+  phase21-performance:
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22.12.0
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate diagnostic scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check scripts/measure-performance.cjs
+          bash -n scripts/run-appimage-performance-diagnostics.sh
+
+      - name: Build Linux AppImage
+        run: npm run build:desktop:linux -- --publish=never
+
+      - name: Inspect packaged application
+        shell: bash
+        run: |
+          set -euo pipefail
+          app_dir="release/linux-unpacked"
+          asar_path="$app_dir/resources/app.asar"
+
+          mapfile -t locale_paks < <(find "$app_dir/locales" -maxdepth 1 -type f -name '*.pak' | sort)
+          if [[ "${#locale_paks[@]}" -ne 1 || "$(basename "${locale_paks[0]}")" != "en-US.pak" ]]; then
+            echo "Expected only Electron locale en-US.pak" >&2
+            exit 1
+          fi
+
+          asar_listing="$(mktemp)"
+          npx --no-install asar list "$asar_path" > "$asar_listing"
+          if grep -q '^/node_modules/' "$asar_listing"; then
+            echo "Packaged app still contains runtime node_modules" >&2
+            exit 1
+          fi
+
+          if find dist release/linux-unpacked/resources -type f -name '*.map' -print -quit | grep -q .; then
+            echo "Production package contains source maps" >&2
+            exit 1
+          fi
+
+      - name: Report build sizes
+        run: node scripts/report-build-metrics.cjs release/build-metrics.json
+
+      - name: Ensure AppImage FUSE runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! ldconfig -p | grep -q 'libfuse.so.2'; then
+            sudo apt-get update
+            sudo apt-get install -y libfuse2t64 || sudo apt-get install -y libfuse2
+          fi
+
+      - name: Prepare first-launch cache state
+        shell: bash
+        run: |
+          set -euo pipefail
+          cache_note="filesystem cache clear not permitted"
+          if sudo sh -c 'sync; echo 3 > /proc/sys/vm/drop_caches' 2>/tmp/pv-drop-caches-error.log; then
+            cache_note="filesystem caches cleared immediately before first AppImage measurement"
+          else
+            cat /tmp/pv-drop-caches-error.log >&2 || true
+          fi
+          echo "PV_PERFORMANCE_ENV_NOTE=$cache_note" >> "$GITHUB_ENV"
+
+      - name: Measure direct AppImage performance
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x release/*.AppImage
+          xvfb-run -a node scripts/measure-performance.cjs release/performance-diagnostics.json
+
+      - name: Upload Phase 2.1 diagnostics
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: phase21-performance-diagnostics
+          path: |
+            release/*.AppImage
+            release/build-metrics.json
+            release/performance-diagnostics.json
+            release/performance-runs/*.json
+            scripts/run-appimage-performance-diagnostics.sh
+          if-no-files-found: warn
+          compression-level: 6
