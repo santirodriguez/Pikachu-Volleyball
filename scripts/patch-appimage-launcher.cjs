@@ -22,6 +22,26 @@ function countOccurrences(text, fragment) {
   return text.split(fragment).length - 1;
 }
 
+function removeQuotedExpansion(line, marker) {
+  const markerIndex = line.indexOf(marker);
+  if (markerIndex === -1) {
+    fail(`could not locate ${marker} in AppRun exec line`);
+  }
+
+  const openingQuote = line.lastIndexOf('"', markerIndex);
+  const closingQuote = line.indexOf('"', markerIndex);
+  if (openingQuote === -1 || closingQuote === -1 || closingQuote <= openingQuote) {
+    fail(`could not isolate quoted ${marker} expansion in AppRun exec line`);
+  }
+
+  let endIndex = closingQuote + 1;
+  if (line[endIndex] === ' ') {
+    endIndex += 1;
+  }
+
+  return line.slice(0, openingQuote) + line.slice(endIndex);
+}
+
 const packageJsonPath = require.resolve('app-builder-lib/package.json');
 const packageDir = path.dirname(packageJsonPath);
 const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
@@ -97,22 +117,43 @@ source =
   failClosedSandboxBlock +
   source.slice(endIndex);
 
-const execWithoutArgs = 'exec "$BIN" "\\${NO_SANDBOX[@]}"';
-const execWithArgs = 'exec "$BIN" "\\${NO_SANDBOX[@]}" "\\${args[@]}"';
-
-if (countOccurrences(source, execWithoutArgs) !== 1) {
-  fail('expected zero-argument AppRun exec form was not found exactly once');
+const lines = source.split('\n');
+const noSandboxMarker = 'NO_SANDBOX[@]';
+const execLineIndexes = [];
+for (let index = 0; index < lines.length; index += 1) {
+  const line = lines[index];
+  if (line.includes('exec "$BIN"') && line.includes(noSandboxMarker)) {
+    execLineIndexes.push(index);
+  }
 }
-if (countOccurrences(source, execWithArgs) !== 1) {
-  fail('expected argument-forwarding AppRun exec form was not found exactly once');
+
+if (execLineIndexes.length !== 2) {
+  fail(
+    `expected exactly two AppRun exec lines containing ${noSandboxMarker}, found ${execLineIndexes.length}`
+  );
 }
 
-source = source.replace(execWithoutArgs, 'exec "$BIN"');
-source = source.replace(execWithArgs, 'exec "$BIN" "\\${args[@]}"');
+const zeroArgExecIndexes = execLineIndexes.filter(
+  (index) => !lines[index].includes('args[@]')
+);
+const forwardingExecIndexes = execLineIndexes.filter((index) =>
+  lines[index].includes('args[@]')
+);
 
+if (zeroArgExecIndexes.length !== 1 || forwardingExecIndexes.length !== 1) {
+  fail('could not uniquely identify zero-argument and forwarding AppRun exec lines');
+}
+
+for (const index of execLineIndexes) {
+  lines[index] = removeQuotedExpansion(lines[index], noSandboxMarker);
+}
+source = lines.join('\n');
+
+if (countOccurrences(source, noSandboxMarker) !== 0) {
+  fail(`forbidden ${noSandboxMarker} expansion remains after patch`);
+}
 for (const forbiddenFragment of [
   'NO_SANDBOX=(--no-sandbox)',
-  '\\${NO_SANDBOX[@]}',
   'HAVE_NO_SANDBOX=0',
 ]) {
   if (source.includes(forbiddenFragment)) {
@@ -124,6 +165,8 @@ for (const requiredFragment of [
   'export LD_LIBRARY_PATH="\\${APPDIR}/usr/lib\\${LD_LIBRARY_PATH:+:\\${LD_LIBRARY_PATH}}"',
   'ERROR: --no-sandbox is disabled by this AppImage security policy.',
   'ERROR: Chromium sandbox prerequisites are unavailable; refusing to launch unsandboxed.',
+  'exec "$BIN"',
+  'args[@]',
 ]) {
   if (!source.includes(requiredFragment)) {
     fail(`required patched fragment is missing: ${requiredFragment}`);
