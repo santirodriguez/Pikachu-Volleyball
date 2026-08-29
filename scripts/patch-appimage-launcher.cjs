@@ -75,7 +75,22 @@ for (const requiredFragment of [
   }
 }
 
-const failClosedSandboxBlock = `# Pikachu Volleyball security policy: sandboxing is mandatory.\nfor arg in "\\${args[@]}" ; do\n  if [ "$arg" = --no-sandbox ] ; then\n    echo "ERROR: --no-sandbox is disabled by this AppImage security policy." >&2\n    exit 1\n  fi\ndone\n\n# Fail closed when the user-namespace sandbox prerequisite is unavailable.\n# Never downgrade to --no-sandbox.\nif ! command -v unshare >/dev/null 2>&1 || ! unshare -Ur true 2>/dev/null ; then\n  echo "ERROR: Chromium sandbox prerequisites are unavailable; refusing to launch unsandboxed." >&2\n  exit 1\nfi`;
+const failClosedSandboxBlock = [
+  '# Pikachu Volleyball security policy: sandboxing is mandatory.',
+  'for arg in "\\${args[@]}" ; do',
+  '  if [ "$arg" = --no-sandbox ] ; then',
+  '    echo "ERROR: --no-sandbox is disabled by this AppImage security policy." >&2',
+  '    exit 1',
+  '  fi',
+  'done',
+  '',
+  '# Fail closed when the user-namespace sandbox prerequisite is unavailable.',
+  '# Never downgrade to --no-sandbox.',
+  'if ! command -v unshare >/dev/null 2>&1 || ! unshare -Ur true 2>/dev/null ; then',
+  '  echo "ERROR: Chromium sandbox prerequisites are unavailable; refusing to launch unsandboxed." >&2',
+  '  exit 1',
+  'fi',
+].join('\n');
 
 source =
   source.slice(0, startIndex) +
