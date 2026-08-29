@@ -415,7 +415,7 @@ const ABOUT_COPY = Object.freeze({
     kicker: 'LINUX EDITION',
     title: 'One more match, years later',
     body:
-      'As a child, this game meant a great deal to me. On a low-powered computer, Game Boy Color emulators and simple, joyful, hard-to-put-down games like this became my doorway into the Pokémon world—and the beginning of an affection that never really left.',
+      'As a child, this game meant a great deal to me. Simple, joyful, hard-to-put-down games like this became part of my doorway into the Pokémon world—and the beginning of an affection that never really left.',
     original:
       '<strong>Pikachu Volleyball (1997)</strong> — SACHI SOFT / SAWAYAKAN Programmers and Satoshi Takenouchi. Thanks for creating the small, unforgettable classic that started it all.',
     reverse:
@@ -429,7 +429,7 @@ const ABOUT_COPY = Object.freeze({
     kicker: 'EDICIÓN LINUX',
     title: 'Un partido más, tantos años después',
     body:
-      'De chico, este juego me hacía mucha ilusión. En una computadora con pocos recursos, los emuladores de Game Boy Color y estos juegos sencillos, alegres y difíciles de soltar fueron mi puerta de entrada al universo Pokémon y el comienzo de un cariño que todavía conservo.',
+      'De chico, este juego me hacía mucha ilusión. Juegos sencillos, alegres y difíciles de soltar como este fueron parte de mi puerta de entrada al universo Pokémon y el comienzo de un cariño que todavía conservo.',
     original:
       '<strong>Pikachu Volleyball (1997)</strong> — SACHI SOFT / SAWAYAKAN Programmers y Satoshi Takenouchi. Gracias por crear el pequeño e inolvidable clásico que empezó todo.',
     reverse:
@@ -443,7 +443,7 @@ const ABOUT_COPY = Object.freeze({
     kicker: 'LINUX 에디션',
     title: '세월이 흘러도, 한 경기 더',
     body:
-      '어릴 적 이 게임은 제게 큰 설렘이었습니다. 성능이 낮은 컴퓨터에서 Game Boy Color 에뮬레이터와 이처럼 단순하지만 즐겁고 좀처럼 손을 놓기 힘든 게임들은 포켓몬 세계로 들어가는 문이 되었고, 지금까지 이어지는 애정의 시작이 되었습니다.',
+      '어릴 적 이 게임은 제게 큰 설렘이었습니다. 이처럼 단순하지만 즐겁고 좀처럼 손을 놓기 힘든 게임들은 포켓몬 세계로 들어가는 문이 되었고, 지금까지 이어지는 애정의 시작이 되었습니다.',
     original:
       '<strong>Pikachu Volleyball (1997)</strong> — SACHI SOFT / SAWAYAKAN Programmers와 Satoshi Takenouchi. 이 모든 것의 시작이 된 작지만 잊을 수 없는 고전을 만들어 주셔서 감사합니다.',
     reverse:
@@ -457,7 +457,7 @@ const ABOUT_COPY = Object.freeze({
     kicker: 'LINUX 版本',
     title: '多年以后，再来一局',
     body:
-      '小时候，这款游戏曾让我满怀期待。那时电脑性能有限，Game Boy Color 模拟器和这类简单、快乐又让人舍不得放下的游戏，成了我走进宝可梦世界的入口，也开启了一份延续至今的喜爱。',
+      '小时候，这款游戏曾让我满怀期待。这类简单、快乐又让人舍不得放下的游戏，成了我走进宝可梦世界的入口，也开启了一份延续至今的喜爱。',
     original:
       '<strong>Pikachu Volleyball (1997)</strong> — SACHI SOFT / SAWAYAKAN Programmers 与 Satoshi Takenouchi。感谢你们创造了这个小巧却令人难忘的经典，一切由此开始。',
     reverse:
@@ -471,7 +471,7 @@ const ABOUT_COPY = Object.freeze({
     kicker: 'EDICIÓ LINUX',
     title: 'Un partit més, tants anys després',
     body:
-      'De petit, aquest joc em feia molta il·lusió. En un ordinador amb pocs recursos, els emuladors de Game Boy Color i jocs senzills, alegres i difícils de deixar com aquest van ser la meva porta d’entrada a l’univers Pokémon i l’inici d’un afecte que encara conservo.',
+      'De petit, aquest joc em feia molta il·lusió. Jocs senzills, alegres i difícils de deixar com aquest van ser part de la meva porta d’entrada a l’univers Pokémon i l’inici d’un afecte que encara conservo.',
     original:
       '<strong>Pikachu Volleyball (1997)</strong> — SACHI SOFT / SAWAYAKAN Programmers i Satoshi Takenouchi. Gràcies per crear el petit clàssic inoblidable que ho va començar tot.',
     reverse:
