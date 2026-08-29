@@ -25,12 +25,7 @@ function createCatalanIndexTemplate() {
     );
 }
 
-const MAIN_CHUNKS = [
-  'runtime',
-  'main',
-  'dark_color_scheme',
-  'is_embedded_in_other_website',
-];
+const MAIN_CHUNKS = ['runtime', 'main', 'is_embedded_in_other_website'];
 
 const HTML_MINIFY = {
   collapseWhitespace: true,

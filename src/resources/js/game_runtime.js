@@ -19,12 +19,13 @@
  *
  * And explanations for other source files are below.
  *  - "cloud_and_wave.js": This is also a Model part which takes charge of the clouds and wave motion in the game. Of course, it is also rendered by "view.js".
- *                         It is also gained by reverse engineering the original machine code.
+ *                         It is also gained by reverse engineering the machine code of the original game.
  *  - "keyboard.js": Support the Controller("pikavolley.js") to get a user input via keyboard.
  *  - "audio.js": The game audio or sounds. It depends on pixi-sound (https://github.com/pixijs/sound) library.
  *  - "rand.js": For the random function used in the Models ("physics.js", "cloud_and_wave.js").
  *  - "assets_path.js": For the assets (image files, sound files) locations.
- *  - "ui.js": For the legacy web controls that initialize persisted settings.
+ *  - "settings_store.js": Application settings persistence and sanitization.
+ *  - "game_settings.cjs": Application of persisted settings to the live game runtime.
  *  - "game_commands.js": Operational commands shared by the integrated menu.
  *  - "integrated_menu.js": Production pause menu for web and desktop.
  */
@@ -44,11 +45,12 @@ import { CanvasPrepare } from '@pixi/canvas-prepare';
 import '@pixi/canvas-display';
 import { PikachuVolleyball } from './pikavolley.js';
 import { ASSETS_PATH } from './assets_path.js';
-import { setUpUI } from './ui.js';
 import { createGameCommands } from './game_commands.js';
 import { setUpIntegratedMenu } from './integrated_menu.js';
-import { setUpIntegratedMenuTheme } from './integrated_menu_theme.js';
+import { settingsStore } from './settings_store.js';
+import gameSettingsModule from './game_settings.cjs';
 
+const { hydrateGameSettings } = gameSettingsModule;
 let runtimeStarted = false;
 
 /**
@@ -116,13 +118,32 @@ function setUpLoaderUI(loader) {
  */
 function setupGame(renderer, stage, ticker, loader) {
   const pikaVolley = new PikachuVolleyball(stage, loader.resources);
-  setUpUI(pikaVolley, ticker);
+  hydrateGameSettings(
+    settingsStore.getSettings(),
+    pikaVolley,
+    ticker,
+    document
+  );
+  setUpVisibilityAudio(pikaVolley);
   const commands = createGameCommands(pikaVolley, ticker);
   setUpIntegratedMenu(commands);
-  setUpIntegratedMenuTheme(commands);
   warmUpAudioAssets();
   markPerformance('pv-runtime-ready');
   startGameLoop(renderer, stage, ticker, pikaVolley);
+}
+
+/**
+ * Preserve the legacy visibility mute semantics without depending on legacy UI.
+ * @param {PikachuVolleyball} pikaVolley
+ */
+function setUpVisibilityAudio(pikaVolley) {
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      pikaVolley.audio.unmuteAll();
+    } else {
+      pikaVolley.audio.muteAll();
+    }
+  });
 }
 
 /**

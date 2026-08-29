@@ -1,9 +1,11 @@
 'use strict';
 
-import { localStorageWrapper } from './utils/local_storage_wrapper.js';
 import { loadControlBindings, saveControlBindings } from './control_bindings.js';
 import controlBindingsModule from './control_bindings.cjs';
 import menuLogicModule from './menu_logic.cjs';
+import settingsStoreModule from './settings_store.cjs';
+import gameSettingsModule from './game_settings.cjs';
+import { settingsStore } from './settings_store.js';
 
 const {
   CONTROL_BINDING_DEFINITIONS,
@@ -14,24 +16,8 @@ const {
   formatKeyboardCode,
 } = controlBindingsModule;
 const { buildLocaleUrl, normalizeLocale } = menuLogicModule;
-
-const STORAGE_KEYS = Object.freeze({
-  graphic: 'pv-offline-graphic',
-  bgm: 'pv-offline-bgm',
-  sfx: 'pv-offline-sfx',
-  speed: 'pv-offline-speed',
-  winningScore: 'pv-offline-winningScore',
-  colorScheme: 'colorScheme',
-});
-
-const DEFAULT_SETTINGS = Object.freeze({
-  graphic: 'sharp',
-  bgm: 'on',
-  sfx: 'stereo',
-  speed: 'medium',
-  winningScore: '15',
-  practiceMode: false,
-});
+const { DEFAULT_SETTINGS } = settingsStoreModule;
+const { applyColorScheme, applyGameSetting } = gameSettingsModule;
 
 /**
  * Build the single command surface used by the integrated menu.
@@ -39,13 +25,11 @@ const DEFAULT_SETTINGS = Object.freeze({
  * @param {import('@pixi/ticker').Ticker} ticker
  */
 export function createGameCommands(pikaVolley, ticker) {
-  const pauseButton = document.getElementById('pause-btn');
   let controlBindings = loadControlBindings();
+  let appSettings = settingsStore.getSettings();
 
   function resetInputs() {
-    for (const keyboard of pikaVolley.keyboardArray) {
-      keyboard.reset();
-    }
+    for (const keyboard of pikaVolley.keyboardArray) keyboard.reset();
   }
 
   function applyControlBindingsToGame(bindings, persist = false) {
@@ -72,12 +56,10 @@ export function createGameCommands(pikaVolley, ticker) {
   }
 
   function setPaused(paused) {
-    const nextPaused = Boolean(paused);
-    pikaVolley.paused = nextPaused;
-    pauseButton?.classList.toggle('selected', nextPaused);
+    pikaVolley.paused = Boolean(paused);
     resetInputs();
     emitPauseState();
-    return nextPaused;
+    return pikaVolley.paused;
   }
 
   function togglePaused() {
@@ -90,33 +72,15 @@ export function createGameCommands(pikaVolley, ticker) {
     resetInputs();
   }
 
-  function getStoredValue(key, fallback) {
-    return localStorageWrapper.get(STORAGE_KEYS[key]) || fallback;
-  }
-
-  function getSpeedName() {
-    if (pikaVolley.normalFPS === 20) return 'slow';
-    if (pikaVolley.normalFPS === 30) return 'fast';
-    return 'medium';
-  }
-
   function getCurrentLocale() {
     return normalizeLocale(document.documentElement.lang);
   }
 
   function getSettings() {
-    const canvas = document.getElementById('game-canvas');
     return {
-      graphic: getStoredValue(
-        'graphic',
-        canvas?.classList.contains('graphic-soft') ? 'soft' : 'sharp'
-      ),
-      bgm: getStoredValue('bgm', DEFAULT_SETTINGS.bgm),
-      sfx: getStoredValue('sfx', DEFAULT_SETTINGS.sfx),
-      speed: getStoredValue('speed', getSpeedName()),
+      ...appSettings,
       winningScore: String(pikaVolley.winningScore),
       practiceMode: pikaVolley.isPracticeMode,
-      colorScheme: document.documentElement.dataset.colorScheme || 'light',
       locale: getCurrentLocale(),
       controlBindings: { ...controlBindings },
       controlDefinitions: CONTROL_BINDING_DEFINITIONS.map((definition) => ({
@@ -125,52 +89,32 @@ export function createGameCommands(pikaVolley, ticker) {
     };
   }
 
-  function setGraphic(value) {
-    if (!['sharp', 'soft'].includes(value)) return false;
-    document
-      .getElementById('game-canvas')
-      ?.classList.toggle('graphic-soft', value === 'soft');
-    localStorageWrapper.set(STORAGE_KEYS.graphic, value);
+  function setPersistedGameSetting(name, value) {
+    if (!settingsStore.set(name, value)) return false;
+    if (!applyGameSetting(name, value, pikaVolley, ticker, document)) {
+      return false;
+    }
+    appSettings = { ...appSettings, [name]: value };
     return true;
+  }
+
+  function setGraphic(value) {
+    return setPersistedGameSetting('graphic', value);
+  }
+  function setBgm(value) {
+    return setPersistedGameSetting('bgm', value);
+  }
+  function setSfx(value) {
+    return setPersistedGameSetting('sfx', value);
+  }
+  function setSpeed(value) {
+    return setPersistedGameSetting('speed', value);
   }
 
   function setColorScheme(value) {
-    if (!['light', 'dark'].includes(value)) return false;
-    document.documentElement.dataset.colorScheme = value;
-    document
-      .querySelector('meta[name="theme-color"]')
-      ?.setAttribute('content', value === 'dark' ? '#202124' : '#FFFFFF');
-    document.querySelectorAll('.dark-color-scheme-checkbox').forEach((element) => {
-      element.checked = value === 'dark';
-    });
-    localStorageWrapper.set(STORAGE_KEYS.colorScheme, value);
-    return true;
-  }
-
-  function setBgm(value) {
-    if (!['on', 'off'].includes(value)) return false;
-    pikaVolley.audio.turnBGMVolume(value === 'on');
-    localStorageWrapper.set(STORAGE_KEYS.bgm, value);
-    return true;
-  }
-
-  function setSfx(value) {
-    if (!['stereo', 'mono', 'off'].includes(value)) return false;
-    pikaVolley.audio.turnSFXVolume(value !== 'off');
-    if (value !== 'off') {
-      pikaVolley.isStereoSound = value === 'stereo';
-    }
-    localStorageWrapper.set(STORAGE_KEYS.sfx, value);
-    return true;
-  }
-
-  function setSpeed(value) {
-    const fpsBySpeed = { slow: 20, medium: 25, fast: 30 };
-    const fps = fpsBySpeed[value];
-    if (fps === undefined) return false;
-    pikaVolley.normalFPS = fps;
-    ticker.maxFPS = fps;
-    localStorageWrapper.set(STORAGE_KEYS.speed, value);
+    if (!settingsStore.set('colorScheme', value)) return false;
+    if (!applyColorScheme(value, document)) return false;
+    appSettings = { ...appSettings, colorScheme: value };
     return true;
   }
 
@@ -197,8 +141,9 @@ export function createGameCommands(pikaVolley, ticker) {
     ) {
       return { ok: false, reason: 'score-reached' };
     }
-    pikaVolley.winningScore = numericValue;
-    localStorageWrapper.set(STORAGE_KEYS.winningScore, String(numericValue));
+    if (!setPersistedGameSetting('winningScore', String(numericValue))) {
+      return { ok: false, reason: 'invalid' };
+    }
     return { ok: true };
   }
 
@@ -208,16 +153,12 @@ export function createGameCommands(pikaVolley, ticker) {
   }
 
   function resetDefaults() {
-    setGraphic(DEFAULT_SETTINGS.graphic);
-    setBgm(DEFAULT_SETTINGS.bgm);
-    setSfx(DEFAULT_SETTINGS.sfx);
-    setSpeed(DEFAULT_SETTINGS.speed);
-    setPracticeMode(DEFAULT_SETTINGS.practiceMode);
-    pikaVolley.winningScore = Number(DEFAULT_SETTINGS.winningScore);
-    localStorageWrapper.set(
-      STORAGE_KEYS.winningScore,
-      DEFAULT_SETTINGS.winningScore
-    );
+    setPracticeMode(false);
+    settingsStore.resetDefaults();
+    for (const [name, value] of Object.entries(DEFAULT_SETTINGS)) {
+      applyGameSetting(name, value, pikaVolley, ticker, document);
+    }
+    appSettings = { ...appSettings, ...DEFAULT_SETTINGS };
   }
 
   function previewControlBinding(bindingId, code) {
