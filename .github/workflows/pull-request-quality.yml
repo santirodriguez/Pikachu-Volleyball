@@ -177,19 +177,13 @@ jobs:
           sudo chown root:root release/linux-unpacked/chrome-sandbox
           sudo chmod 4755 release/linux-unpacked/chrome-sandbox
 
-          ignored='^(chrome-sandbox|chrome_crashpad_handler)$'
-          mapfile -t candidates < <(
-            find release/linux-unpacked -maxdepth 1 -type f -perm /111 -printf '%f\n' \
-              | grep -Ev "$ignored" \
-              | sort
-          )
-          if [[ "${#candidates[@]}" -ne 1 ]]; then
-            echo "Unable to identify packaged executable" >&2
-            printf 'Candidates: %s\n' "${candidates[@]}" >&2
+          target="$PWD/release/linux-unpacked/pikachu-volleyball"
+          if [[ ! -x "$target" ]]; then
+            echo "Missing packaged executable: $target" >&2
             exit 1
           fi
 
-          echo "PV_PERFORMANCE_EXECUTABLE=$PWD/release/linux-unpacked/${candidates[0]}" >> "$GITHUB_ENV"
+          echo "PV_PERFORMANCE_EXECUTABLE=$target" >> "$GITHUB_ENV"
           echo "PV_PERFORMANCE_EXECUTABLE_KIND=linux-unpacked" >> "$GITHUB_ENV"
 
       - name: Prepare first-launch cache state
