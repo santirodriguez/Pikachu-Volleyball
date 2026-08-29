@@ -6,7 +6,7 @@ This guide records the validated architecture and extension points for future ti
 
 ## Validated baseline
 
-The following behavior was verified in Fedora AppImage reviews during the 2.0 and 2.1 work:
+The following behavior was verified in real-world Linux AppImage reviews during the 2.0 and 2.1 work:
 
 - Player 1 Power Hit: `Z` or `Left Shift`;
 - Player 2 Power Hit: `Enter` or `Left Control`;
