@@ -88,6 +88,26 @@ jobs:
             exit 1
           fi
 
+          set +e
+          (
+            cd release/squashfs-root
+            ./AppRun --no-sandbox
+          ) > release/apprun-no-sandbox.stdout 2> release/apprun-no-sandbox.stderr
+          reject_rc=$?
+          set -e
+          if [[ "$reject_rc" -ne 1 ]]; then
+            echo "Expected AppRun --no-sandbox to exit 1, got $reject_rc" >&2
+            cat release/apprun-no-sandbox.stdout >&2 || true
+            cat release/apprun-no-sandbox.stderr >&2 || true
+            exit 1
+          fi
+          grep -Fxq 'ERROR: --no-sandbox is disabled by this AppImage security policy.' release/apprun-no-sandbox.stderr
+          if grep -Fq 'command not found' release/apprun-no-sandbox.stderr; then
+            echo "Sandbox rejection triggered an unexpected shell error" >&2
+            cat release/apprun-no-sandbox.stderr >&2
+            exit 1
+          fi
+
           echo "Fail-closed AppRun policy validated"
           cat "$desktop_file"
           cat release/SHA256SUMS.txt
