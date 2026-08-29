@@ -11,7 +11,7 @@
     "build:web": "webpack --config webpack.prod.js",
     "start:desktop": "npm run build:web && electron .",
     "build:appimage": "npm run build:desktop:linux",
-    "build:desktop:linux": "npm run build:web && electron-builder --linux AppImage",
+    "build:desktop:linux": "npm run build:web && node scripts/patch-appimage-launcher.cjs && electron-builder --linux AppImage",
     "lint": "node ./node_modules/eslint/bin/eslint.js \"src/resources/js/**/*.{js,cjs}\" \"test/**/*.cjs\" \"desktop/**/*.js\" \"webpack.*.js\"",
     "quality:check": "npm run lint && npm run test:unit && npm run build:web"
   },
