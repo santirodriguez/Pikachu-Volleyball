@@ -2,7 +2,7 @@
   <img src="src/resources/assets/images/IDI_PIKAICON-1_gap_filled_192.png" width="96" alt="Pikachu Volleyball icon">
 </p>
 
-<h1 align="center">Pikachu Volleyball 2.0</h1>
+<h1 align="center">Pikachu Volleyball 2.1</h1>
 
 <p align="center">
   <strong>A tiny beach-volleyball classic, carefully brought into a modern Linux desktop.</strong>
@@ -14,7 +14,7 @@
 
 <p align="center">
   <a href="https://github.com/santirodriguez/pikachu-volleyball/releases"><img alt="Linux AppImage" src="https://img.shields.io/badge/Linux-AppImage-F7C948?style=for-the-badge&logo=linux&logoColor=111827"></a>
-  <img alt="Version 2.0" src="https://img.shields.io/badge/Version-2.0-E63946?style=for-the-badge">
+  <img alt="Version 2.1" src="https://img.shields.io/badge/Version-2.1-E63946?style=for-the-badge">
   <img alt="Five languages" src="https://img.shields.io/badge/Languages-5-4EA8DE?style=for-the-badge">
 </p>
 
@@ -56,7 +56,7 @@ This edition is simply my way of looking after a game I remember fondly. The ori
 2. Download the latest `.AppImage` for `x86_64` and `SHA256SUMS.txt`.
 3. Verify the checksum, allow the AppImage to run as a program and open it.
 
-See the concise [2.0.0 release notes](docs/releases/v2.0.0.md). Pre-release builds may also appear in the [Build Linux AppImage workflow](https://github.com/santirodriguez/pikachu-volleyball/actions/workflows/release-appimage.yml).
+See the concise [2.1.0 release notes](docs/releases/v2.1.0.md). Pre-release builds may also appear in the [Build Linux AppImage workflow](https://github.com/santirodriguez/pikachu-volleyball/actions/workflows/release-appimage.yml).
 
 ## Controls
 
@@ -88,7 +88,7 @@ These are the defaults. Player controls can be changed from the in-game **Contro
 
 The browser foundation comes from [Kyutae Lee’s JavaScript reverse-engineering reimplementation](https://github.com/gorisanson/pikachu-volleyball). This edition would not exist without that careful work.
 
-The Linux desktop edition, integrated interface, controls, localization and 2.0 work are maintained by [Santiago Rodríguez](https://santiagorodriguez.com).
+The Linux desktop edition, integrated interface, controls, localization and 2.x work are maintained by [Santiago Rodríguez](https://santiagorodriguez.com).
 
 <details>
 <summary><strong>Development and packaging</strong></summary>
