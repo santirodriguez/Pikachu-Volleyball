@@ -190,10 +190,16 @@ test('SFX off preserves the current stereo mode while muting effects', () => {
 test('applies light and dark themes without using legacy checkboxes', () => {
   const fixture = createRuntimeFixture();
   assert.equal(applyColorScheme('dark', fixture.documentObject), true);
-  assert.equal(fixture.documentObject.documentElement.dataset.colorScheme, 'dark');
+  assert.equal(
+    fixture.documentObject.documentElement.dataset.colorScheme,
+    'dark'
+  );
   assert.equal(fixture.themeMeta.content, '#202124');
   assert.equal(applyColorScheme('light', fixture.documentObject), true);
-  assert.equal(fixture.documentObject.documentElement.dataset.colorScheme, 'light');
+  assert.equal(
+    fixture.documentObject.documentElement.dataset.colorScheme,
+    'light'
+  );
   assert.equal(fixture.themeMeta.content, '#FFFFFF');
   assert.equal(applyColorScheme('sepia', fixture.documentObject), false);
 });
