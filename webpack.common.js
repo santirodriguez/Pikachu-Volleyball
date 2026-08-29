@@ -4,30 +4,15 @@ const CopyPlugin = require('copy-webpack-plugin');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const WorkboxPlugin = require('workbox-webpack-plugin');
 
-function createCatalanIndexTemplate() {
-  return require('fs')
-    .readFileSync(path.resolve(__dirname, 'src/en/index.html'), 'utf8')
-    .replace('<html lang="en">', '<html lang="ca">')
-    .replace(
-      'content="Play the game Pikachu Volleyball"',
-      'content="Juga a Pikachu Volleyball al web o a Linux"'
-    )
-    .replace('Loading the game assets...', 'Carregant els recursos del joc...')
-    .replace(
-      'A new version is available. Update now?',
-      'Hi ha una versió nova. Vols actualitzar ara?'
-    )
-    .replace(
-      'Update Now (current game state will be lost)',
-      'Actualitza ara (es perdrà el partit actual)'
-    )
-    .replace(
-      'Later (automatically at relaunching the browser)',
-      'Més tard (automàticament en tornar a obrir el navegador)'
-    );
-}
-
 const MAIN_CHUNKS = ['runtime', 'main', 'is_embedded_in_other_website'];
+
+const GAME_LOCALES = Object.freeze([
+  { locale: 'en', chunks: MAIN_CHUNKS },
+  { locale: 'es-ar', chunks: MAIN_CHUNKS },
+  { locale: 'ca', chunks: MAIN_CHUNKS },
+  { locale: 'ko', chunks: ['runtime', 'ko', ...MAIN_CHUNKS.slice(1)] },
+  { locale: 'zh', chunks: MAIN_CHUNKS },
+]);
 
 const HTML_MINIFY = {
   collapseWhitespace: true,
@@ -70,83 +55,29 @@ module.exports = {
           from: 'src/resources/integrated-menu.css',
           to: 'resources/integrated-menu.css',
         },
-        {
-          from: 'src/resources/phase3-menu.css',
-          to: 'resources/phase3-menu.css',
-        },
         { from: 'src/index.html', to: 'index.html' },
       ],
     }),
-    new HtmlWebpackPlugin({
-      template: 'src/en/index.html',
-      filename: 'en/index.html',
-      chunks: MAIN_CHUNKS,
-      chunksSortMode: 'manual',
-      minify: HTML_MINIFY,
-    }),
-    new HtmlWebpackPlugin({
-      template: 'src/es-ar/index.html',
-      filename: 'es-ar/index.html',
-      chunks: MAIN_CHUNKS,
-      chunksSortMode: 'manual',
-      minify: HTML_MINIFY,
-    }),
-    new HtmlWebpackPlugin({
-      templateContent: createCatalanIndexTemplate,
-      filename: 'ca/index.html',
-      chunks: MAIN_CHUNKS,
-      chunksSortMode: 'manual',
-      minify: HTML_MINIFY,
-    }),
-    new HtmlWebpackPlugin({
-      template: 'src/ko/index.html',
-      filename: 'ko/index.html',
-      chunks: ['runtime', 'ko', ...MAIN_CHUNKS.slice(1)],
-      chunksSortMode: 'manual',
-      minify: HTML_MINIFY,
-    }),
-    new HtmlWebpackPlugin({
-      template: 'src/zh/index.html',
-      filename: 'zh/index.html',
-      chunks: MAIN_CHUNKS,
-      chunksSortMode: 'manual',
-      minify: HTML_MINIFY,
-    }),
-    new HtmlWebpackPlugin({
-      template: 'src/en/update-history/index.html',
-      filename: 'en/update-history/index.html',
-      chunks: ['dark_color_scheme'],
-      chunksSortMode: 'manual',
-      minify: HTML_MINIFY,
-    }),
-    new HtmlWebpackPlugin({
-      template: 'src/es-ar/update-history/index.html',
-      filename: 'es-ar/update-history/index.html',
-      chunks: ['dark_color_scheme'],
-      chunksSortMode: 'manual',
-      minify: HTML_MINIFY,
-    }),
-    new HtmlWebpackPlugin({
-      template: 'src/ca/update-history/index.html',
-      filename: 'ca/update-history/index.html',
-      chunks: ['dark_color_scheme'],
-      chunksSortMode: 'manual',
-      minify: HTML_MINIFY,
-    }),
-    new HtmlWebpackPlugin({
-      template: 'src/ko/update-history/index.html',
-      filename: 'ko/update-history/index.html',
-      chunks: ['dark_color_scheme'],
-      chunksSortMode: 'manual',
-      minify: HTML_MINIFY,
-    }),
-    new HtmlWebpackPlugin({
-      template: 'src/zh/update-history/index.html',
-      filename: 'zh/update-history/index.html',
-      chunks: ['dark_color_scheme'],
-      chunksSortMode: 'manual',
-      minify: HTML_MINIFY,
-    }),
+    ...GAME_LOCALES.map(
+      ({ locale, chunks }) =>
+        new HtmlWebpackPlugin({
+          template: `src/${locale}/index.html`,
+          filename: `${locale}/index.html`,
+          chunks,
+          chunksSortMode: 'manual',
+          minify: HTML_MINIFY,
+        })
+    ),
+    ...GAME_LOCALES.map(
+      ({ locale }) =>
+        new HtmlWebpackPlugin({
+          template: `src/${locale}/update-history/index.html`,
+          filename: `${locale}/update-history/index.html`,
+          chunks: ['dark_color_scheme'],
+          chunksSortMode: 'manual',
+          minify: HTML_MINIFY,
+        })
+    ),
     new WorkboxPlugin.GenerateSW({
       swDest: 'sw.js',
       cleanupOutdatedCaches: true,

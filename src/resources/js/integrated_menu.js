@@ -4,8 +4,6 @@ import inputActionsModule from './input_actions.cjs';
 import menuLogicModule from './menu_logic.cjs';
 import controlBindingsModule from './control_bindings.cjs';
 import { getIntegratedMenuStrings } from './integrated_menu_strings.js';
-import { getPhase3MenuStrings } from './integrated_menu_phase3_strings.js';
-import { getIntegratedMenuThemeCopy } from './integrated_menu_theme.js';
 
 const { shouldHandlePauseShortcut } = inputActionsModule;
 const { wrapIndex, isMenuConfirmKey } = menuLogicModule;
@@ -41,10 +39,7 @@ export function setUpIntegratedMenu(commands) {
   document.documentElement.classList.add('integrated-menu-enabled');
 
   const locale = commands.getCurrentLocale();
-  const strings = getPhase3MenuStrings(
-    locale,
-    getIntegratedMenuStrings(locale)
-  );
+  const strings = getIntegratedMenuStrings(locale);
   const navIds = commands.isDesktop() ? [...NAV_IDS, 'quit'] : [...NAV_IDS];
   let selectedNavIndex = 0;
   let panelControlIndex = 0;
@@ -100,7 +95,9 @@ export function setUpIntegratedMenu(commands) {
       </div>
       <footer class="pv-menu-footer">
         <div id="pv-menu-hints" class="pv-menu-hints"></div>
-        <p id="pv-menu-status" class="pv-menu-status">${strings.status.ready}</p>
+        <p id="pv-menu-status" class="pv-menu-status">${
+          strings.status.ready
+        }</p>
       </footer>
     </div>
     <div id="pv-menu-modal" class="pv-menu-modal" role="alertdialog" aria-modal="true" hidden>
@@ -109,8 +106,12 @@ export function setUpIntegratedMenu(commands) {
         <h3 id="pv-menu-modal-title">${strings.confirmation.title}</h3>
         <p id="pv-menu-modal-message"></p>
         <div id="pv-menu-modal-actions" class="pv-menu-modal-actions">
-          <button type="button" data-modal-action="accept">${strings.confirmation.accept}</button>
-          <button type="button" data-modal-action="cancel">${strings.confirmation.cancel}</button>
+          <button type="button" data-modal-action="accept">${
+            strings.confirmation.accept
+          }</button>
+          <button type="button" data-modal-action="cancel">${
+            strings.confirmation.cancel
+          }</button>
         </div>
       </div>
     </div>
@@ -204,7 +205,9 @@ export function setUpIntegratedMenu(commands) {
     });
 
     detail.querySelectorAll('[data-locale]').forEach((button) => {
-      button.addEventListener('click', () => applyLanguage(button.dataset.locale));
+      button.addEventListener('click', () =>
+        applyLanguage(button.dataset.locale)
+      );
     });
 
     detail.querySelectorAll('[data-control-id]').forEach((button) => {
@@ -224,29 +227,35 @@ export function setUpIntegratedMenu(commands) {
       });
     });
 
-    detail.querySelector('[data-command="restart"]')?.addEventListener('click', () => {
-      showConfirmation(strings.restart.warning, () => {
-        commands.restartMatch();
-        closeMenu(false);
+    detail
+      .querySelector('[data-command="restart"]')
+      ?.addEventListener('click', () => {
+        showConfirmation(strings.restart.warning, () => {
+          commands.restartMatch();
+          closeMenu(false);
+        });
       });
-    });
 
-    detail.querySelector('[data-command="reset-defaults"]')?.addEventListener('click', () => {
-      commands.resetDefaults();
-      confirmationSound();
-      setStatus(strings.status.defaults);
-      renderPanel();
-    });
-
-    detail.querySelector('[data-command="quit"]')?.addEventListener('click', () => {
-      showConfirmation(strings.quit.warning, async () => {
-        const didQuit = await commands.quit();
-        if (!didQuit) {
-          closeConfirmation();
-          setStatus(strings.status.quitUnavailable);
-        }
+    detail
+      .querySelector('[data-command="reset-defaults"]')
+      ?.addEventListener('click', () => {
+        commands.resetDefaults();
+        confirmationSound();
+        setStatus(strings.status.defaults);
+        renderPanel();
       });
-    });
+
+    detail
+      .querySelector('[data-command="quit"]')
+      ?.addEventListener('click', () => {
+        showConfirmation(strings.quit.warning, async () => {
+          const didQuit = await commands.quit();
+          if (!didQuit) {
+            closeConfirmation();
+            setStatus(strings.status.quitUnavailable);
+          }
+        });
+      });
   }
 
   function getPanelControls() {
@@ -312,7 +321,8 @@ export function setUpIntegratedMenu(commands) {
 
     const currentValue = button.dataset.value;
     const currentIndex = Math.max(0, values.indexOf(currentValue));
-    const nextValue = values[wrapIndex(currentIndex + direction, values.length)];
+    const nextValue =
+      values[wrapIndex(currentIndex + direction, values.length)];
     let result = true;
 
     if (setting === 'winningScore') {
@@ -584,9 +594,7 @@ export function setUpIntegratedMenu(commands) {
   }
 
   function handleModalKey(event) {
-    const actions = Array.from(
-      overlay.querySelectorAll('[data-modal-action]')
-    );
+    const actions = Array.from(overlay.querySelectorAll('[data-modal-action]'));
     const focusedIndex = Math.max(0, actions.indexOf(document.activeElement));
     if (event.code === 'ArrowLeft' || event.code === 'ArrowRight') {
       actions[wrapIndex(focusedIndex + 1, actions.length)]?.focus();
@@ -729,8 +737,7 @@ function settingMarkup(id, label, values, currentValue, strings) {
   `;
 }
 
-function themeSettingMarkup(currentValue, locale) {
-  const copy = getIntegratedMenuThemeCopy(locale);
+function themeSettingMarkup(currentValue, copy) {
   return `
     <button
       type="button"
@@ -778,15 +785,13 @@ function controlGroupMarkup(player, strings, settings) {
   );
   return `
     <section class="pv-control-player">
-      <h4>${player === 1 ? strings.controls.player1 : strings.controls.player2}</h4>
+      <h4>${
+        player === 1 ? strings.controls.player1 : strings.controls.player2
+      }</h4>
       <div class="pv-control-player-bindings">
         ${definitions
           .map((definition) =>
-            controlBindingMarkup(
-              definition,
-              strings,
-              settings.controlBindings
-            )
+            controlBindingMarkup(definition, strings, settings.controlBindings)
           )
           .join('')}
       </div>
@@ -797,7 +802,9 @@ function controlGroupMarkup(player, strings, settings) {
 function getPanelMarkup(id, strings, settings) {
   const panelHeading = (section, title, body, danger = false) => `
     <div class="pv-menu-panel-heading">
-      <span class="pv-menu-kicker ${danger ? 'pv-menu-kicker-danger' : ''}">${section}</span>
+      <span class="pv-menu-kicker ${
+        danger ? 'pv-menu-kicker-danger' : ''
+      }">${section}</span>
       <h3>${title}</h3>
       <p>${body}</p>
     </div>
@@ -819,7 +826,9 @@ function getPanelMarkup(id, strings, settings) {
       true
     )}
       <div class="pv-menu-warning">${strings.restart.warning}</div>
-      <button type="button" class="pv-menu-primary-action pv-menu-danger-action" data-command="restart">${strings.restart.action}</button>`;
+      <button type="button" class="pv-menu-primary-action pv-menu-danger-action" data-command="restart">${
+        strings.restart.action
+      }</button>`;
   }
   if (id === 'match') {
     return `${panelHeading(
@@ -850,7 +859,9 @@ function getPanelMarkup(id, strings, settings) {
           strings
         )}
       </div>
-      <button type="button" class="pv-menu-secondary-action" data-command="reset-defaults">${strings.match.reset}</button>`;
+      <button type="button" class="pv-menu-secondary-action" data-command="reset-defaults">${
+        strings.match.reset
+      }</button>`;
   }
   if (id === 'controls') {
     return `${panelHeading(
@@ -864,11 +875,19 @@ function getPanelMarkup(id, strings, settings) {
           ${controlGroupMarkup(2, strings, settings)}
         </div>
         <div class="pv-control-reset-actions">
-          <button type="button" data-control-reset="player1">${strings.controls.resetPlayer1}</button>
-          <button type="button" data-control-reset="player2">${strings.controls.resetPlayer2}</button>
-          <button type="button" data-control-reset="all">${strings.controls.resetAll}</button>
+          <button type="button" data-control-reset="player1">${
+            strings.controls.resetPlayer1
+          }</button>
+          <button type="button" data-control-reset="player2">${
+            strings.controls.resetPlayer2
+          }</button>
+          <button type="button" data-control-reset="all">${
+            strings.controls.resetAll
+          }</button>
         </div>
-        <p class="pv-control-fixed-keys"><strong>P</strong> — ${strings.controls.pause} · <strong>B</strong> — ${strings.controls.practiceReset}</p>
+        <p class="pv-control-fixed-keys"><strong>P</strong> — ${
+          strings.controls.pause
+        } · <strong>B</strong> — ${strings.controls.practiceReset}</p>
       </div>`;
   }
   if (id === 'audio') {
@@ -885,7 +904,7 @@ function getPanelMarkup(id, strings, settings) {
           settings.graphic,
           strings
         )}
-        ${themeSettingMarkup(settings.colorScheme, settings.locale)}
+        ${themeSettingMarkup(settings.colorScheme, strings.theme)}
         ${settingMarkup(
           'bgm',
           strings.audio.bgm,
@@ -940,8 +959,12 @@ function getPanelMarkup(id, strings, settings) {
         <p class="pv-menu-about-punchline">${strings.about.punchline}</p>
       </div>
       <div class="pv-menu-about-links">
-        <a class="pv-menu-about-link" href="https://santiagorodriguez.com" target="_blank" rel="noopener">${strings.about.website}</a>
-        <a class="pv-menu-about-link" href="https://github.com/santirodriguez/pikachu-volleyball" target="_blank" rel="noopener">${strings.about.source}</a>
+        <a class="pv-menu-about-link" href="https://santiagorodriguez.com" target="_blank" rel="noopener">${
+          strings.about.website
+        }</a>
+        <a class="pv-menu-about-link" href="https://github.com/santirodriguez/pikachu-volleyball" target="_blank" rel="noopener">${
+          strings.about.source
+        }</a>
       </div>`;
   }
   if (id === 'quit') {
@@ -952,7 +975,9 @@ function getPanelMarkup(id, strings, settings) {
       true
     )}
       <div class="pv-menu-warning">${strings.quit.warning}</div>
-      <button type="button" class="pv-menu-primary-action pv-menu-danger-action" data-command="quit">${strings.quit.action}</button>`;
+      <button type="button" class="pv-menu-primary-action pv-menu-danger-action" data-command="quit">${
+        strings.quit.action
+      }</button>`;
   }
   return '';
 }
