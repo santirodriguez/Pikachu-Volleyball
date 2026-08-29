@@ -1,0 +1,126 @@
+name: Checkpoint 2 AppImage Validation
+
+on:
+  pull_request:
+    branches:
+      - v2.1
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  appimage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22.12.0
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=critical
+
+      - name: Run repository quality checks
+        run: npm run quality:check
+
+      - name: Build Linux AppImage
+        run: npm run build:desktop:linux -- --publish=never
+
+      - name: Validate AppImage packaging
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t appimages < <(find release -maxdepth 1 -type f -name '*.AppImage' | sort)
+          if [[ "${#appimages[@]}" -ne 1 ]]; then
+            echo "Expected exactly one AppImage, found ${#appimages[@]}" >&2
+            exit 1
+          fi
+
+          appimage="${appimages[0]}"
+          chmod +x "$appimage"
+          offset="$($appimage --appimage-offset)"
+          printf 'AppImage offset: %s\n' "$offset"
+          dd if="$appimage" bs=1 skip="$offset" count=96 status=none | od -An -t u1 > release/squashfs-superblock.txt
+
+          node scripts/report-build-metrics.cjs release/build-metrics.json
+
+          compression="$(node -e "const fs=require('fs');const p=process.argv[1];const o=Number(process.argv[2]);const b=Buffer.alloc(32);const f=fs.openSync(p,'r');fs.readSync(f,b,0,b.length,o);fs.closeSync(f);if(b.toString('ascii',0,4)!=='hsqs')process.exit(2);process.stdout.write(String(b.readUInt16LE(20)));" "$appimage" "$offset")"
+          block_size="$(node -e "const fs=require('fs');const p=process.argv[1];const o=Number(process.argv[2]);const b=Buffer.alloc(32);const f=fs.openSync(p,'r');fs.readSync(f,b,0,b.length,o);fs.closeSync(f);process.stdout.write(String(b.readUInt32LE(12)));" "$appimage" "$offset")"
+
+          echo "SquashFS compression id: $compression"
+          echo "SquashFS block size: $block_size"
+          if [[ "$compression" != "6" ]]; then
+            echo "Expected SquashFS Zstd compression id 6" >&2
+            exit 1
+          fi
+          if [[ "$block_size" != "131072" ]]; then
+            echo "Expected 131072-byte SquashFS blocks" >&2
+            exit 1
+          fi
+
+          appimage_bytes="$(stat -c%s "$appimage")"
+          echo "AppImage bytes: $appimage_bytes"
+          sha256sum "$appimage" | tee release/SHA256SUMS.txt
+
+      - name: Validate fail-closed launcher
+        shell: bash
+        run: |
+          set -euo pipefail
+          appimage="$(find release -maxdepth 1 -type f -name '*.AppImage' -print -quit)"
+          extract_dir="$(mktemp -d)"
+          trap 'rm -rf "$extract_dir"' EXIT
+          (
+            cd "$extract_dir"
+            "$GITHUB_WORKSPACE/$appimage" --appimage-extract >/dev/null
+          )
+          apprun="$extract_dir/squashfs-root/AppRun"
+          bash -n "$apprun"
+          grep -Fq 'ERROR: --no-sandbox is disabled by this AppImage security policy.' "$apprun"
+          grep -Fq 'ERROR: Chromium sandbox prerequisites are unavailable; refusing to launch unsandboxed.' "$apprun"
+          if grep -Fq 'NO_SANDBOX=(--no-sandbox)' "$apprun"; then
+            echo "Unsafe automatic no-sandbox fallback is present" >&2
+            exit 1
+          fi
+          set +e
+          output="$("$apprun" --no-sandbox 2>&1)"
+          status=$?
+          set -e
+          if [[ "$status" -ne 1 ]]; then
+            echo "Expected explicit --no-sandbox rejection to exit 1, got $status" >&2
+            echo "$output" >&2
+            exit 1
+          fi
+          if [[ "$output" != 'ERROR: --no-sandbox is disabled by this AppImage security policy.' ]]; then
+            echo "Unexpected --no-sandbox rejection output: $output" >&2
+            exit 1
+          fi
+
+      - name: Measure packaged startup
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo chown root:root release/linux-unpacked/chrome-sandbox
+          sudo chmod 4755 release/linux-unpacked/chrome-sandbox
+          xvfb-run -a node scripts/measure-startup.cjs release/startup-metrics.json
+
+      - name: Upload checkpoint artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: checkpoint2-zstd-appimage
+          path: |
+            release/*.AppImage
+            release/SHA256SUMS.txt
+            release/build-metrics.json
+            release/startup-metrics.json
+            release/squashfs-superblock.txt
+          if-no-files-found: error
