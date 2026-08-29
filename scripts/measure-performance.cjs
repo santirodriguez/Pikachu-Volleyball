@@ -46,6 +46,16 @@ function roundNumber(value) {
   return Number(value.toFixed(2));
 }
 
+function mean(values) {
+  if (values.length === 0) return null;
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+function meanAbsoluteDeviation(values, center) {
+  if (values.length === 0 || !Number.isFinite(center)) return null;
+  return mean(values.map((value) => Math.abs(value - center)));
+}
+
 function percentile(values, ratio) {
   if (values.length === 0) return null;
   const sorted = [...values].sort((a, b) => a - b);
@@ -63,6 +73,7 @@ function summarizeRenderer(report) {
     (sample) => sample.state === 'round' && Number.isFinite(sample.intervalMs)
   );
   const intervals = roundSamples.map((sample) => sample.intervalMs);
+  const meanInterval = mean(intervals);
   const gameLoop = roundSamples
     .map((sample) => sample.gameLoopMs)
     .filter(Number.isFinite);
@@ -87,7 +98,15 @@ function summarizeRenderer(report) {
     targetFps: diagnostics.targetFps || null,
     targetFrameIntervalMs: target,
     roundSampleCount: roundSamples.length,
+    effectiveFps:
+      Number.isFinite(meanInterval) && meanInterval > 0
+        ? roundNumber(1000 / meanInterval)
+        : null,
+    cadenceMeanAbsoluteDeviationMs: roundNumber(
+      meanAbsoluteDeviation(intervals, meanInterval)
+    ),
     intervalMs: {
+      mean: roundNumber(meanInterval),
       p50: percentile(intervals, 0.5),
       p95: percentile(intervals, 0.95),
       p99: percentile(intervals, 0.99),
@@ -218,12 +237,12 @@ function renderSummary(report) {
   const lines = [
     `## ${isAppImage ? 'AppImage' : report.target.kind} performance diagnostics`,
     '',
-    '| Run | Launch -> report | Approx. pre-Electron | Process -> first frame | Round p95 | Round max | >60 ms frames | Work p95 |',
-    '|---|---:|---:|---:|---:|---:|---:|---:|',
+    '| Run | Launch -> report | Approx. pre-Electron | Process -> first frame | Avg FPS | Mean interval | Cadence MAD | Round p95 | >60 ms frames | Work p95 |',
+    '|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|',
   ];
   for (const run of report.runs) {
     lines.push(
-      `| ${run.label} | ${run.launchMeasurement.launchToMetricsObservedMs ?? 'n/a'} ms | ${run.launchMeasurement.approximatePreElectronOrLauncherMs ?? 'n/a'} ms | ${run.endToEndMs?.processStartToFirstGameFrame ?? 'n/a'} ms | ${run.framePacingSummary.intervalMs.p95 ?? 'n/a'} ms | ${run.framePacingSummary.intervalMs.max ?? 'n/a'} ms | ${run.framePacingSummary.lateFrames.over1_5xTarget} | ${run.framePacingSummary.workMs.totalP95 ?? 'n/a'} ms |`
+      `| ${run.label} | ${run.launchMeasurement.launchToMetricsObservedMs ?? 'n/a'} ms | ${run.launchMeasurement.approximatePreElectronOrLauncherMs ?? 'n/a'} ms | ${run.endToEndMs?.processStartToFirstGameFrame ?? 'n/a'} ms | ${run.framePacingSummary.effectiveFps ?? 'n/a'} | ${run.framePacingSummary.intervalMs.mean ?? 'n/a'} ms | ${run.framePacingSummary.cadenceMeanAbsoluteDeviationMs ?? 'n/a'} ms | ${run.framePacingSummary.intervalMs.p95 ?? 'n/a'} ms | ${run.framePacingSummary.lateFrames.over1_5xTarget} | ${run.framePacingSummary.workMs.totalP95 ?? 'n/a'} ms |`
     );
   }
   lines.push(
