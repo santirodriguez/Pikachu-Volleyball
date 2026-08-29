@@ -6,13 +6,13 @@ This guide records the validated architecture and extension points for future ti
 
 ## Validated baseline
 
-The following behavior was verified in a Fedora AppImage review on August 5, 2026:
+The following behavior was verified in Fedora AppImage reviews during the 2.0 and 2.1 work:
 
 - Player 1 Power Hit: `Z` or `Left Shift`;
 - Player 2 Power Hit: `Enter` or `Left Control`;
 - `P` pauses and resumes the game;
 - the AppImage starts and runs correctly with the current Electron wrapper;
-- the web bundle and all four current locale outputs pass CI.
+- the web bundle and all five supported locale outputs pass CI.
 
 These controls are the reference baseline for future presentation work. A title-screen or graphical change must not silently modify them.
 
@@ -24,14 +24,29 @@ These controls are the reference baseline for future presentation work. A title-
 
 Responsibilities:
 
-- creates the PixiJS renderer, stage, ticker and loader;
+- applies the effective color scheme before the game runtime loads;
+- prepares the lightweight loading and integrated-menu shell;
+- defers the heavy game runtime until after the initial shell can paint;
+- reports a localized bootstrap failure if the runtime import fails.
+
+Use this file only for lightweight application bootstrap. Do not place PixiJS setup, game-state logic or screen-specific animation here.
+
+### Game runtime
+
+`src/resources/js/game_runtime.js`
+
+Responsibilities:
+
+- registers and creates the PixiJS renderer, stage, ticker and loader;
 - loads the sprite sheet;
 - constructs `PikachuVolleyball`;
-- initializes persisted options;
-- mounts the integrated menu;
-- starts the render loop.
+- hydrates persisted gameplay settings;
+- owns visibility-based audio mute and unmute behavior;
+- constructs `GameCommands` and mounts the integrated menu;
+- performs deferred audio warm-up;
+- starts the game and render loop.
 
-Use this file only to connect top-level components. Do not place screen-specific animation logic here.
+Use this file to connect runtime components. Keep presentation-specific state in the controller or view rather than adding it to the runtime bootstrap.
 
 ### Game state flow
 
@@ -110,14 +125,18 @@ A visual effect may read simulation state, but it should not write to physics fi
 
 ### Integrated application interface
 
+Primary ownership:
+
 - `src/resources/js/integrated_menu.js`;
 - `src/resources/js/game_commands.js`;
+- `src/resources/js/settings_store.js` and `settings_store.cjs`;
+- `src/resources/js/game_settings.cjs`;
 - `src/resources/integrated-menu.css`;
-- `src/resources/js/integrated_menu_strings.js`.
+- `src/resources/js/integrated_menu_strings.js` and related localized menu copy.
 
-The menu is an HTML overlay above the canvas. It is intentionally separate from the PixiJS game presentation. Future game-screen redesigns may change the canvas content without rebuilding application commands.
+The integrated menu is the game page's DOM UI authority and is mounted as an HTML overlay above the canvas. It is intentionally separate from the PixiJS game presentation. Future game-screen redesigns may change the canvas content without rebuilding application commands.
 
-Use `game_commands.js` for restart, pause, options, locale changes and desktop quit. Do not reconnect these operations through hidden buttons or simulated clicks.
+Use `game_commands.js` for restart, pause, options, locale changes, control changes and desktop quit. Persist supported application settings through the settings store. Do not reconnect operations through hidden legacy buttons, checkboxes or simulated clicks.
 
 ### Desktop boundary
 
@@ -165,4 +184,4 @@ For any future presentation change:
 
 ## Decision record
 
-The current 2.0 work intentionally modernizes the application shell before redesigning the original title and in-game presentation. A future version may revise those visuals, but it should build on the documented state and rendering boundaries above rather than coupling the change to desktop packaging or menu commands.
+The project intentionally modernizes the application shell without coupling those changes to the reverse-engineered gameplay model. Future visual work should build on the documented bootstrap, runtime, menu and rendering boundaries above rather than reconnecting legacy DOM controls or mixing desktop packaging concerns into game-state code.

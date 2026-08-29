@@ -1,8 +1,3 @@
-html.integrated-menu-enabled #menu-bar,
-html.integrated-menu-enabled #about-box {
-  display: none !important;
-}
-
 html.integrated-menu-enabled #flex-container {
   height: 100vh;
   padding-top: 0;
