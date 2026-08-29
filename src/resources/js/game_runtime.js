@@ -50,6 +50,8 @@ import { settingsStore } from './settings_store.js';
 import gameSettingsModule from './game_settings.cjs';
 
 const { hydrateGameSettings } = gameSettingsModule;
+const MAX_DIAGNOSTIC_FRAME_SAMPLES = 600;
+const MAX_DIAGNOSTIC_LONG_TASKS = 100;
 let runtimeStarted = false;
 
 /**
@@ -133,9 +135,16 @@ function setupGame(renderer, stage, ticker, loader) {
   const commands = createGameCommands(pikaVolley, ticker);
   setUpIntegratedMenuLauncher(commands);
   markPerformance('pv-menu-launcher-ready');
-  warmUpAudioAssets();
+  const performanceDiagnostics = createPerformanceDiagnostics(pikaVolley);
+  warmUpAudioAssets(performanceDiagnostics);
   markPerformance('pv-runtime-ready');
-  startGameLoop(renderer, stage, ticker, pikaVolley);
+  startGameLoop(
+    renderer,
+    stage,
+    ticker,
+    pikaVolley,
+    performanceDiagnostics
+  );
 }
 
 /**
@@ -154,19 +163,24 @@ function setUpVisibilityAudio(pikaVolley) {
 
 /**
  * Start non-critical audio loading after the game becomes interactive.
+ * @param {ReturnType<typeof createPerformanceDiagnostics>} performanceDiagnostics
  */
-function warmUpAudioAssets() {
+function warmUpAudioAssets(performanceDiagnostics) {
   const idleCallback =
     window.requestIdleCallback ||
     ((callback) => {
       window.setTimeout(callback, 300);
     });
   idleCallback(() => {
+    markPerformance('pv-audio-warmup-start');
+    performanceDiagnostics?.markAudioWarmupStart();
     for (const prop in ASSETS_PATH.SOUNDS) {
       const audio = new Audio(ASSETS_PATH.SOUNDS[prop]);
       audio.preload = 'auto';
       audio.load();
     }
+    markPerformance('pv-audio-warmup-dispatched');
+    performanceDiagnostics?.markAudioWarmupDispatched();
   });
 }
 
@@ -176,19 +190,160 @@ function warmUpAudioAssets() {
  * @param {Container} stage
  * @param {Ticker} ticker
  * @param {PikachuVolleyball} pikaVolley
+ * @param {ReturnType<typeof createPerformanceDiagnostics>} performanceDiagnostics
  */
-function startGameLoop(renderer, stage, ticker, pikaVolley) {
+function startGameLoop(
+  renderer,
+  stage,
+  ticker,
+  pikaVolley,
+  performanceDiagnostics
+) {
   let firstFrame = true;
   ticker.maxFPS = pikaVolley.normalFPS;
   ticker.add(() => {
+    const frameStartedAt = performanceDiagnostics ? performance.now() : 0;
+    const stateBefore = performanceDiagnostics
+      ? getGameStateName(pikaVolley)
+      : null;
     if (firstFrame) {
       firstFrame = false;
       markPerformance('pv-first-game-frame');
     }
+
+    const gameLoopStartedAt = performanceDiagnostics ? performance.now() : 0;
     pikaVolley.gameLoop();
+    const gameLoopFinishedAt = performanceDiagnostics ? performance.now() : 0;
     renderer.render(stage);
+    const frameFinishedAt = performanceDiagnostics ? performance.now() : 0;
+
+    performanceDiagnostics?.recordFrame({
+      frameStartedAt,
+      stateBefore,
+      gameLoopMs: gameLoopFinishedAt - gameLoopStartedAt,
+      renderMs: frameFinishedAt - gameLoopFinishedAt,
+      totalWorkMs: frameFinishedAt - frameStartedAt,
+    });
   });
   ticker.start();
+}
+
+/**
+ * Create an opt-in frame pacing recorder for packaged diagnostics.
+ * Normal web and desktop runs do not allocate frame samples or observers.
+ * @param {PikachuVolleyball} pikaVolley
+ */
+function createPerformanceDiagnostics(pikaVolley) {
+  const enabled =
+    new URLSearchParams(window.location.search).get('performanceDiagnostics') ===
+    '1';
+  if (!enabled) return null;
+
+  const samples = [];
+  const longTasks = [];
+  let previousFrameAt = null;
+  let audioWarmupStartAtMs = null;
+  let audioWarmupDispatchedAtMs = null;
+
+  const diagnostics = {
+    ready: true,
+    currentState: getGameStateName(pikaVolley),
+    currentFrameCounter: pikaVolley.frameCounter,
+    roundSampleCount: 0,
+    recordFrame(sample) {
+      const intervalMs =
+        previousFrameAt === null ? null : sample.frameStartedAt - previousFrameAt;
+      previousFrameAt = sample.frameStartedAt;
+
+      if (samples.length < MAX_DIAGNOSTIC_FRAME_SAMPLES) {
+        samples.push({
+          atMs: roundNumber(sample.frameStartedAt),
+          intervalMs: roundNumber(intervalMs),
+          state: sample.stateBefore,
+          gameLoopMs: roundNumber(sample.gameLoopMs),
+          renderMs: roundNumber(sample.renderMs),
+          totalWorkMs: roundNumber(sample.totalWorkMs),
+        });
+      }
+
+      if (sample.stateBefore === 'round') {
+        diagnostics.roundSampleCount += 1;
+      }
+      diagnostics.currentState = getGameStateName(pikaVolley);
+      diagnostics.currentFrameCounter = pikaVolley.frameCounter;
+    },
+    markAudioWarmupStart() {
+      audioWarmupStartAtMs = roundNumber(performance.now());
+    },
+    markAudioWarmupDispatched() {
+      audioWarmupDispatchedAtMs = roundNumber(performance.now());
+    },
+    snapshot() {
+      return {
+        targetFps: pikaVolley.normalFPS,
+        targetFrameIntervalMs: roundNumber(1000 / pikaVolley.normalFPS),
+        currentState: diagnostics.currentState,
+        currentFrameCounter: diagnostics.currentFrameCounter,
+        sampleCount: samples.length,
+        roundSampleCount: diagnostics.roundSampleCount,
+        audioWarmupStartAtMs,
+        audioWarmupDispatchedAtMs,
+        samples: samples.slice(),
+        longTasks: longTasks.slice(),
+      };
+    },
+  };
+
+  window.__pvPerformanceDiagnostics = diagnostics;
+
+  try {
+    if (
+      typeof PerformanceObserver !== 'undefined' &&
+      PerformanceObserver.supportedEntryTypes?.includes('longtask')
+    ) {
+      const observer = new PerformanceObserver((list) => {
+        for (const entry of list.getEntries()) {
+          if (longTasks.length >= MAX_DIAGNOSTIC_LONG_TASKS) break;
+          longTasks.push({
+            startTimeMs: roundNumber(entry.startTime),
+            durationMs: roundNumber(entry.duration),
+          });
+        }
+      });
+      observer.observe({ type: 'longtask', buffered: true });
+    }
+  } catch {
+    // Long Task timing is optional diagnostic evidence.
+  }
+
+  return diagnostics;
+}
+
+/**
+ * @param {PikachuVolleyball} pikaVolley
+ */
+function getGameStateName(pikaVolley) {
+  const stateNames = [
+    'intro',
+    'menu',
+    'afterMenuSelection',
+    'beforeStartOfNewGame',
+    'startOfNewGame',
+    'round',
+    'afterEndOfRound',
+    'beforeStartOfNextRound',
+  ];
+  for (const stateName of stateNames) {
+    if (pikaVolley.state === pikaVolley[stateName]) return stateName;
+  }
+  return 'unknown';
+}
+
+function roundNumber(value) {
+  if (value === null || value === undefined || !Number.isFinite(value)) {
+    return null;
+  }
+  return Number(value.toFixed(2));
 }
 
 /**
