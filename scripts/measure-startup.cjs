@@ -41,17 +41,23 @@ function findExecutable() {
   return candidates[0];
 }
 
+function elapsed(marks, start, end) {
+  if (marks[start] === undefined || marks[end] === undefined) return null;
+  return Number((marks[end] - marks[start]).toFixed(2));
+}
+
 function main() {
   const executable = findExecutable();
   fs.mkdirSync(path.dirname(OUTPUT_PATH), { recursive: true });
   fs.rmSync(OUTPUT_PATH, { force: true });
 
   const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pv-startup-'));
-  const child = spawn(executable, [`--user-data-dir=${userDataDir}`], {
+  const child = spawn(executable, [], {
     cwd: APP_DIR,
     env: {
       ...process.env,
       PV_STARTUP_METRICS_FILE: OUTPUT_PATH,
+      PV_STARTUP_USER_DATA_DIR: userDataDir,
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -82,10 +88,45 @@ function main() {
     }
 
     const report = JSON.parse(fs.readFileSync(OUTPUT_PATH, 'utf8'));
-    const firstFrame = report.rendererMarks?.['pv-first-game-frame'];
-    const menuUsable = report.rendererMarks?.['pv-menu-usable'];
+    const marks = report.rendererMarks || {};
+    const firstFrame = marks['pv-first-game-frame'];
+    const menuUsable = marks['pv-menu-usable'];
     const processToFrame = report.endToEndMs?.processStartToFirstGameFrame;
     const processToMenu = report.endToEndMs?.processStartToMenuUsable;
+    const componentDurations = {
+      runtimeImport: elapsed(marks, 'pv-runtime-import-start', 'pv-runtime-start'),
+      pixiSetup: elapsed(marks, 'pv-runtime-start', 'pv-pixi-ready'),
+      rendererSetup: elapsed(marks, 'pv-pixi-ready', 'pv-renderer-ready'),
+      spriteLoad: elapsed(marks, 'pv-sprite-load-start', 'pv-sprite-load-ready'),
+      controllerConstruction: elapsed(
+        marks,
+        'pv-sprite-load-ready',
+        'pv-game-controller-ready'
+      ),
+      settingsHydration: elapsed(
+        marks,
+        'pv-game-controller-ready',
+        'pv-settings-ready'
+      ),
+      menuMount: elapsed(marks, 'pv-settings-ready', 'pv-menu-mounted'),
+      runtimeReadyToFirstFrame: elapsed(
+        marks,
+        'pv-runtime-ready',
+        'pv-first-game-frame'
+      ),
+      menuPauseResponse: elapsed(
+        marks,
+        'pv-menu-open-request',
+        'pv-menu-paused'
+      ),
+      menuOpenToUsable: elapsed(
+        marks,
+        'pv-menu-open-request',
+        'pv-menu-usable'
+      ),
+    };
+    report.componentDurationsMs = componentDurations;
+    fs.writeFileSync(OUTPUT_PATH, `${JSON.stringify(report, null, 2)}\n`);
 
     const lines = [
       '## Packaged startup report',
@@ -94,6 +135,16 @@ function main() {
       `- Renderer bootstrap -> first game frame: \`${firstFrame ?? 'n/a'}\` ms`,
       `- Electron process start -> first menu usable: \`${processToMenu ?? 'n/a'}\` ms`,
       `- Renderer bootstrap -> first menu usable: \`${menuUsable ?? 'n/a'}\` ms`,
+      `- Runtime import/evaluation: \`${componentDurations.runtimeImport ?? 'n/a'}\` ms`,
+      `- Pixi registration/settings: \`${componentDurations.pixiSetup ?? 'n/a'}\` ms`,
+      `- Renderer/stage/ticker setup: \`${componentDurations.rendererSetup ?? 'n/a'}\` ms`,
+      `- Sprite load: \`${componentDurations.spriteLoad ?? 'n/a'}\` ms`,
+      `- Game controller construction: \`${componentDurations.controllerConstruction ?? 'n/a'}\` ms`,
+      `- Settings hydration: \`${componentDurations.settingsHydration ?? 'n/a'}\` ms`,
+      `- Integrated menu mount: \`${componentDurations.menuMount ?? 'n/a'}\` ms`,
+      `- Runtime ready -> first frame: \`${componentDurations.runtimeReadyToFirstFrame ?? 'n/a'}\` ms`,
+      `- P request -> paused: \`${componentDurations.menuPauseResponse ?? 'n/a'}\` ms`,
+      `- P request -> menu usable: \`${componentDurations.menuOpenToUsable ?? 'n/a'}\` ms`,
       '- Method: fresh packaged Electron process with a temporary user-data directory; OS filesystem cache is not forcibly cleared.',
       '',
     ];
