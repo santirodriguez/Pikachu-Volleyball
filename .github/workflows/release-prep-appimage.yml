@@ -1,0 +1,125 @@
+name: Build 2.1.0 release candidate
+
+on:
+  push:
+    branches:
+      - v2.1-release-prep
+
+permissions:
+  contents: write
+
+jobs:
+  appimage:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out release-prep branch
+        uses: actions/checkout@v5
+        with:
+          ref: v2.1-release-prep
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22.12.0
+          cache: npm
+
+      - name: Validate release metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          package_version="$(node -p "require('./package.json').version")"
+          lock_version="$(node -p "require('./package-lock.json').version")"
+          if [[ "$package_version" != "$lock_version" ]]; then
+            echo "package.json version ($package_version) does not match package-lock.json ($lock_version)" >&2
+            exit 1
+          fi
+          if [[ "$package_version" != "2.1.0" ]]; then
+            echo "Expected release candidate version 2.1.0, found $package_version" >&2
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=critical
+
+      - name: Run repository quality checks
+        run: npm run quality:check
+
+      - name: Build Linux AppImage
+        run: npm run build:desktop:linux -- --publish=never
+
+      - name: Inspect packaged application
+        shell: bash
+        run: |
+          set -euo pipefail
+          app_dir="release/linux-unpacked"
+          asar_path="$app_dir/resources/app.asar"
+          mapfile -t locale_paks < <(find "$app_dir/locales" -maxdepth 1 -type f -name '*.pak' | sort)
+          if [[ "${#locale_paks[@]}" -ne 1 || "$(basename "${locale_paks[0]}")" != "en-US.pak" ]]; then
+            echo "Expected only Electron locale en-US.pak" >&2
+            printf 'Found: %s\n' "${locale_paks[@]}" >&2
+            exit 1
+          fi
+          asar_listing="$(mktemp)"
+          npx --no-install asar list "$asar_path" > "$asar_listing"
+          packaged_node_modules="$(grep -c '^/node_modules/' "$asar_listing" || true)"
+          packaged_pixi_files="$(grep -c '^/node_modules/@pixi/' "$asar_listing" || true)"
+          if [[ "$packaged_node_modules" -ne 0 || "$packaged_pixi_files" -ne 0 ]]; then
+            echo "Packaged app still contains runtime node_modules" >&2
+            exit 1
+          fi
+          echo "Electron locale packs: ${#locale_paks[@]}"
+          echo "app.asar bytes: $(stat -c%s "$asar_path")"
+          echo "node_modules files in app.asar: $packaged_node_modules"
+          echo "@pixi files in app.asar: $packaged_pixi_files"
+
+      - name: Verify AppImage and create checksum
+        shell: bash
+        run: |
+          set -euo pipefail
+          package_version="$(node -p "require('./package.json').version")"
+          expected_name="Pikachu-Volleyball-${package_version}-x86_64.AppImage"
+          mapfile -t appimages < <(find release -maxdepth 1 -type f -name '*.AppImage' | sort)
+          if [[ "${#appimages[@]}" -ne 1 ]]; then
+            echo "Expected exactly one AppImage, found ${#appimages[@]}" >&2
+            exit 1
+          fi
+          actual_name="$(basename "${appimages[0]}")"
+          if [[ "$actual_name" != "$expected_name" ]]; then
+            echo "Expected $expected_name, found $actual_name" >&2
+            exit 1
+          fi
+          appimage_bytes="$(stat -c%s "${appimages[0]}")"
+          appimage_mib="$(awk -v bytes="$appimage_bytes" 'BEGIN { printf "%.2f", bytes / 1024 / 1024 }')"
+          v2_baseline_bytes=90911841
+          v2_delta_bytes=$((appimage_bytes - v2_baseline_bytes))
+          v2_delta_percent="$(awk -v delta="$v2_delta_bytes" -v baseline="$v2_baseline_bytes" 'BEGIN { printf "%+.2f", (delta / baseline) * 100 }')"
+          (cd release && sha256sum "$actual_name" > SHA256SUMS.txt)
+          echo "Built artifact: $actual_name"
+          echo "Artifact size: $appimage_bytes bytes (${appimage_mib} MiB)"
+          echo "Delta vs v2.0.0: $v2_delta_bytes bytes (${v2_delta_percent}%)"
+          cat release/SHA256SUMS.txt
+
+      - name: Upload release candidate
+        uses: actions/upload-artifact@v6
+        with:
+          name: pikachu-volleyball-2.1.0-release-candidate
+          path: |
+            release/*.AppImage
+            release/SHA256SUMS.txt
+          if-no-files-found: error
+
+      - name: Remove temporary release-candidate workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/release-prep-appimage.yml
+          git commit -m "Remove temporary release candidate workflow"
+          git push origin HEAD:v2.1-release-prep
