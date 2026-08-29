@@ -47,23 +47,23 @@ export function createGameCommands(pikaVolley, ticker) {
 
   applyControlBindingsToGame(controlBindings);
 
-  function emitPauseState() {
+  function emitPauseState(paused) {
     window.dispatchEvent(
       new CustomEvent('pv-pause-changed', {
-        detail: { paused: pikaVolley.paused },
+        detail: { paused },
       })
     );
   }
 
   function setPaused(paused) {
-    pikaVolley.paused = Boolean(paused);
+    const nextPaused = pikaVolley.setPaused(paused);
     resetInputs();
-    emitPauseState();
-    return pikaVolley.paused;
+    emitPauseState(nextPaused);
+    return nextPaused;
   }
 
   function togglePaused() {
-    return setPaused(!pikaVolley.paused);
+    return setPaused(!pikaVolley.isPaused());
   }
 
   function restartMatch() {
@@ -118,15 +118,6 @@ export function createGameCommands(pikaVolley, ticker) {
     return true;
   }
 
-  function isMatchInProgress() {
-    return ![
-      pikaVolley.intro,
-      pikaVolley.menu,
-      pikaVolley.afterMenuSelection,
-      pikaVolley.beforeStartOfNewGame,
-    ].includes(pikaVolley.state);
-  }
-
   function setWinningScore(value) {
     const numericValue = Number(value);
     if (![5, 10, 15].includes(numericValue)) {
@@ -136,7 +127,7 @@ export function createGameCommands(pikaVolley, ticker) {
       return { ok: false, reason: 'practice-mode' };
     }
     if (
-      isMatchInProgress() &&
+      pikaVolley.isMatchInProgress() &&
       pikaVolley.scores.some((score) => score >= numericValue)
     ) {
       return { ok: false, reason: 'score-reached' };
@@ -205,7 +196,7 @@ export function createGameCommands(pikaVolley, ticker) {
   return Object.freeze({
     setPaused,
     togglePaused,
-    isPaused: () => pikaVolley.paused,
+    isPaused: () => pikaVolley.isPaused(),
     restartMatch,
     resetInputs,
     getSettings,
@@ -221,7 +212,7 @@ export function createGameCommands(pikaVolley, ticker) {
     setControlBinding,
     resetControlBindingScope,
     formatControlCode: formatKeyboardCode,
-    isMatchInProgress,
+    isMatchInProgress: () => pikaVolley.isMatchInProgress(),
     getCurrentLocale,
     isDesktop,
     changeLanguage,
