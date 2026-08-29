@@ -45,11 +45,14 @@
       <div class="margin-top limit-width">
         <div class="indent-minus">
           <p>
-            <span class="bold">2026-08-28</span> Version 2.1.0: reduce the Linux
-            AppImage by about 10%, defer the heavy game runtime until after the
-            initial shell paint, centralize settings and UI ownership, remove the
-            inactive legacy interface, and fix input recovery after Restart.
-            Physics, AI, scoring and game timing remain unchanged.
+            <span class="bold">2026-08-29</span> Version 2.1.0: restore fast
+            Linux startup after an over-compressed AppImage introduced a launch
+            regression of roughly one minute. The final build returns startup to
+            roughly two seconds in real-world Linux validation and recovers as
+            much package-size savings as practical without sacrificing startup
+            speed, compatibility or sandbox security. It also includes general
+            reliability and maintenance improvements while preserving physics,
+            AI, scoring and game timing.
           </p>
           <p>
             <span class="bold">2026-08-05</span> Version 2.0.0: release the
