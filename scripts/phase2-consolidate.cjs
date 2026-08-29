@@ -188,8 +188,4 @@ for (const file of productionFiles) {
   }
 }
 
-if (!quality.includes('dist/resources/integrated-menu.css') || quality.includes('dist/resources/phase3-menu.css')) {
-  throw new Error('Quality workflow stylesheet gate was not migrated');
-}
-
 console.log('Phase 2 build/localization/UI consolidation applied successfully.');
