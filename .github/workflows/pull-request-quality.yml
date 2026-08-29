@@ -37,7 +37,7 @@ jobs:
           lock_version="$(node -p "require('./package-lock.json').version")"
 
           if [[ "$package_version" != "$lock_version" ]]; then
-            echo "package.json version ($package_version) does not match package-lock.json ($lock_version)" >&2
+            echo "package.json version ($package_version) does not match package-lock.json version ($lock_version)" >&2
             exit 1
           fi
 
@@ -113,3 +113,91 @@ jobs:
             echo "README still advertises an alpha release" >&2
             exit 1
           fi
+
+  phase2-packaging:
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22.12.0
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Linux AppImage
+        run: npm run build:desktop:linux -- --publish=never
+
+      - name: Inspect packaged application
+        shell: bash
+        run: |
+          set -euo pipefail
+          app_dir="release/linux-unpacked"
+          asar_path="$app_dir/resources/app.asar"
+
+          mapfile -t locale_paks < <(find "$app_dir/locales" -maxdepth 1 -type f -name '*.pak' | sort)
+          if [[ "${#locale_paks[@]}" -ne 1 || "$(basename "${locale_paks[0]}")" != "en-US.pak" ]]; then
+            echo "Expected only Electron locale en-US.pak" >&2
+            printf 'Found: %s\n' "${locale_paks[@]}" >&2
+            exit 1
+          fi
+
+          if [[ ! -f "$asar_path" ]]; then
+            echo "Missing packaged app archive: $asar_path" >&2
+            exit 1
+          fi
+
+          asar_listing="$(mktemp)"
+          npx --no-install asar list "$asar_path" > "$asar_listing"
+          if grep -q '^/node_modules/' "$asar_listing"; then
+            echo "Packaged app still contains runtime node_modules" >&2
+            exit 1
+          fi
+
+          if find dist release/linux-unpacked/resources -type f -name '*.map' -print -quit | grep -q .; then
+            echo "Production package contains source maps" >&2
+            exit 1
+          fi
+
+      - name: Verify AppImage and create checksum
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t appimages < <(find release -maxdepth 1 -type f -name '*.AppImage' | sort)
+          if [[ "${#appimages[@]}" -ne 1 || ! -s "${appimages[0]}" ]]; then
+            echo "Expected exactly one non-empty AppImage" >&2
+            exit 1
+          fi
+          (
+            cd release
+            sha256sum "$(basename "${appimages[0]}")" > SHA256SUMS.txt
+          )
+
+      - name: Report build sizes
+        run: node scripts/report-build-metrics.cjs release/build-metrics.json
+
+      - name: Measure packaged startup
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo chown root:root release/linux-unpacked/chrome-sandbox
+          sudo chmod 4755 release/linux-unpacked/chrome-sandbox
+          xvfb-run -a node scripts/measure-startup.cjs release/startup-metrics.json
+
+      - name: Upload Phase 2 validation artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: phase2-startup-payload-validation
+          path: |
+            release/*.AppImage
+            release/SHA256SUMS.txt
+            release/build-metrics.json
+            release/startup-metrics.json
+          if-no-files-found: error
