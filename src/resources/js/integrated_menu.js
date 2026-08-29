@@ -5,6 +5,7 @@ import menuLogicModule from './menu_logic.cjs';
 import controlBindingsModule from './control_bindings.cjs';
 import { getIntegratedMenuStrings } from './integrated_menu_strings.js';
 import { getPhase3MenuStrings } from './integrated_menu_phase3_strings.js';
+import { getIntegratedMenuThemeCopy } from './integrated_menu_theme.js';
 
 const { shouldHandlePauseShortcut } = inputActionsModule;
 const { wrapIndex, isMenuConfirmKey } = menuLogicModule;
@@ -322,6 +323,8 @@ export function setUpIntegratedMenu(commands) {
       result = commands.setPracticeMode(nextValue === 'true');
     } else if (setting === 'graphic') {
       result = commands.setGraphic(nextValue);
+    } else if (setting === 'colorScheme') {
+      result = commands.setColorScheme(nextValue);
     } else if (setting === 'bgm') {
       result = commands.setBgm(nextValue);
     } else if (setting === 'sfx') {
@@ -725,6 +728,23 @@ function settingMarkup(id, label, values, currentValue, strings) {
   `;
 }
 
+function themeSettingMarkup(currentValue, locale) {
+  const copy = getIntegratedMenuThemeCopy(locale);
+  return `
+    <button
+      type="button"
+      class="pv-menu-setting"
+      data-setting="colorScheme"
+      data-values="light|dark"
+      data-value="${currentValue}"
+    >
+      <span>${copy.label}</span>
+      <strong>${currentValue === 'dark' ? copy.dark : copy.light}</strong>
+      <span class="pv-menu-setting-arrows" aria-hidden="true">◀ ▶</span>
+    </button>
+  `;
+}
+
 function displaySettingValue(id, value, strings) {
   if (id === 'winningScore') return `${value} ${strings.values.points}`;
   if (id === 'practiceMode') {
@@ -864,6 +884,7 @@ function getPanelMarkup(id, strings, settings) {
           settings.graphic,
           strings
         )}
+        ${themeSettingMarkup(settings.colorScheme, settings.locale)}
         ${settingMarkup(
           'bgm',
           strings.audio.bgm,
