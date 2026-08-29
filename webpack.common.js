@@ -1,4 +1,3 @@
-const fs = require('fs');
 const path = require('path');
 const { CleanWebpackPlugin } = require('clean-webpack-plugin');
 const CopyPlugin = require('copy-webpack-plugin');
@@ -6,7 +5,7 @@ const HtmlWebpackPlugin = require('html-webpack-plugin');
 const WorkboxPlugin = require('workbox-webpack-plugin');
 
 function createCatalanIndexTemplate() {
-  return fs
+  return require('fs')
     .readFileSync(path.resolve(__dirname, 'src/en/index.html'), 'utf8')
     .replace('<html lang="en">', '<html lang="ca">')
     .replace(
@@ -14,7 +13,10 @@ function createCatalanIndexTemplate() {
       'content="Juga a Pikachu Volleyball al web o a Linux"'
     )
     .replace('Loading the game assets...', 'Carregant els recursos del joc...')
-    .replace('A new version is available. Update now?', 'Hi ha una versió nova. Vols actualitzar ara?')
+    .replace(
+      'A new version is available. Update now?',
+      'Hi ha una versió nova. Vols actualitzar ara?'
+    )
     .replace(
       'Update Now (current game state will be lost)',
       'Actualitza ara (es perdrà el partit actual)'
