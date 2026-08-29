@@ -165,7 +165,12 @@ jobs:
         run: node scripts/report-build-metrics.cjs release/build-metrics.json
 
       - name: Measure packaged startup
-        run: xvfb-run -a node scripts/measure-startup.cjs release/startup-metrics.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo chown root:root release/linux-unpacked/chrome-sandbox
+          sudo chmod 4755 release/linux-unpacked/chrome-sandbox
+          xvfb-run -a node scripts/measure-startup.cjs release/startup-metrics.json
 
       - name: Upload validation evidence
         uses: actions/upload-artifact@v6
