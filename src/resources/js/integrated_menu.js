@@ -4,8 +4,6 @@ import inputActionsModule from './input_actions.cjs';
 import menuLogicModule from './menu_logic.cjs';
 import controlBindingsModule from './control_bindings.cjs';
 import { getIntegratedMenuStrings } from './integrated_menu_strings.js';
-import { getPhase3MenuStrings } from './integrated_menu_phase3_strings.js';
-import { getIntegratedMenuThemeCopy } from './integrated_menu_theme.js';
 
 const { shouldHandlePauseShortcut } = inputActionsModule;
 const { wrapIndex, isMenuConfirmKey } = menuLogicModule;
@@ -41,10 +39,7 @@ export function setUpIntegratedMenu(commands) {
   document.documentElement.classList.add('integrated-menu-enabled');
 
   const locale = commands.getCurrentLocale();
-  const strings = getPhase3MenuStrings(
-    locale,
-    getIntegratedMenuStrings(locale)
-  );
+  const strings = getIntegratedMenuStrings(locale);
   const navIds = commands.isDesktop() ? [...NAV_IDS, 'quit'] : [...NAV_IDS];
   let selectedNavIndex = 0;
   let panelControlIndex = 0;
@@ -729,8 +724,7 @@ function settingMarkup(id, label, values, currentValue, strings) {
   `;
 }
 
-function themeSettingMarkup(currentValue, locale) {
-  const copy = getIntegratedMenuThemeCopy(locale);
+function themeSettingMarkup(currentValue, copy) {
   return `
     <button
       type="button"
@@ -885,7 +879,7 @@ function getPanelMarkup(id, strings, settings) {
           settings.graphic,
           strings
         )}
-        ${themeSettingMarkup(settings.colorScheme, settings.locale)}
+        ${themeSettingMarkup(settings.colorScheme, strings.theme)}
         ${settingMarkup(
           'bgm',
           strings.audio.bgm,

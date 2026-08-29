@@ -68,7 +68,7 @@ jobs:
             dist/ko/update-history/index.html
             dist/zh/index.html
             dist/zh/update-history/index.html
-            dist/resources/phase3-menu.css
+            dist/resources/integrated-menu.css
           )
 
           for file in "${expected_files[@]}"; do

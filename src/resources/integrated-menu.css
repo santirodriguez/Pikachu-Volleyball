@@ -673,3 +673,160 @@ html.integrated-menu-enabled #game-canvas-container {
     transition: none;
   }
 }
+
+/* Control editor */
+.pv-control-editor {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  max-height: calc(100% - 5.2em);
+  margin-top: 0.62em;
+  padding-right: 0.22em;
+  overflow-y: auto;
+  gap: 0.42em;
+  scrollbar-color: #f4d44d #143b57;
+  scrollbar-width: thin;
+}
+
+.pv-control-groups {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 0.42em;
+}
+
+.pv-control-player {
+  min-width: 0;
+  border: 2px solid #17384b;
+  padding: 0.34em;
+  background: rgba(235, 251, 255, 0.28);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+
+.pv-control-player h4 {
+  margin: 0 0 0.28em;
+  color: #17384b;
+  font-family: 'Arial Black', 'Trebuchet MS', sans-serif;
+  font-size: 0.62em;
+  letter-spacing: 0.1em;
+}
+
+.pv-control-player-bindings {
+  display: grid;
+  gap: 0.2em;
+}
+
+.pv-control-binding {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  min-width: 0;
+  border: 2px solid #17384b;
+  border-radius: 0;
+  padding: 0.24em 0.3em;
+  color: #fff8d7;
+  background: #143b57;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  text-align: left;
+  gap: 0.32em;
+}
+
+.pv-control-binding:hover,
+.pv-control-binding:focus-visible,
+.pv-control-binding.is-keyboard-selected {
+  border-color: #f4d44d;
+  outline: none;
+  box-shadow: 3px 3px 0 #bd4338;
+  transform: translate(-1px, -1px);
+}
+
+.pv-control-binding-copy {
+  display: grid;
+  min-width: 0;
+  gap: 0.04em;
+}
+
+.pv-control-binding-copy small {
+  overflow: hidden;
+  color: #aee9ff;
+  font-size: 0.48em;
+  font-weight: 800;
+  letter-spacing: 0.025em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pv-control-binding-copy strong {
+  overflow: hidden;
+  color: #f4d44d;
+  font-size: 0.63em;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pv-control-binding-change {
+  border-left: 1px solid rgba(139, 220, 255, 0.35);
+  padding-left: 0.34em;
+  color: #fff8d7;
+  font-size: 0.43em;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.pv-control-reset-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.28em;
+}
+
+.pv-control-reset-actions button {
+  border: 2px solid #17384b;
+  border-radius: 0;
+  padding: 0.34em 0.24em;
+  color: #17384b;
+  background: rgba(255, 248, 215, 0.72);
+  font-size: 0.48em;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.pv-control-reset-actions button:last-child {
+  color: #fff8d7;
+  background: #8d2f2a;
+}
+
+.pv-control-reset-actions button:hover,
+.pv-control-reset-actions button:focus-visible,
+.pv-control-reset-actions button.is-keyboard-selected {
+  border-color: #f4d44d;
+  outline: none;
+  box-shadow: 3px 3px 0 #bd4338;
+}
+
+.pv-control-fixed-keys {
+  margin: 0;
+  color: #17384b;
+  font-size: 0.48em;
+  font-weight: 800;
+  text-align: center;
+}
+
+.pv-control-fixed-keys strong {
+  color: #8d2f2a;
+}
+
+#pv-menu-modal-actions[hidden] {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .pv-control-groups {
+    grid-template-columns: 1fr;
+  }
+
+  .pv-control-reset-actions {
+    grid-template-columns: 1fr;
+  }
+}
