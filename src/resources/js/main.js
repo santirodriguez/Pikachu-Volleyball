@@ -63,7 +63,9 @@ function showBootstrapError(error) {
   console.error('Failed to start Pikachu Volleyball runtime.', error);
   const loadingBox = document.getElementById('loading-box');
   const message = loadingBox?.querySelector('p');
-  if (message !== null && message !== undefined) message.textContent = getBootstrapErrorMessage();
+  if (message !== null && message !== undefined) {
+    message.textContent = getBootstrapErrorMessage();
+  }
   loadingBox?.classList.remove('hidden');
 }
 
@@ -73,5 +75,7 @@ function getBootstrapErrorMessage() {
 }
 
 function markPerformance(name) {
-  if (typeof performance !== 'undefined' && performance.mark) performance.mark(name);
+  if (typeof performance !== 'undefined' && performance.mark) {
+    performance.mark(name);
+  }
 }
