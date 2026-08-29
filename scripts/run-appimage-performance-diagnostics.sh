@@ -9,6 +9,10 @@ if [[ -z "$appimage" || ! -f "$appimage" ]]; then
   exit 1
 fi
 
+if [[ ! -x "$appimage" ]]; then
+  chmod +x "$appimage"
+fi
+
 mkdir -p "$output_dir"
 profile_a="$(mktemp -d)"
 profile_b="$(mktemp -d)"
