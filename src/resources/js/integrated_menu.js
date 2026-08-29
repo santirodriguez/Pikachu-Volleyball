@@ -541,6 +541,7 @@ export function setUpIntegratedMenu(commands) {
   function closeMenu(resumeMatch = true) {
     clearModal();
     controlCapture = null;
+    mode = 'nav';
     overlay.hidden = true;
     trigger.hidden = false;
     if (resumeMatch) commands.setPaused(false);
