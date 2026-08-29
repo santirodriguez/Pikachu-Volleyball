@@ -1,4 +1,5 @@
 name: Temporary Checkpoint 1 Fail-Closed Validation
+# Final rerun after clean fail-closed rejection handling.
 
 on:
   pull_request:
