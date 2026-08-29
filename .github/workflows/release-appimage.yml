@@ -237,7 +237,7 @@ jobs:
           apprun="$root/AppRun"
 
           bash -n "$apprun"
-          grep -Fq 'ERROR: --no-sandbox is disabled by this AppImage security policy.' "$apprun"
+          grep -Fq 'ERROR: sandbox-disabling Chromium switch is disabled by this AppImage security policy:' "$apprun"
           grep -Fq 'ERROR: Chromium sandbox prerequisites are unavailable; refusing to launch unsandboxed.' "$apprun"
           grep -Fq 'export LD_LIBRARY_PATH="${APPDIR}/usr/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"' "$apprun"
           ! grep -Fq 'NO_SANDBOX=(--no-sandbox)' "$apprun"
@@ -250,18 +250,43 @@ jobs:
           fi
           grep -Fxq 'Exec=AppRun --enable-sandbox %U' "${desktop_files[0]}"
 
-          set +e
-          output="$("$apprun" --no-sandbox 2>&1)"
-          status=$?
-          set -e
-          [[ "$status" -eq 1 ]] || {
-            echo "AppRun --no-sandbox returned $status instead of 1" >&2
-            exit 1
-          }
-          [[ "$output" == 'ERROR: --no-sandbox is disabled by this AppImage security policy.' ]] || {
-            echo "Unexpected --no-sandbox rejection output: $output" >&2
-            exit 1
-          }
+          sandbox_switches=(
+            no-sandbox
+            disable-gpu-sandbox
+            disable-namespace-sandbox
+            disable-seccomp-filter-sandbox
+            disable-setuid-sandbox
+            no-zygote-sandbox
+            gpu-sandbox-allow-sysv-shm
+            allow-sandbox-debugging
+          )
+          switch_suffixes=(
+            ''
+            '='
+            '=true'
+            '=false'
+            '=1'
+          )
+
+          for switch_name in "${sandbox_switches[@]}"; do
+            for prefix in '--' '-'; do
+              for suffix in "${switch_suffixes[@]}"; do
+                argument="${prefix}${switch_name}${suffix}"
+                set +e
+                output="$("$apprun" "$argument" 2>&1)"
+                status=$?
+                set -e
+                [[ "$status" -eq 1 ]] || {
+                  echo "AppRun $argument returned $status instead of 1" >&2
+                  exit 1
+                }
+                [[ "$output" == "ERROR: sandbox-disabling Chromium switch is disabled by this AppImage security policy: $argument" ]] || {
+                  echo "Unexpected sandbox-switch rejection output for $argument: $output" >&2
+                  exit 1
+                }
+              done
+            done
+          done
 
           echo "SquashFS compression: zstd"
           echo "SquashFS block size: $block_size bytes"
