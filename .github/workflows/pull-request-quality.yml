@@ -35,12 +35,10 @@ jobs:
           set -euo pipefail
           package_version="$(node -p "require('./package.json').version")"
           lock_version="$(node -p "require('./package-lock.json').version")"
-
           if [[ "$package_version" != "$lock_version" ]]; then
             echo "package.json version ($package_version) does not match package-lock.json ($lock_version)" >&2
             exit 1
           fi
-
           echo "Validated package version: $package_version"
 
       - name: Install dependencies
@@ -70,46 +68,85 @@ jobs:
             dist/zh/update-history/index.html
             dist/resources/integrated-menu.css
           )
-
           for file in "${expected_files[@]}"; do
-            if [[ ! -f "$file" ]]; then
-              echo "Missing expected locale output: $file" >&2
-              exit 1
-            fi
+            [[ -f "$file" ]] || { echo "Missing expected locale output: $file" >&2; exit 1; }
           done
-
           if find dist -type f -name '*.map' -print -quit | grep -q .; then
             echo "Production build contains source maps" >&2
-            find dist -type f -name '*.map' -print >&2
             exit 1
           fi
-
-          if ! grep -q 'lang="ca"' dist/ca/index.html; then
-            echo "Catalan index output does not declare lang=ca" >&2
-            exit 1
-          fi
-
+          grep -q 'lang="ca"' dist/ca/index.html
           release_version="$(node -p "require('./package.json').version")"
-          release_notes="docs/releases/v${release_version}.md"
-
-          if [[ ! -f "$release_notes" ]]; then
-            echo "Missing release notes for $release_version: $release_notes" >&2
-            exit 1
-          fi
-
-          if ! grep -Fq "$release_version" README.md; then
-            echo "README does not mention release version $release_version" >&2
-            exit 1
-          fi
-
+          [[ -f "docs/releases/v${release_version}.md" ]]
+          grep -Fq "$release_version" README.md
           for locale in en es-ar ca ko zh; do
-            if ! grep -Fq "$release_version" "dist/$locale/update-history/index.html"; then
-              echo "Release history for $locale does not mention $release_version" >&2
-              exit 1
-            fi
+            grep -Fq "$release_version" "dist/$locale/update-history/index.html"
           done
+          ! grep -q '2.0%20alpha' README.md
 
-          if grep -q '2.0%20alpha' README.md; then
-            echo "README still advertises an alpha release" >&2
-            exit 1
-          fi
+  phase2-appimage:
+    if: github.event_name == 'pull_request' && github.head_ref == 'v2.1-build-ui-consolidation'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22.12.0
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Linux AppImage
+        run: npm run build:desktop:linux -- --publish=never
+
+      - name: Inspect AppImage
+        shell: bash
+        run: |
+          set -euo pipefail
+          appimage="$(find release -maxdepth 1 -type f -name '*.AppImage' -print -quit)"
+          chmod +x "$appimage"
+          offset="$($appimage --appimage-offset)"
+          compression="$(node -e "const fs=require('fs');const p=process.argv[1];const o=Number(process.argv[2]);const b=Buffer.alloc(32);const f=fs.openSync(p,'r');fs.readSync(f,b,0,b.length,o);fs.closeSync(f);if(b.toString('ascii',0,4)!=='hsqs')process.exit(2);process.stdout.write(String(b.readUInt16LE(20)));" "$appimage" "$offset")"
+          block_size="$(node -e "const fs=require('fs');const p=process.argv[1];const o=Number(process.argv[2]);const b=Buffer.alloc(32);const f=fs.openSync(p,'r');fs.readSync(f,b,0,b.length,o);fs.closeSync(f);process.stdout.write(String(b.readUInt32LE(12)));" "$appimage" "$offset")"
+          [[ "$compression" == "6" ]]
+          [[ "$block_size" == "131072" ]]
+          node scripts/report-build-metrics.cjs release/build-metrics.json
+          sha256sum "$appimage" | tee release/SHA256SUMS.txt
+          extract_dir="$(mktemp -d)"
+          trap 'rm -rf "$extract_dir"' EXIT
+          (cd "$extract_dir" && "$GITHUB_WORKSPACE/$appimage" --appimage-extract >/dev/null)
+          apprun="$extract_dir/squashfs-root/AppRun"
+          bash -n "$apprun"
+          grep -Fq 'ERROR: --no-sandbox is disabled by this AppImage security policy.' "$apprun"
+          ! grep -Fq 'NO_SANDBOX=(--no-sandbox)' "$apprun"
+          set +e
+          output="$("$apprun" --no-sandbox 2>&1)"
+          status=$?
+          set -e
+          [[ "$status" -eq 1 ]]
+          [[ "$output" == 'ERROR: --no-sandbox is disabled by this AppImage security policy.' ]]
+
+      - name: Measure packaged startup
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo chown root:root release/linux-unpacked/chrome-sandbox
+          sudo chmod 4755 release/linux-unpacked/chrome-sandbox
+          xvfb-run -a node scripts/measure-startup.cjs release/startup-metrics.json
+
+      - name: Upload Phase 2 AppImage
+        uses: actions/upload-artifact@v6
+        with:
+          name: phase2-build-ui-appimage
+          path: |
+            release/*.AppImage
+            release/SHA256SUMS.txt
+            release/build-metrics.json
+            release/startup-metrics.json
+          if-no-files-found: error
