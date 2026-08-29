@@ -257,6 +257,7 @@ jobs:
             disable-seccomp-filter-sandbox
             disable-setuid-sandbox
             no-zygote-sandbox
+            gpu-sandbox-allow-sysv-shm
             allow-sandbox-debugging
           )
           switch_suffixes=(
