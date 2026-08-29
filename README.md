@@ -31,7 +31,7 @@
 
 ## A small game with a long memory
 
-When I was a kid, I had a modest computer. Game Boy Color emulators and simple, joyful games like this one became my way into the Pokémon world: colorful, welcoming and endlessly replayable.
+When I was a kid, simple, joyful games like this one became part of my way into the Pokémon world: colorful, welcoming and endlessly replayable.
 
 This edition is simply my way of looking after a game I remember fondly. The original feel stays at the center, while the interface, controls and Linux desktop experience receive the care they deserve.
 
