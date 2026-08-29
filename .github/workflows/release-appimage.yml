@@ -31,7 +31,7 @@ jobs:
           lock_version="$(node -p "require('./package-lock.json').version")"
 
           if [[ "$package_version" != "$lock_version" ]]; then
-            echo "package.json version ($package_version) does not match package-lock.json version ($lock_version)" >&2
+            echo "package.json version ($package_version) does not match package-lock.json ($lock_version)" >&2
             exit 1
           fi
 
