@@ -84,7 +84,9 @@
         "AppImage"
       ],
       "category": "Game",
-      "icon": "src/resources/assets/images/IDI_PIKAICON-1_gap_filled_512.png",
+      "icon": "src/resources/assets/images/IDI_PIKAICON-1_gap_filled_512.png"
+    },
+    "appImage": {
       "executableArgs": [
         "--enable-sandbox"
       ]
