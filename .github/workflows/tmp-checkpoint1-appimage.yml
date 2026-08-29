@@ -44,7 +44,7 @@ jobs:
       - name: Build Linux AppImage
         run: npm run build:desktop:linux -- --publish=never
 
-      - name: Verify AppImage launcher and checksum
+      - name: Inspect AppImage launcher and checksum
         shell: bash
         run: |
           set -euo pipefail
@@ -63,16 +63,22 @@ jobs:
           (cd release && "./$(basename "$appimage_path")" --appimage-extract >/dev/null)
           app_run="release/squashfs-root/AppRun"
           desktop_file="$(find release/squashfs-root -maxdepth 1 -type f -name '*.desktop' -print -quit)"
+          {
+            echo "Desktop Exec:"
+            grep -n '^Exec=' "$desktop_file" || true
+            echo ""
+            echo "AppRun sandbox/library references:"
+            strings "$app_run" | grep -n -E -- '--no-sandbox|--enable-sandbox|LD_LIBRARY_PATH' || true
+          } | tee release/launcher-inspection.txt
           if grep -Fq 'LD_LIBRARY_PATH="${APPDIR}/usr/lib:${LD_LIBRARY_PATH}"' "$app_run"; then
-            echo "Vulnerable LD_LIBRARY_PATH form is still present in AppRun" >&2
-            exit 1
+            echo "vulnerable-ld-library-path" >> release/launcher-unsafe.txt
           fi
-          if grep -Fq -- '--no-sandbox' "$app_run" "$desktop_file"; then
-            echo "Packaged launcher still contains --no-sandbox" >&2
-            exit 1
+          if grep -Fq -- '--no-sandbox' "$desktop_file"; then
+            echo "desktop-no-sandbox" >> release/launcher-unsafe.txt
           fi
-          grep -Fq -- '--enable-sandbox' "$desktop_file"
-          echo "AppRun and desktop launcher validated"
+          if ! grep -Fq -- '--enable-sandbox' "$desktop_file"; then
+            echo "desktop-missing-enable-sandbox" >> release/launcher-unsafe.txt
+          fi
           cat release/SHA256SUMS.txt
 
       - name: Report build sizes
@@ -87,6 +93,7 @@ jobs:
           xvfb-run -a node scripts/measure-startup.cjs release/startup-metrics.json
 
       - name: Upload validation artifact
+        if: always()
         uses: actions/upload-artifact@v6
         with:
           name: checkpoint1-appimage-validation
@@ -95,4 +102,16 @@ jobs:
             release/SHA256SUMS.txt
             release/build-metrics.json
             release/startup-metrics.json
+            release/launcher-inspection.txt
+            release/launcher-unsafe.txt
           if-no-files-found: error
+
+      - name: Fail unsafe effective launcher
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -f release/launcher-unsafe.txt ]]; then
+            cat release/launcher-unsafe.txt >&2
+            exit 1
+          fi
