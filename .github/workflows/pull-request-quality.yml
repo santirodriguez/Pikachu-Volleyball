@@ -89,9 +89,22 @@ jobs:
             exit 1
           fi
 
+          release_version="$(node -p "require('./package.json').version")"
+          release_notes="docs/releases/v${release_version}.md"
+
+          if [[ ! -f "$release_notes" ]]; then
+            echo "Missing release notes for $release_version: $release_notes" >&2
+            exit 1
+          fi
+
+          if ! grep -Fq "$release_version" README.md; then
+            echo "README does not mention release version $release_version" >&2
+            exit 1
+          fi
+
           for locale in en es-ar ca ko zh; do
-            if ! grep -q '2.0.0' "dist/$locale/update-history/index.html"; then
-              echo "Release history for $locale does not mention 2.0.0" >&2
+            if ! grep -Fq "$release_version" "dist/$locale/update-history/index.html"; then
+              echo "Release history for $locale does not mention $release_version" >&2
               exit 1
             fi
           done
