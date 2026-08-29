@@ -19,7 +19,7 @@
  *
  * And explanations for other source files are below.
  *  - "cloud_and_wave.js": This is also a Model part which takes charge of the clouds and wave motion in the game. Of course, it is also rendered by "view.js".
- *                         It is also gained by reverse engineering the machine code of the original game.
+ *                         It is also gained by reverse engineering the original machine code.
  *  - "keyboard.js": Support the Controller("pikavolley.js") to get a user input via keyboard.
  *  - "audio.js": The game audio or sounds. It depends on pixi-sound (https://github.com/pixijs/sound) library.
  *  - "rand.js": For the random function used in the Models ("physics.js", "cloud_and_wave.js").
@@ -27,14 +27,13 @@
  *  - "settings_store.js": Application settings persistence and sanitization.
  *  - "game_settings.cjs": Application of persisted settings to the live game runtime.
  *  - "game_commands.js": Operational commands shared by the integrated menu.
+ *  - "integrated_menu_launcher.js": Lightweight pause shortcut and lazy menu loader.
  *  - "integrated_menu.js": Production pause menu for web and desktop.
  */
 'use strict';
 
 import { settings } from '@pixi/settings';
 import { SCALE_MODES } from '@pixi/constants';
-import { Renderer, BatchRenderer, autoDetectRenderer } from '@pixi/core';
-import { Prepare } from '@pixi/prepare';
 import { Container } from '@pixi/display';
 import { Loader } from '@pixi/loaders';
 import { SpritesheetLoader } from '@pixi/spritesheet';
@@ -46,7 +45,7 @@ import '@pixi/canvas-display';
 import { PikachuVolleyball } from './pikavolley.js';
 import { ASSETS_PATH } from './assets_path.js';
 import { createGameCommands } from './game_commands.js';
-import { setUpIntegratedMenu } from './integrated_menu.js';
+import { setUpIntegratedMenuLauncher } from './integrated_menu_launcher.js';
 import { settingsStore } from './settings_store.js';
 import gameSettingsModule from './game_settings.cjs';
 
@@ -61,8 +60,6 @@ export function startGameRuntime() {
   runtimeStarted = true;
   markPerformance('pv-runtime-start');
 
-  Renderer.registerPlugin('prepare', Prepare);
-  Renderer.registerPlugin('batch', BatchRenderer);
   CanvasRenderer.registerPlugin('prepare', CanvasPrepare);
   CanvasRenderer.registerPlugin('sprite', CanvasSpriteRenderer);
   Loader.registerPlugin(SpritesheetLoader);
@@ -72,13 +69,12 @@ export function startGameRuntime() {
   settings.ROUND_PIXELS = true;
   markPerformance('pv-pixi-ready');
 
-  const renderer = autoDetectRenderer({
+  const renderer = new CanvasRenderer({
     width: 432,
     height: 304,
     antialias: false,
     backgroundColor: 0x000000,
     backgroundAlpha: 1,
-    forceCanvas: true,
   });
   const stage = new Container();
   const ticker = new Ticker();
@@ -117,8 +113,8 @@ function setUpLoaderUI(loader) {
 }
 
 /**
- * Set up the game, persisted settings and integrated menu.
- * @param {import('@pixi/core').Renderer} renderer
+ * Set up the game, persisted settings and the lightweight menu launcher.
+ * @param {CanvasRenderer} renderer
  * @param {Container} stage
  * @param {Ticker} ticker
  * @param {Loader} loader
@@ -135,8 +131,8 @@ function setupGame(renderer, stage, ticker, loader) {
   markPerformance('pv-settings-ready');
   setUpVisibilityAudio(pikaVolley);
   const commands = createGameCommands(pikaVolley, ticker);
-  setUpIntegratedMenu(commands);
-  markPerformance('pv-menu-mounted');
+  setUpIntegratedMenuLauncher(commands);
+  markPerformance('pv-menu-launcher-ready');
   warmUpAudioAssets();
   markPerformance('pv-runtime-ready');
   startGameLoop(renderer, stage, ticker, pikaVolley);
@@ -176,7 +172,7 @@ function warmUpAudioAssets() {
 
 /**
  * Start the game loop.
- * @param {import('@pixi/core').Renderer} renderer
+ * @param {CanvasRenderer} renderer
  * @param {Container} stage
  * @param {Ticker} ticker
  * @param {PikachuVolleyball} pikaVolley

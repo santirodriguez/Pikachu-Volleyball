@@ -108,7 +108,11 @@ function main() {
         'pv-game-controller-ready',
         'pv-settings-ready'
       ),
-      menuMount: elapsed(marks, 'pv-settings-ready', 'pv-menu-mounted'),
+      menuLauncherSetup: elapsed(
+        marks,
+        'pv-settings-ready',
+        'pv-menu-launcher-ready'
+      ),
       runtimeReadyToFirstFrame: elapsed(
         marks,
         'pv-runtime-ready',
@@ -119,6 +123,12 @@ function main() {
         'pv-menu-open-request',
         'pv-menu-paused'
       ),
+      menuImport: elapsed(
+        marks,
+        'pv-menu-import-start',
+        'pv-menu-import-ready'
+      ),
+      menuMount: elapsed(marks, 'pv-menu-import-ready', 'pv-menu-mounted'),
       menuOpenToUsable: elapsed(
         marks,
         'pv-menu-open-request',
@@ -136,14 +146,16 @@ function main() {
       `- Electron process start -> first menu usable: \`${processToMenu ?? 'n/a'}\` ms`,
       `- Renderer bootstrap -> first menu usable: \`${menuUsable ?? 'n/a'}\` ms`,
       `- Runtime import/evaluation: \`${componentDurations.runtimeImport ?? 'n/a'}\` ms`,
-      `- Pixi registration/settings: \`${componentDurations.pixiSetup ?? 'n/a'}\` ms`,
+      `- Canvas registration/settings: \`${componentDurations.pixiSetup ?? 'n/a'}\` ms`,
       `- Renderer/stage/ticker setup: \`${componentDurations.rendererSetup ?? 'n/a'}\` ms`,
       `- Sprite load: \`${componentDurations.spriteLoad ?? 'n/a'}\` ms`,
       `- Game controller construction: \`${componentDurations.controllerConstruction ?? 'n/a'}\` ms`,
       `- Settings hydration: \`${componentDurations.settingsHydration ?? 'n/a'}\` ms`,
-      `- Integrated menu mount: \`${componentDurations.menuMount ?? 'n/a'}\` ms`,
+      `- Menu launcher setup: \`${componentDurations.menuLauncherSetup ?? 'n/a'}\` ms`,
       `- Runtime ready -> first frame: \`${componentDurations.runtimeReadyToFirstFrame ?? 'n/a'}\` ms`,
       `- P request -> paused: \`${componentDurations.menuPauseResponse ?? 'n/a'}\` ms`,
+      `- Lazy menu import/evaluation: \`${componentDurations.menuImport ?? 'n/a'}\` ms`,
+      `- Lazy menu mount: \`${componentDurations.menuMount ?? 'n/a'}\` ms`,
       `- P request -> menu usable: \`${componentDurations.menuOpenToUsable ?? 'n/a'}\` ms`,
       '- Method: fresh packaged Electron process with a temporary user-data directory; OS filesystem cache is not forcibly cleared.',
       '',
