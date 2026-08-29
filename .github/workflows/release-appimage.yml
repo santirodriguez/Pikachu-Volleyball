@@ -122,7 +122,7 @@ jobs:
         run: |
           set -euo pipefail
           v2_baseline_bytes=90911841
-          phase1_baseline_bytes=83297939
+          previous_optimization_checkpoint_bytes=83297939
           mapfile -t appimages < <(find release -maxdepth 1 -type f -name '*.AppImage' | sort)
 
           if [[ "${#appimages[@]}" -ne 1 ]]; then
@@ -141,8 +141,8 @@ jobs:
           appimage_mib="$(awk -v bytes="$appimage_bytes" 'BEGIN { printf "%.2f", bytes / 1024 / 1024 }')"
           v2_delta_bytes=$((appimage_bytes - v2_baseline_bytes))
           v2_delta_percent="$(awk -v delta="$v2_delta_bytes" -v baseline="$v2_baseline_bytes" 'BEGIN { printf "%+.2f", (delta / baseline) * 100 }')"
-          phase1_delta_bytes=$((appimage_bytes - phase1_baseline_bytes))
-          phase1_delta_percent="$(awk -v delta="$phase1_delta_bytes" -v baseline="$phase1_baseline_bytes" 'BEGIN { printf "%+.2f", (delta / baseline) * 100 }')"
+          checkpoint_delta_bytes=$((appimage_bytes - previous_optimization_checkpoint_bytes))
+          checkpoint_delta_percent="$(awk -v delta="$checkpoint_delta_bytes" -v baseline="$previous_optimization_checkpoint_bytes" 'BEGIN { printf "%+.2f", (delta / baseline) * 100 }')"
 
           (
             cd release
@@ -152,7 +152,7 @@ jobs:
           echo "Built artifact: $appimage_name"
           echo "Artifact size: $appimage_bytes bytes (${appimage_mib} MiB)"
           echo "Delta vs v2.0.0: $v2_delta_bytes bytes (${v2_delta_percent}%)"
-          echo "Delta vs Phase 1 baseline: $phase1_delta_bytes bytes (${phase1_delta_percent}%)"
+          echo "Delta vs previous optimization checkpoint: $checkpoint_delta_bytes bytes (${checkpoint_delta_percent}%)"
           cat release/SHA256SUMS.txt
 
           {
@@ -162,10 +162,21 @@ jobs:
             echo "- Size: \`$appimage_bytes\` bytes (\`${appimage_mib}\` MiB)"
             echo "- v2.0.0 baseline: \`$v2_baseline_bytes\` bytes"
             echo "- Delta vs v2.0.0: \`$v2_delta_bytes\` bytes (\`${v2_delta_percent}%\`)"
-            echo "- Phase 1 baseline: \`$phase1_baseline_bytes\` bytes"
-            echo "- Delta vs Phase 1 baseline: \`$phase1_delta_bytes\` bytes (\`${phase1_delta_percent}%\`)"
+            echo "- Previous optimization checkpoint: \`$previous_optimization_checkpoint_bytes\` bytes"
+            echo "- Delta vs previous optimization checkpoint: \`$checkpoint_delta_bytes\` bytes (\`${checkpoint_delta_percent}%\`)"
             echo "- Checksum file: \`SHA256SUMS.txt\`"
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Report build sizes
+        run: node scripts/report-build-metrics.cjs release/build-metrics.json
+
+      - name: Measure packaged startup
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo chown root:root release/linux-unpacked/chrome-sandbox
+          sudo chmod 4755 release/linux-unpacked/chrome-sandbox
+          xvfb-run -a node scripts/measure-startup.cjs release/startup-metrics.json
 
       - name: Upload AppImage workflow artifact
         uses: actions/upload-artifact@v6
@@ -174,6 +185,8 @@ jobs:
           path: |
             release/*.AppImage
             release/SHA256SUMS.txt
+            release/build-metrics.json
+            release/startup-metrics.json
           if-no-files-found: error
 
       - name: Attach AppImage and checksum to GitHub release
