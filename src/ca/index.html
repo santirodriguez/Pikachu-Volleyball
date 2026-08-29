@@ -5,10 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
 
     <title>Pikachu Volleyball</title>
-    <meta
-      name="description"
-      content="Juga a Pikachu Volleyball al web o a Linux"
-    />
+    <meta name="description" content="Juga a Pikachu Volleyball al web o a Linux" />
     <meta name="author" content="Kyutae Lee" />
 
     <meta name="mobile-web-app-capable" content="yes" />
@@ -61,9 +58,7 @@
         </div>
       </div>
       <div id="game-canvas-container">
-        <div id="quick-rematch-hint" class="hidden">
-          Press Power Hit for a quick rematch
-        </div>
+        <div id="quick-rematch-hint" class="hidden">Press Power Hit for a quick rematch</div>
         <div class="fade-in-box loading hidden" id="loading-box">
           <div>
             <p>Carregant els recursos del joc...</p>
@@ -125,32 +120,30 @@
       if (shouldRegisterServiceWorker) {
         import(
           'https://storage.googleapis.com/workbox-cdn/releases/5.0.0/workbox-window.prod.mjs'
-        )
-          .then(({ Workbox }) => {
-            const wb = new Workbox('../sw.js');
-            // Add an event listener to detect when the registered
-            // service worker has installed but is waiting to activate.
-            wb.addEventListener('waiting', (event) => {
-              const prompt = createUpdateUIPrompt({
-                onAccept: async () => {
-                  // Assuming the user accepted the update, set up a listener
-                  // that will reload the page as soon as the previously waiting
-                  // service worker has taken control.
-                  wb.addEventListener('controlling', (event) => {
-                    window.location.reload();
-                  });
-                  // Send a message telling the service worker to skip waiting.
-                  // This will trigger the `controlling` event handler above.
-                  wb.messageSW({ type: 'SKIP_WAITING' });
-                },
-              });
+        ).then(({ Workbox }) => {
+          const wb = new Workbox('../sw.js');
+          // Add an event listener to detect when the registered
+          // service worker has installed but is waiting to activate.
+          wb.addEventListener('waiting', (event) => {
+            const prompt = createUpdateUIPrompt({
+              onAccept: async () => {
+                // Assuming the user accepted the update, set up a listener
+                // that will reload the page as soon as the previously waiting
+                // service worker has taken control.
+                wb.addEventListener('controlling', (event) => {
+                  window.location.reload();
+                });
+                // Send a message telling the service worker to skip waiting.
+                // This will trigger the `controlling` event handler above.
+                wb.messageSW({ type: 'SKIP_WAITING' });
+              },
             });
-
-            wb.register();
-          })
-          .catch((error) => {
-            console.warn('Service worker update check is unavailable.', error);
           });
+
+          wb.register();
+        }).catch((error) => {
+          console.warn('Service worker update check is unavailable.', error);
+        });
       }
     </script>
   </body>

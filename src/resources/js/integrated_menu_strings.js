@@ -61,17 +61,14 @@ const EN = {
     title: 'Language',
     body: 'Choose with the mouse, or press Select and use the arrow keys.',
     current: 'Current language',
-    restartWarning:
-      'Changing language reloads the application and restarts the current match.',
+    restartWarning: 'Changing language reloads the application and restarts the current match.',
   },
   about: {
     kicker: 'VERSION 2.0',
     title: 'A perfectly reasonable amount of engineering',
     body: 'Pikachu Volleyball never had a proper Linux desktop edition, so Santiago Rodríguez gave it an AppImage, a modern interface and—because restraint is apparently optional—a 2.0 roadmap.',
-    original:
-      '<strong>Pikachu Volleyball (1997)</strong> — SACHI SOFT / SAWAYAKAN Programmers and Satoshi Takenouchi. Thanks for creating the wonderfully unnecessary classic that started everything.',
-    reverse:
-      '<a href="https://github.com/gorisanson/pikachu-volleyball" target="_blank" rel="noopener"><strong>JavaScript reverse-engineering reimplementation</strong></a> — Kyutae Lee. Thanks for the painstaking work that made this Linux edition possible.',
+    original: '<strong>Pikachu Volleyball (1997)</strong> — SACHI SOFT / SAWAYAKAN Programmers and Satoshi Takenouchi. Thanks for creating the wonderfully unnecessary classic that started everything.',
+    reverse: '<a href="https://github.com/gorisanson/pikachu-volleyball" target="_blank" rel="noopener"><strong>JavaScript reverse-engineering reimplementation</strong></a> — Kyutae Lee. Thanks for the painstaking work that made this Linux edition possible.',
     fork: 'Linux/AppImage implementation and 2.0 direction: Santiago Rodríguez.',
     website: 'Visit santiagorodriguez.com',
     source: 'View source on GitHub',
@@ -183,17 +180,14 @@ const ES = {
     title: 'Idioma',
     body: 'Elegí con el mouse o presioná Seleccionar y usá las flechas.',
     current: 'Idioma actual',
-    restartWarning:
-      'Cambiar el idioma recarga la aplicación y reinicia el partido actual.',
+    restartWarning: 'Cambiar el idioma recarga la aplicación y reinicia el partido actual.',
   },
   about: {
     kicker: 'VERSIÓN 2.0',
     title: 'Una cantidad perfectamente razonable de ingeniería',
     body: 'Pikachu Volleyball nunca tuvo una edición de escritorio digna para Linux, así que Santiago Rodríguez le dio un AppImage, una interfaz moderna y —porque la moderación parece opcional— una hoja de ruta 2.0.',
-    original:
-      '<strong>Pikachu Volleyball (1997)</strong> — SACHI SOFT / SAWAYAKAN Programmers y Satoshi Takenouchi. Gracias por crear el clásico maravillosamente innecesario que empezó todo.',
-    reverse:
-      '<a href="https://github.com/gorisanson/pikachu-volleyball" target="_blank" rel="noopener"><strong>Reimplementación en JavaScript mediante ingeniería inversa</strong></a> — Kyutae Lee. Gracias por el trabajo minucioso que hizo posible esta edición para Linux.',
+    original: '<strong>Pikachu Volleyball (1997)</strong> — SACHI SOFT / SAWAYAKAN Programmers y Satoshi Takenouchi. Gracias por crear el clásico maravillosamente innecesario que empezó todo.',
+    reverse: '<a href="https://github.com/gorisanson/pikachu-volleyball" target="_blank" rel="noopener"><strong>Reimplementación en JavaScript mediante ingeniería inversa</strong></a> — Kyutae Lee. Gracias por el trabajo minucioso que hizo posible esta edición para Linux.',
     fork: 'Implementación Linux/AppImage y dirección de 2.0: Santiago Rodríguez.',
     website: 'Visitar santiagorodriguez.com',
     source: 'Ver código en GitHub',
@@ -206,18 +200,8 @@ const ES = {
     warning: 'El partido actual terminará.',
     action: 'Salir ahora',
   },
-  confirmation: {
-    title: '¿Confirmás?',
-    accept: 'Confirmar',
-    cancel: 'Cancelar',
-  },
-  hints: {
-    navigate: 'Navegar',
-    select: 'Seleccionar',
-    back: 'Volver',
-    change: 'Cambiar',
-    returnToMenu: 'Volver al menú',
-  },
+  confirmation: { title: '¿Confirmás?', accept: 'Confirmar', cancel: 'Cancelar' },
+  hints: { navigate: 'Navegar', select: 'Seleccionar', back: 'Volver', change: 'Cambiar', returnToMenu: 'Volver al menú' },
   status: {
     ...EN.status,
     ready: 'Juego en pausa. Elegí una acción.',
@@ -237,106 +221,18 @@ const KO = {
   paused: '일시 정지',
   chip: '2.0 · 아직도 스파이크 중',
   trigger: '메뉴',
-  nav: {
-    continue: '계속',
-    restart: '경기 다시 시작',
-    match: '경기 설정',
-    controls: '조작',
-    audio: '오디오 및 그래픽',
-    language: '언어',
-    about: '정보',
-    quit: '종료',
-  },
-  continue: {
-    kicker: '경기',
-    title: '랠리로 돌아갈까요?',
-    body: '현재 점수와 설정 그대로 경기를 이어갑니다.',
-    poster: '랠리를 계속하세요',
-  },
-  restart: {
-    kicker: '경기',
-    title: '경기 다시 시작',
-    body: '선택한 옵션을 유지한 채 현재 대전을 처음부터 시작합니다.',
-    warning: '점수와 라운드 진행 상황이 초기화됩니다.',
-    action: '지금 다시 시작',
-  },
-  match: {
-    kicker: '게임플레이',
-    title: '경기 설정',
-    body: '실제로 적용되는 설정입니다. 장식용 스위치는 없습니다.',
-    winningScore: '승리 점수',
-    speed: '게임 속도',
-    practice: '연습 모드',
-    reset: '기본값 복원',
-  },
-  controls: {
-    kicker: '입력',
-    title: '조작',
-    body: '현재 기본 조작입니다. 전체 키 변경은 다음 단계에서 제공됩니다.',
-    player1: '플레이어 1',
-    player2: '플레이어 2',
-    move: '이동',
-    jumpDown: '점프 / 아래',
-    powerHit: '파워 히트',
-    pause: '일시 정지 메뉴',
-    practiceReset: '공 초기화',
-  },
-  audio: {
-    kicker: '표현',
-    title: '오디오 및 그래픽',
-    body: '원작의 개성은 유지하고 운영체제 메뉴는 덜 엽니다.',
-    graphics: '그래픽',
-    bgm: '배경 음악',
-    sfx: '효과음',
-  },
-  language: {
-    kicker: '언어',
-    title: '언어',
-    body: '마우스로 선택하거나 선택 키를 누른 뒤 방향키를 사용하세요.',
-    current: '현재 언어',
-    restartWarning:
-      '언어를 바꾸면 앱이 다시 로드되고 현재 경기가 재시작됩니다.',
-  },
-  about: {
-    kicker: '버전 2.0',
-    title: '아주 합리적인 수준의 엔지니어링',
-    body: 'Pikachu Volleyball에는 제대로 된 Linux 데스크톱판이 없었습니다. 그래서 Santiago Rodríguez가 AppImage와 현대적인 인터페이스, 그리고 절제는 선택 사항이라는 듯한 2.0 로드맵을 더했습니다.',
-    original:
-      '<strong>Pikachu Volleyball (1997)</strong> — SACHI SOFT / SAWAYAKAN Programmers와 Satoshi Takenouchi. 이 모든 것의 시작이 된 멋지게 불필요한 고전을 만들어 주셔서 감사합니다.',
-    reverse:
-      '<a href="https://github.com/gorisanson/pikachu-volleyball" target="_blank" rel="noopener"><strong>JavaScript 리버스 엔지니어링 재구현</strong></a> — Kyutae Lee. 이 Linux판을 가능하게 한 세심한 작업에 감사드립니다.',
-    fork: 'Linux/AppImage 구현 및 2.0 방향: Santiago Rodríguez.',
-    website: 'santiagorodriguez.com 방문',
-    source: 'GitHub 소스 보기',
-    punchline: '전기 쥐 둘. 배구공 하나. Linux가 너무 늦었습니다.',
-  },
-  quit: {
-    kicker: '데스크톱',
-    title: '게임 종료',
-    body: 'AppImage를 닫고 공중의 피카츄가 더 적은 세계로 돌아갑니다.',
-    warning: '현재 경기가 종료됩니다.',
-    action: '지금 종료',
-  },
+  nav: { continue: '계속', restart: '경기 다시 시작', match: '경기 설정', controls: '조작', audio: '오디오 및 그래픽', language: '언어', about: '정보', quit: '종료' },
+  continue: { kicker: '경기', title: '랠리로 돌아갈까요?', body: '현재 점수와 설정 그대로 경기를 이어갑니다.', poster: '랠리를 계속하세요' },
+  restart: { kicker: '경기', title: '경기 다시 시작', body: '선택한 옵션을 유지한 채 현재 대전을 처음부터 시작합니다.', warning: '점수와 라운드 진행 상황이 초기화됩니다.', action: '지금 다시 시작' },
+  match: { kicker: '게임플레이', title: '경기 설정', body: '실제로 적용되는 설정입니다. 장식용 스위치는 없습니다.', winningScore: '승리 점수', speed: '게임 속도', practice: '연습 모드', reset: '기본값 복원' },
+  controls: { kicker: '입력', title: '조작', body: '현재 기본 조작입니다. 전체 키 변경은 다음 단계에서 제공됩니다.', player1: '플레이어 1', player2: '플레이어 2', move: '이동', jumpDown: '점프 / 아래', powerHit: '파워 히트', pause: '일시 정지 메뉴', practiceReset: '공 초기화' },
+  audio: { kicker: '표현', title: '오디오 및 그래픽', body: '원작의 개성은 유지하고 운영체제 메뉴는 덜 엽니다.', graphics: '그래픽', bgm: '배경 음악', sfx: '효과음' },
+  language: { kicker: '언어', title: '언어', body: '마우스로 선택하거나 선택 키를 누른 뒤 방향키를 사용하세요.', current: '현재 언어', restartWarning: '언어를 바꾸면 앱이 다시 로드되고 현재 경기가 재시작됩니다.' },
+  about: { kicker: '버전 2.0', title: '아주 합리적인 수준의 엔지니어링', body: 'Pikachu Volleyball에는 제대로 된 Linux 데스크톱판이 없었습니다. 그래서 Santiago Rodríguez가 AppImage와 현대적인 인터페이스, 그리고 절제는 선택 사항이라는 듯한 2.0 로드맵을 더했습니다.', original: '<strong>Pikachu Volleyball (1997)</strong> — SACHI SOFT / SAWAYAKAN Programmers와 Satoshi Takenouchi. 이 모든 것의 시작이 된 멋지게 불필요한 고전을 만들어 주셔서 감사합니다.', reverse: '<a href="https://github.com/gorisanson/pikachu-volleyball" target="_blank" rel="noopener"><strong>JavaScript 리버스 엔지니어링 재구현</strong></a> — Kyutae Lee. 이 Linux판을 가능하게 한 세심한 작업에 감사드립니다.', fork: 'Linux/AppImage 구현 및 2.0 방향: Santiago Rodríguez.', website: 'santiagorodriguez.com 방문', source: 'GitHub 소스 보기', punchline: '전기 쥐 둘. 배구공 하나. Linux가 너무 늦었습니다.' },
+  quit: { kicker: '데스크톱', title: '게임 종료', body: 'AppImage를 닫고 공중의 피카츄가 더 적은 세계로 돌아갑니다.', warning: '현재 경기가 종료됩니다.', action: '지금 종료' },
   confirmation: { title: '확실합니까?', accept: '확인', cancel: '취소' },
-  hints: {
-    navigate: '이동',
-    select: '선택',
-    back: '뒤로',
-    change: '변경',
-    returnToMenu: '메뉴로 돌아가기',
-  },
-  status: {
-    ...EN.status,
-    ready: '게임이 일시 정지되었습니다.',
-    resumed: '경기를 계속합니다.',
-    restarted: '경기를 다시 시작했습니다.',
-    changed: '설정이 적용되었습니다.',
-    defaults: '기본 설정을 복원했습니다.',
-    currentLanguage: '이미 선택된 언어입니다.',
-    practiceScore: '연습 모드에서는 승리 점수를 사용하지 않습니다.',
-    scoreReached: '현재 경기에서 이미 그 점수에 도달했습니다.',
-    quitUnavailable: '종료는 데스크톱 AppImage에서만 사용할 수 있습니다.',
-  },
+  hints: { navigate: '이동', select: '선택', back: '뒤로', change: '변경', returnToMenu: '메뉴로 돌아가기' },
+  status: { ...EN.status, ready: '게임이 일시 정지되었습니다.', resumed: '경기를 계속합니다.', restarted: '경기를 다시 시작했습니다.', changed: '설정이 적용되었습니다.', defaults: '기본 설정을 복원했습니다.', currentLanguage: '이미 선택된 언어입니다.', practiceScore: '연습 모드에서는 승리 점수를 사용하지 않습니다.', scoreReached: '현재 경기에서 이미 그 점수에 도달했습니다.', quitUnavailable: '종료는 데스크톱 AppImage에서만 사용할 수 있습니다.' },
 };
 
 const ZH = {
@@ -344,105 +240,18 @@ const ZH = {
   paused: '已暂停',
   chip: '2.0 · 仍在扣杀',
   trigger: '菜单',
-  nav: {
-    continue: '继续',
-    restart: '重新开始比赛',
-    match: '比赛设置',
-    controls: '控制',
-    audio: '音频与画面',
-    language: '语言',
-    about: '关于',
-    quit: '退出',
-  },
-  continue: {
-    kicker: '比赛',
-    title: '回到对局？',
-    body: '以当前比分和设置继续比赛。',
-    poster: '继续回合',
-  },
-  restart: {
-    kicker: '比赛',
-    title: '重新开始比赛',
-    body: '保留已选设置并重新开始当前对阵。',
-    warning: '比分与回合进度将被清除。',
-    action: '立即重新开始',
-  },
-  match: {
-    kicker: '玩法',
-    title: '比赛设置',
-    body: '这些设置会真正生效，不再只是装饰。',
-    winningScore: '获胜分数',
-    speed: '游戏速度',
-    practice: '练习模式',
-    reset: '恢复默认值',
-  },
-  controls: {
-    kicker: '输入',
-    title: '控制',
-    body: '这里显示当前默认按键。完整改键将在下一阶段加入。',
-    player1: '玩家 1',
-    player2: '玩家 2',
-    move: '移动',
-    jumpDown: '跳跃 / 下移',
-    powerHit: '强力击球',
-    pause: '暂停菜单',
-    practiceReset: '重置球',
-  },
-  audio: {
-    kicker: '表现',
-    title: '音频与画面',
-    body: '保留原作个性，同时少打开一些系统菜单。',
-    graphics: '画面',
-    bgm: '背景音乐',
-    sfx: '音效',
-  },
-  language: {
-    kicker: '语言',
-    title: '语言',
-    body: '可用鼠标选择，或按选择键后使用方向键。',
-    current: '当前语言',
-    restartWarning: '切换语言会重新载入应用并重新开始当前比赛。',
-  },
-  about: {
-    kicker: '版本 2.0',
-    title: '完全合理的工程投入',
-    body: 'Pikachu Volleyball 一直没有真正的 Linux 桌面版，于是 Santiago Rodríguez 为它补上了 AppImage、现代界面，以及一份仿佛“适可而止”并不存在的 2.0 路线图。',
-    original:
-      '<strong>Pikachu Volleyball (1997)</strong> — SACHI SOFT / SAWAYAKAN Programmers 与 Satoshi Takenouchi。感谢你们创造了这个精彩又毫无必要的经典，一切由此开始。',
-    reverse:
-      '<a href="https://github.com/gorisanson/pikachu-volleyball" target="_blank" rel="noopener"><strong>JavaScript 逆向工程重实现</strong></a> — Kyutae Lee。感谢这项细致工作，让这个 Linux 版本成为可能。',
-    fork: 'Linux/AppImage 实现与 2.0 方向：Santiago Rodríguez。',
-    website: '访问 santiagorodriguez.com',
-    source: '在 GitHub 查看源码',
-    punchline: '两只电气鼠，一只排球。Linux 早该有了。',
-  },
-  quit: {
-    kicker: '桌面',
-    title: '退出游戏',
-    body: '关闭 AppImage，回到空中皮卡丘更少的世界。',
-    warning: '当前比赛将结束。',
-    action: '立即退出',
-  },
+  nav: { continue: '继续', restart: '重新开始比赛', match: '比赛设置', controls: '控制', audio: '音频与画面', language: '语言', about: '关于', quit: '退出' },
+  continue: { kicker: '比赛', title: '回到对局？', body: '以当前比分和设置继续比赛。', poster: '继续回合' },
+  restart: { kicker: '比赛', title: '重新开始比赛', body: '保留已选设置并重新开始当前对阵。', warning: '比分与回合进度将被清除。', action: '立即重新开始' },
+  match: { kicker: '玩法', title: '比赛设置', body: '这些设置会真正生效，不再只是装饰。', winningScore: '获胜分数', speed: '游戏速度', practice: '练习模式', reset: '恢复默认值' },
+  controls: { kicker: '输入', title: '控制', body: '这里显示当前默认按键。完整改键将在下一阶段加入。', player1: '玩家 1', player2: '玩家 2', move: '移动', jumpDown: '跳跃 / 下移', powerHit: '强力击球', pause: '暂停菜单', practiceReset: '重置球' },
+  audio: { kicker: '表现', title: '音频与画面', body: '保留原作个性，同时少打开一些系统菜单。', graphics: '画面', bgm: '背景音乐', sfx: '音效' },
+  language: { kicker: '语言', title: '语言', body: '可用鼠标选择，或按选择键后使用方向键。', current: '当前语言', restartWarning: '切换语言会重新载入应用并重新开始当前比赛。' },
+  about: { kicker: '版本 2.0', title: '完全合理的工程投入', body: 'Pikachu Volleyball 一直没有真正的 Linux 桌面版，于是 Santiago Rodríguez 为它补上了 AppImage、现代界面，以及一份仿佛“适可而止”并不存在的 2.0 路线图。', original: '<strong>Pikachu Volleyball (1997)</strong> — SACHI SOFT / SAWAYAKAN Programmers 与 Satoshi Takenouchi。感谢你们创造了这个精彩又毫无必要的经典，一切由此开始。', reverse: '<a href="https://github.com/gorisanson/pikachu-volleyball" target="_blank" rel="noopener"><strong>JavaScript 逆向工程重实现</strong></a> — Kyutae Lee。感谢这项细致工作，让这个 Linux 版本成为可能。', fork: 'Linux/AppImage 实现与 2.0 方向：Santiago Rodríguez。', website: '访问 santiagorodriguez.com', source: '在 GitHub 查看源码', punchline: '两只电气鼠，一只排球。Linux 早该有了。' },
+  quit: { kicker: '桌面', title: '退出游戏', body: '关闭 AppImage，回到空中皮卡丘更少的世界。', warning: '当前比赛将结束。', action: '立即退出' },
   confirmation: { title: '确定吗？', accept: '确认', cancel: '取消' },
-  hints: {
-    navigate: '导航',
-    select: '选择',
-    back: '返回',
-    change: '更改',
-    returnToMenu: '返回菜单',
-  },
-  status: {
-    ...EN.status,
-    ready: '游戏已暂停，请选择操作。',
-    resumed: '比赛已继续。',
-    restarted: '比赛已重新开始。',
-    changed: '设置已应用。',
-    defaults: '已恢复默认设置。',
-    currentLanguage: '该语言已经启用。',
-    practiceScore: '练习模式下不使用获胜分数。',
-    scoreReached: '当前比赛已经达到该分数。',
-    quitUnavailable: '退出功能仅在桌面 AppImage 中可用。',
-  },
+  hints: { navigate: '导航', select: '选择', back: '返回', change: '更改', returnToMenu: '返回菜单' },
+  status: { ...EN.status, ready: '游戏已暂停，请选择操作。', resumed: '比赛已继续。', restarted: '比赛已重新开始。', changed: '设置已应用。', defaults: '已恢复默认设置。', currentLanguage: '该语言已经启用。', practiceScore: '练习模式下不使用获胜分数。', scoreReached: '当前比赛已经达到该分数。', quitUnavailable: '退出功能仅在桌面 AppImage 中可用。' },
 };
 
 const CONTROL_ACTIONS_EN = Object.freeze({
@@ -605,7 +414,8 @@ const ABOUT_COPY = Object.freeze({
   en: {
     kicker: 'VERSION 2.0',
     title: 'One more match, years later',
-    body: 'As a child, this game meant a great deal to me. On a low-powered computer, Game Boy Color emulators and simple, joyful, hard-to-put-down games like this became my doorway into the Pokémon world—and the beginning of an affection that never really left.',
+    body:
+      'As a child, this game meant a great deal to me. On a low-powered computer, Game Boy Color emulators and simple, joyful, hard-to-put-down games like this became my doorway into the Pokémon world—and the beginning of an affection that never really left.',
     original:
       '<strong>Pikachu Volleyball (1997)</strong> — SACHI SOFT / SAWAYAKAN Programmers and Satoshi Takenouchi. Thanks for creating the small, unforgettable classic that started it all.',
     reverse:
@@ -618,7 +428,8 @@ const ABOUT_COPY = Object.freeze({
   'es-ar': {
     kicker: 'VERSIÓN 2.0',
     title: 'Un partido más, tantos años después',
-    body: 'De chico, este juego me hacía mucha ilusión. En una computadora con pocos recursos, los emuladores de Game Boy Color y estos juegos sencillos, alegres y difíciles de soltar fueron mi puerta de entrada al universo Pokémon y el comienzo de un cariño que todavía conservo.',
+    body:
+      'De chico, este juego me hacía mucha ilusión. En una computadora con pocos recursos, los emuladores de Game Boy Color y estos juegos sencillos, alegres y difíciles de soltar fueron mi puerta de entrada al universo Pokémon y el comienzo de un cariño que todavía conservo.',
     original:
       '<strong>Pikachu Volleyball (1997)</strong> — SACHI SOFT / SAWAYAKAN Programmers y Satoshi Takenouchi. Gracias por crear el pequeño e inolvidable clásico que empezó todo.',
     reverse:
@@ -631,7 +442,8 @@ const ABOUT_COPY = Object.freeze({
   ko: {
     kicker: '버전 2.0',
     title: '세월이 흘러도, 한 경기 더',
-    body: '어릴 적 이 게임은 제게 큰 설렘이었습니다. 성능이 낮은 컴퓨터에서 Game Boy Color 에뮬레이터와 이처럼 단순하지만 즐겁고 좀처럼 손을 놓기 힘든 게임들은 포켓몬 세계로 들어가는 문이 되었고, 지금까지 이어지는 애정의 시작이 되었습니다.',
+    body:
+      '어릴 적 이 게임은 제게 큰 설렘이었습니다. 성능이 낮은 컴퓨터에서 Game Boy Color 에뮬레이터와 이처럼 단순하지만 즐겁고 좀처럼 손을 놓기 힘든 게임들은 포켓몬 세계로 들어가는 문이 되었고, 지금까지 이어지는 애정의 시작이 되었습니다.',
     original:
       '<strong>Pikachu Volleyball (1997)</strong> — SACHI SOFT / SAWAYAKAN Programmers와 Satoshi Takenouchi. 이 모든 것의 시작이 된 작지만 잊을 수 없는 고전을 만들어 주셔서 감사합니다.',
     reverse:
@@ -639,13 +451,13 @@ const ABOUT_COPY = Object.freeze({
     fork: '이 에디션은 좋은 추억으로 간직한 게임을 조심스럽게 돌보는 저만의 작은 방식일 뿐입니다.',
     website: 'santiagorodriguez.com 방문',
     source: 'GitHub 소스 보기',
-    punchline:
-      '어린 시절의 어떤 게임은 언제나 한 경기를 더 할 가치가 있습니다.',
+    punchline: '어린 시절의 어떤 게임은 언제나 한 경기를 더 할 가치가 있습니다.',
   },
   zh: {
     kicker: '版本 2.0',
     title: '多年以后，再来一局',
-    body: '小时候，这款游戏曾让我满怀期待。那时电脑性能有限，Game Boy Color 模拟器和这类简单、快乐又让人舍不得放下的游戏，成了我走进宝可梦世界的入口，也开启了一份延续至今的喜爱。',
+    body:
+      '小时候，这款游戏曾让我满怀期待。那时电脑性能有限，Game Boy Color 模拟器和这类简单、快乐又让人舍不得放下的游戏，成了我走进宝可梦世界的入口，也开启了一份延续至今的喜爱。',
     original:
       '<strong>Pikachu Volleyball (1997)</strong> — SACHI SOFT / SAWAYAKAN Programmers 与 Satoshi Takenouchi。感谢你们创造了这个小巧却令人难忘的经典，一切由此开始。',
     reverse:
@@ -658,7 +470,8 @@ const ABOUT_COPY = Object.freeze({
   ca: {
     kicker: 'VERSIÓ 2.0',
     title: 'Un partit més, tants anys després',
-    body: 'De petit, aquest joc em feia molta il·lusió. En un ordinador amb pocs recursos, els emuladors de Game Boy Color i jocs senzills, alegres i difícils de deixar com aquest van ser la meva porta d’entrada a l’univers Pokémon i l’inici d’un afecte que encara conservo.',
+    body:
+      'De petit, aquest joc em feia molta il·lusió. En un ordinador amb pocs recursos, els emuladors de Game Boy Color i jocs senzills, alegres i difícils de deixar com aquest van ser la meva porta d’entrada a l’univers Pokémon i l’inici d’un afecte que encara conservo.',
     original:
       '<strong>Pikachu Volleyball (1997)</strong> — SACHI SOFT / SAWAYAKAN Programmers i Satoshi Takenouchi. Gràcies per crear el petit clàssic inoblidable que ho va començar tot.',
     reverse:
@@ -709,7 +522,8 @@ const CATALAN = Object.freeze({
   controls: {
     kicker: 'ENTRADA',
     title: 'Controls',
-    body: 'Selecciona una acció i prem la tecla que vulguis. Els valors predeterminats continuen sent una bona idea.',
+    body:
+      'Selecciona una acció i prem la tecla que vulguis. Els valors predeterminats continuen sent una bona idea.',
     player1: 'JUGADOR 1',
     player2: 'JUGADOR 2',
     move: 'Moure',
@@ -721,7 +535,8 @@ const CATALAN = Object.freeze({
   audio: {
     kicker: 'PRESENTACIÓ',
     title: 'Àudio i gràfics',
-    body: 'El caràcter original, amb menys motius per obrir menús del sistema operatiu.',
+    body:
+      'El caràcter original, amb menys motius per obrir menús del sistema operatiu.',
     graphics: 'Gràfics',
     bgm: 'Música',
     sfx: 'Efectes',
@@ -761,9 +576,11 @@ const CATALAN = Object.freeze({
     changed: 'Configuració aplicada.',
     defaults: 'Valors predeterminats restaurats.',
     currentLanguage: 'Aquest idioma ja està actiu.',
-    practiceScore: 'La puntuació guanyadora no s’utilitza en mode pràctica.',
+    practiceScore:
+      'La puntuació guanyadora no s’utilitza en mode pràctica.',
     scoreReached: 'Aquesta puntuació ja s’ha assolit en el partit.',
-    quitUnavailable: 'Sortir només està disponible a l’AppImage d’escriptori.',
+    quitUnavailable:
+      'Sortir només està disponible a l’AppImage d’escriptori.',
   },
   values: {
     on: 'ACTIVAT',

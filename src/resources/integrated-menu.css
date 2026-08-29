@@ -27,11 +27,8 @@ html.integrated-menu-enabled #game-canvas-container {
   color: #fff8d7;
   font-family: 'Trebuchet MS', Arial, sans-serif;
   font-size: var(--pv-menu-font-size);
-  background: linear-gradient(
-      180deg,
-      rgba(12, 35, 52, 0.34),
-      rgba(7, 20, 31, 0.78)
-    ),
+  background:
+    linear-gradient(180deg, rgba(12, 35, 52, 0.34), rgba(7, 20, 31, 0.78)),
     repeating-linear-gradient(
       90deg,
       rgba(119, 211, 247, 0.08) 0,
@@ -80,7 +77,9 @@ html.integrated-menu-enabled #game-canvas-container {
   outline: none;
   color: #fff8d7;
   background: linear-gradient(180deg, #1b4e70 0%, #12344e 43%, #0d293f 100%);
-  box-shadow: inset 0 0 0 2px #73cceb, inset 0 -5px 0 rgba(7, 25, 38, 0.48),
+  box-shadow:
+    inset 0 0 0 2px #73cceb,
+    inset 0 -5px 0 rgba(7, 25, 38, 0.48),
     7px 7px 0 rgba(2, 11, 17, 0.58);
   clip-path: polygon(
     0 8px,
@@ -105,11 +104,7 @@ html.integrated-menu-enabled #game-canvas-container {
   min-height: 0;
   padding: 0.55em 0.8em 0.48em;
   border-bottom: 2px solid rgba(123, 211, 242, 0.45);
-  background: linear-gradient(
-    90deg,
-    rgba(117, 205, 239, 0.17),
-    transparent 58%
-  );
+  background: linear-gradient(90deg, rgba(117, 205, 239, 0.17), transparent 58%);
 }
 
 .pv-menu-brand {
@@ -220,7 +215,9 @@ html.integrated-menu-enabled #game-canvas-container {
   border-color: #fff3a2;
   color: #162331;
   background: linear-gradient(90deg, #f7dc52, #efbd39);
-  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.48), 4px 4px 0 #bd4338;
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.48),
+    4px 4px 0 #bd4338;
   transform: translateX(0.2em);
 }
 
@@ -243,9 +240,11 @@ html.integrated-menu-enabled #game-canvas-container {
   border: 2px solid #091824;
   padding: 0.72em;
   color: #102331;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.2), transparent 25%),
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.2), transparent 25%),
     #75c9ee;
-  box-shadow: inset 0 0 0 2px rgba(230, 250, 255, 0.35),
+  box-shadow:
+    inset 0 0 0 2px rgba(230, 250, 255, 0.35),
     4px 4px 0 rgba(5, 19, 29, 0.62);
   scrollbar-color: #143b57 #75c9ee;
   scrollbar-width: thin;
@@ -455,7 +454,8 @@ html.integrated-menu-enabled #game-canvas-container {
 
 .pv-menu-poster {
   color: #162331;
-  background: repeating-linear-gradient(
+  background:
+    repeating-linear-gradient(
       -45deg,
       rgba(255, 255, 255, 0.15) 0 5px,
       transparent 5px 10px
@@ -604,7 +604,9 @@ html.integrated-menu-enabled #game-canvas-container {
   padding: 1em;
   color: #102331;
   background: #75c9ee;
-  box-shadow: inset 0 0 0 2px rgba(230, 250, 255, 0.35), 6px 6px 0 #bd4338;
+  box-shadow:
+    inset 0 0 0 2px rgba(230, 250, 255, 0.35),
+    6px 6px 0 #bd4338;
   gap: 0.6em;
   text-align: center;
 }
