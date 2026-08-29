@@ -7,9 +7,9 @@ const { shouldHandlePauseShortcut } = inputActionsModule;
 const TRIGGER_LABELS = Object.freeze({
   en: 'MENU',
   'es-ar': 'MENÚ',
+  ca: 'MENÚ',
   ko: '메뉴',
   zh: '菜单',
-  ca: 'MENU',
 });
 
 /**
@@ -64,17 +64,15 @@ export function setUpIntegratedMenuLauncher(commands) {
     trigger.hidden = true;
     detachLauncher();
     trigger.remove();
-    loadIntegratedMenu(commands, container, trigger, attachLauncher).catch(
-      (error) => {
-        loading = false;
-        commands.setPaused(false);
-        commands.resetInputs();
-        if (!trigger.isConnected) container.appendChild(trigger);
-        trigger.hidden = false;
-        attachLauncher();
-        console.error('Unable to load integrated menu.', error);
-      }
-    );
+    loadIntegratedMenu(commands).catch((error) => {
+      loading = false;
+      commands.setPaused(false);
+      commands.resetInputs();
+      if (!trigger.isConnected) container.appendChild(trigger);
+      trigger.hidden = false;
+      attachLauncher();
+      console.error('Unable to load integrated menu.', error);
+    });
   }
 
   attachLauncher();
@@ -82,24 +80,14 @@ export function setUpIntegratedMenuLauncher(commands) {
 
 /**
  * @param {ReturnType<import('./game_commands.js').createGameCommands>} commands
- * @param {HTMLElement} container
- * @param {HTMLButtonElement} trigger
- * @param {() => void} restoreLauncher
  */
-async function loadIntegratedMenu(
-  commands,
-  container,
-  trigger,
-  restoreLauncher
-) {
+async function loadIntegratedMenu(commands) {
   markPerformance('pv-menu-import-start');
   const { setUpIntegratedMenu } = await import('./integrated_menu.js');
   markPerformance('pv-menu-import-ready');
 
   setUpIntegratedMenu(commands);
   if (document.getElementById('pv-menu-overlay') === null) {
-    if (!trigger.isConnected) container.appendChild(trigger);
-    restoreLauncher();
     throw new Error('Integrated menu did not mount.');
   }
   markPerformance('pv-menu-mounted');
