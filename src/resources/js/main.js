@@ -6,6 +6,14 @@
  */
 'use strict';
 
+const BOOTSTRAP_ERROR_MESSAGES = Object.freeze({
+  en: 'Unable to start the game.',
+  'es-ar': 'No se pudo iniciar el juego.',
+  ca: "No s'ha pogut iniciar el joc.",
+  ko: '게임을 시작할 수 없습니다.',
+  zh: '无法启动游戏。',
+});
+
 markPerformance('pv-bootstrap-start');
 prepareIntegratedMenuShell();
 prepareLoadingShell();
@@ -72,9 +80,18 @@ function showBootstrapError(error) {
   const loadingBox = document.getElementById('loading-box');
   const message = loadingBox?.querySelector('p');
   if (message !== null && message !== undefined) {
-    message.textContent = 'Unable to start the game.';
+    message.textContent = getBootstrapErrorMessage();
   }
   loadingBox?.classList.remove('hidden');
+}
+
+/**
+ * Return the localized startup failure message for the current page.
+ * @returns {string}
+ */
+function getBootstrapErrorMessage() {
+  const locale = document.documentElement.lang.toLowerCase();
+  return BOOTSTRAP_ERROR_MESSAGES[locale] || BOOTSTRAP_ERROR_MESSAGES.en;
 }
 
 /**
