@@ -131,19 +131,15 @@ async function runStartupMeasurement() {
   markStartup('pv-first-menu-observed');
 
   const rendererMarks = await getRendererMarks();
-  const bootstrapOffset = startupMarks['pv-did-finish-load'] - (rendererMarks['pv-bootstrap-start'] || 0);
   const report = {
     generatedAt: new Date().toISOString(),
-    note: 'Fresh packaged process and temporary user-data directory; OS filesystem cache is not forcibly cleared.',
+    note: 'Fresh packaged process and temporary user-data directory; OS filesystem cache is not forcibly cleared. Main-process observation points include up to one 20 ms polling interval.',
     mainProcessMarksMs: startupMarks,
     rendererMarks,
     endToEndMs: {
-      processStartToFirstGameFrame: Number(
-        (bootstrapOffset + rendererMarks['pv-first-game-frame']).toFixed(2)
-      ),
-      processStartToMenuUsable: Number(
-        (bootstrapOffset + rendererMarks['pv-menu-usable']).toFixed(2)
-      ),
+      processStartToFirstGameFrame:
+        startupMarks['pv-first-game-frame-observed'],
+      processStartToMenuUsable: startupMarks['pv-first-menu-observed'],
     },
   };
 
