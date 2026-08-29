@@ -4,7 +4,7 @@ on:
   pull_request:
     branches:
       - main
-      - v2
+      - v2.1
   workflow_dispatch:
 
 permissions:
@@ -68,7 +68,7 @@ jobs:
             dist/ko/update-history/index.html
             dist/zh/index.html
             dist/zh/update-history/index.html
-            dist/resources/phase3-menu.css
+            dist/resources/integrated-menu.css
           )
 
           for file in "${expected_files[@]}"; do
@@ -78,14 +78,33 @@ jobs:
             fi
           done
 
+          if find dist -type f -name '*.map' -print -quit | grep -q .; then
+            echo "Production build contains source maps" >&2
+            find dist -type f -name '*.map' -print >&2
+            exit 1
+          fi
+
           if ! grep -q 'lang="ca"' dist/ca/index.html; then
             echo "Catalan index output does not declare lang=ca" >&2
             exit 1
           fi
 
+          release_version="$(node -p "require('./package.json').version")"
+          release_notes="docs/releases/v${release_version}.md"
+
+          if [[ ! -f "$release_notes" ]]; then
+            echo "Missing release notes for $release_version: $release_notes" >&2
+            exit 1
+          fi
+
+          if ! grep -Fq "$release_version" README.md; then
+            echo "README does not mention release version $release_version" >&2
+            exit 1
+          fi
+
           for locale in en es-ar ca ko zh; do
-            if ! grep -q '2.0.0' "dist/$locale/update-history/index.html"; then
-              echo "Release history for $locale does not mention 2.0.0" >&2
+            if ! grep -Fq "$release_version" "dist/$locale/update-history/index.html"; then
+              echo "Release history for $locale does not mention $release_version" >&2
               exit 1
             fi
           done

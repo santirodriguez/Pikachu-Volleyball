@@ -4,7 +4,6 @@ import inputActionsModule from './input_actions.cjs';
 import menuLogicModule from './menu_logic.cjs';
 import controlBindingsModule from './control_bindings.cjs';
 import { getIntegratedMenuStrings } from './integrated_menu_strings.js';
-import { getPhase3MenuStrings } from './integrated_menu_phase3_strings.js';
 
 const { shouldHandlePauseShortcut } = inputActionsModule;
 const { wrapIndex, isMenuConfirmKey } = menuLogicModule;
@@ -40,10 +39,7 @@ export function setUpIntegratedMenu(commands) {
   document.documentElement.classList.add('integrated-menu-enabled');
 
   const locale = commands.getCurrentLocale();
-  const strings = getPhase3MenuStrings(
-    locale,
-    getIntegratedMenuStrings(locale)
-  );
+  const strings = getIntegratedMenuStrings(locale);
   const navIds = commands.isDesktop() ? [...NAV_IDS, 'quit'] : [...NAV_IDS];
   let selectedNavIndex = 0;
   let panelControlIndex = 0;
@@ -322,6 +318,8 @@ export function setUpIntegratedMenu(commands) {
       result = commands.setPracticeMode(nextValue === 'true');
     } else if (setting === 'graphic') {
       result = commands.setGraphic(nextValue);
+    } else if (setting === 'colorScheme') {
+      result = commands.setColorScheme(nextValue);
     } else if (setting === 'bgm') {
       result = commands.setBgm(nextValue);
     } else if (setting === 'sfx') {
@@ -538,6 +536,7 @@ export function setUpIntegratedMenu(commands) {
   function closeMenu(resumeMatch = true) {
     clearModal();
     controlCapture = null;
+    mode = 'nav';
     overlay.hidden = true;
     trigger.hidden = false;
     if (resumeMatch) commands.setPaused(false);
@@ -725,6 +724,22 @@ function settingMarkup(id, label, values, currentValue, strings) {
   `;
 }
 
+function themeSettingMarkup(currentValue, copy) {
+  return `
+    <button
+      type="button"
+      class="pv-menu-setting"
+      data-setting="colorScheme"
+      data-values="light|dark"
+      data-value="${currentValue}"
+    >
+      <span>${copy.label}</span>
+      <strong>${currentValue === 'dark' ? copy.dark : copy.light}</strong>
+      <span class="pv-menu-setting-arrows" aria-hidden="true">◀ ▶</span>
+    </button>
+  `;
+}
+
 function displaySettingValue(id, value, strings) {
   if (id === 'winningScore') return `${value} ${strings.values.points}`;
   if (id === 'practiceMode') {
@@ -864,6 +879,7 @@ function getPanelMarkup(id, strings, settings) {
           settings.graphic,
           strings
         )}
+        ${themeSettingMarkup(settings.colorScheme, strings.theme)}
         ${settingMarkup(
           'bgm',
           strings.audio.bgm,

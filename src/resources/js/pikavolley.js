@@ -6,6 +6,16 @@ import { GROUND_HALF_WIDTH, PikaPhysics } from './physics.js';
 import { MenuView, GameView, FadeInOut, IntroView } from './view.js';
 import { PikaKeyboard } from './keyboard.js';
 import { PikaAudio } from './audio.js';
+import gameLifecycleModule from './game_lifecycle.cjs';
+import gamePresentationModule from './game_presentation.cjs';
+
+const {
+  GAME_STATE_IDS,
+  getGameStateHandlerName,
+  isMatchInProgress: isGameMatchInProgress,
+} = gameLifecycleModule;
+const { createGamePresentationState, advancePunchEffect } =
+  gamePresentationModule;
 
 /** @typedef {import('@pixi/display').Container} Container */
 /** @typedef {import('@pixi/loaders').LoaderResource} LoaderResource */
@@ -112,11 +122,7 @@ export class PikachuVolleyball {
     this.ballResetKeyDownListener = this.onBallResetKeyDown.bind(this);
     window.addEventListener('keydown', this.ballResetKeyDownListener);
 
-    /**
-     * The game state which is being rendered now
-     * @type {GameState}
-     */
-    this.state = this.intro;
+    this.transitionTo(GAME_STATE_IDS.INTRO);
     this.setQuickRematchHintVisibility(false);
   }
 
@@ -128,7 +134,7 @@ export class PikachuVolleyball {
     if (this.paused === true) {
       return;
     }
-    if (this.state !== this.round) {
+    if (this.currentStateId !== GAME_STATE_IDS.ROUND) {
       this.ballResetRequested = false;
     }
     if (this.slowMotionFramesLeft > 0) {
@@ -150,6 +156,43 @@ export class PikachuVolleyball {
   }
 
   /**
+   * Move the game to one explicit lifecycle state.
+   * @param {string} stateId
+   */
+  transitionTo(stateId) {
+    const handlerName = getGameStateHandlerName(stateId);
+    if (handlerName === null || typeof this[handlerName] !== 'function') {
+      throw new Error(`Unknown game state: ${stateId}`);
+    }
+    this.currentStateId = stateId;
+    this.state = this[handlerName];
+  }
+
+  /** @return {string} */
+  getCurrentStateId() {
+    return this.currentStateId;
+  }
+
+  /**
+   * @param {boolean} paused
+   * @return {boolean}
+   */
+  setPaused(paused) {
+    this.paused = Boolean(paused);
+    return this.paused;
+  }
+
+  /** @return {boolean} */
+  isPaused() {
+    return this.paused;
+  }
+
+  /** @return {boolean} */
+  isMatchInProgress() {
+    return isGameMatchInProgress(this.currentStateId);
+  }
+
+  /**
    * Intro: a man with a brief case
    * @type {GameState}
    */
@@ -168,13 +211,13 @@ export class PikachuVolleyball {
     ) {
       this.frameCounter = 0;
       this.view.intro.visible = false;
-      this.state = this.menu;
+      this.transitionTo(GAME_STATE_IDS.MENU);
     }
 
     if (this.frameCounter >= this.frameTotal.intro) {
       this.frameCounter = 0;
       this.view.intro.visible = false;
-      this.state = this.menu;
+      this.transitionTo(GAME_STATE_IDS.MENU);
     }
   }
 
@@ -252,7 +295,7 @@ export class PikachuVolleyball {
       this.audio.sounds.pikachu.play();
       this.frameCounter = 0;
       this.noInputFrameCounter = 0;
-      this.state = this.afterMenuSelection;
+      this.transitionTo(GAME_STATE_IDS.AFTER_MENU_SELECTION);
       return;
     }
 
@@ -261,7 +304,7 @@ export class PikachuVolleyball {
       this.physics.player2.isComputer = true;
       this.frameCounter = 0;
       this.noInputFrameCounter = 0;
-      this.state = this.afterMenuSelection;
+      this.transitionTo(GAME_STATE_IDS.AFTER_MENU_SELECTION);
     }
   }
 
@@ -274,7 +317,7 @@ export class PikachuVolleyball {
     this.frameCounter++;
     if (this.frameCounter >= this.frameTotal.afterMenuSelection) {
       this.frameCounter = 0;
-      this.state = this.beforeStartOfNewGame;
+      this.transitionTo(GAME_STATE_IDS.BEFORE_START_OF_NEW_GAME);
     }
   }
 
@@ -287,7 +330,7 @@ export class PikachuVolleyball {
     if (this.frameCounter >= this.frameTotal.beforeStartOfNewGame) {
       this.frameCounter = 0;
       this.view.menu.visible = false;
-      this.state = this.startOfNewGame;
+      this.transitionTo(GAME_STATE_IDS.START_OF_NEW_GAME);
     }
   }
 
@@ -313,7 +356,7 @@ export class PikachuVolleyball {
       this.physics.player1.initializeForNewRound();
       this.physics.player2.initializeForNewRound();
       this.physics.ball.initializeForNewRound(this.isPlayer2Serve);
-      this.view.game.drawPlayersAndBall(this.physics);
+      this.drawPlayersAndBall();
 
       this.view.fadeInOut.setBlackAlphaTo(1); // set black screen
       this.audio.sounds.bgm.play();
@@ -331,7 +374,7 @@ export class PikachuVolleyball {
     if (this.frameCounter >= this.frameTotal.startOfNewGame) {
       this.frameCounter = 0;
       this.view.fadeInOut.setBlackAlphaTo(0);
-      this.state = this.round;
+      this.transitionTo(GAME_STATE_IDS.ROUND);
     }
   }
 
@@ -357,7 +400,7 @@ export class PikachuVolleyball {
     ) {
       this.frameCounter = 0;
       this.view.game.visible = false;
-      this.state = this.intro;
+      this.transitionTo(GAME_STATE_IDS.INTRO);
       return;
     }
 
@@ -366,7 +409,7 @@ export class PikachuVolleyball {
     );
 
     this.playSoundEffect();
-    this.view.game.drawPlayersAndBall(this.physics);
+    this.drawPlayersAndBall();
     this.view.game.drawCloudsAndWave();
 
     if (this.gameEnded === true) {
@@ -381,7 +424,7 @@ export class PikachuVolleyball {
         this.frameCounter = 0;
         this.view.game.visible = false;
         this.setQuickRematchHintVisibility(false);
-        this.state = this.intro;
+        this.transitionTo(GAME_STATE_IDS.INTRO);
       }
       return;
     }
@@ -424,7 +467,7 @@ export class PikachuVolleyball {
       // if this is the last frame of this round, begin fade out
       if (this.slowMotionFramesLeft === 0) {
         this.view.fadeInOut.changeBlackAlphaBy(1 / 16); // fade out
-        this.state = this.afterEndOfRound;
+        this.transitionTo(GAME_STATE_IDS.AFTER_END_OF_ROUND);
       }
     }
   }
@@ -438,7 +481,7 @@ export class PikachuVolleyball {
     this.frameCounter++;
     if (this.frameCounter >= this.frameTotal.afterEndOfRound) {
       this.frameCounter = 0;
-      this.state = this.beforeStartOfNextRound;
+      this.transitionTo(GAME_STATE_IDS.BEFORE_START_OF_NEXT_ROUND);
     }
   }
 
@@ -454,7 +497,7 @@ export class PikachuVolleyball {
       this.physics.player1.initializeForNewRound();
       this.physics.player2.initializeForNewRound();
       this.physics.ball.initializeForNewRound(this.isPlayer2Serve);
-      this.view.game.drawPlayersAndBall(this.physics);
+      this.drawPlayersAndBall();
     }
 
     this.view.game.drawCloudsAndWave();
@@ -470,7 +513,7 @@ export class PikachuVolleyball {
       this.view.game.drawReadyMessage(false);
       this.view.fadeInOut.setBlackAlphaTo(0);
       this.roundEnded = false;
-      this.state = this.round;
+      this.transitionTo(GAME_STATE_IDS.ROUND);
     }
   }
 
@@ -486,7 +529,7 @@ export class PikachuVolleyball {
     this.slowMotionNumOfSkippedFrames = 0;
     this.view.game.visible = false;
     this.setQuickRematchHintVisibility(false);
-    this.state = this.startOfNewGame;
+    this.transitionTo(GAME_STATE_IDS.START_OF_NEW_GAME);
   }
 
   /**
@@ -514,10 +557,20 @@ export class PikachuVolleyball {
    */
   resetBallForPractice() {
     this.physics.ball.initializeForNewRound(this.isPlayer2Serve);
-    this.view.game.drawPlayersAndBall(this.physics);
+    this.drawPlayersAndBall();
     this.view.game.drawCloudsAndWave();
   }
 
+  /**
+   * Draw the current gameplay model through a detached presentation snapshot.
+   */
+  drawPlayersAndBall() {
+    const punchEffectRadius = advancePunchEffect(this.physics.ball);
+    const presentationState = createGamePresentationState(this.physics, {
+      punchEffectRadius,
+    });
+    this.view.game.drawPlayersAndBall(presentationState);
+  }
 
   /**
    * Show or hide the quick rematch hint on the game screen
@@ -590,7 +643,7 @@ export class PikachuVolleyball {
     this.slowMotionNumOfSkippedFrames = 0;
     this.view.menu.visible = false;
     this.view.game.visible = false;
-    this.state = this.intro;
+    this.transitionTo(GAME_STATE_IDS.INTRO);
   }
 
   /** @return {boolean} */

@@ -15,17 +15,18 @@ These rules apply to all future work in this repository.
 - Keep changes small and focused. Use one task branch and one pull request per task.
 - Avoid unrelated refactors and formatting-only churn.
 
-## Version 2 integration
+## Version 2.1 integration
 
-- `v2` is the integration branch for Pikachu Volleyball 2.0.
-- Task branches use the `v2-<task>` naming pattern and target `v2`.
-- The final release pull request will target `main` from `v2`.
-- Review relevant changes made to `main` during development and selectively bring them into `v2`.
+- `v2.1` is the integration branch for Pikachu Volleyball 2.1.
+- Task branches use the `v2.1-<task>` naming pattern and target `v2.1`.
+- The final release pull request will target `main` from `v2.1`.
+- Review relevant changes made to `main` during development and selectively bring them into `v2.1`.
 
 ## Preservation requirements
 
 - Preserve the original physics, AI, timing, rendering, game states, scoring, and default controls unless a task explicitly requires a change.
-- Preserve all accepted fork improvements listed in `docs/2.0-preservation-matrix.md`.
+- Preserve all accepted 2.1 behavior listed in `docs/v2.1-preservation-baseline.md`.
+- Keep `docs/2.0-preservation-matrix.md` as historical 2.0 documentation rather than an active 2.1 authority.
 - Do not modify physics, AI, or timing without an explicit requirement and regression evidence.
 - Do not remove a feature merely because its implementation is reorganized.
 

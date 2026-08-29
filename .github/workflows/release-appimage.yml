@@ -35,6 +35,22 @@ jobs:
             exit 1
           fi
 
+          if [[ "$package_version" != "2.1.0" ]]; then
+            echo "Final v2.1 workflow expected package version 2.1.0, found $package_version" >&2
+            exit 1
+          fi
+
+          release_notes="docs/releases/v${package_version}.md"
+          if [[ ! -f "$release_notes" ]]; then
+            echo "Missing release notes: $release_notes" >&2
+            exit 1
+          fi
+
+          if ! grep -Fq "$package_version" README.md; then
+            echo "README does not mention release version $package_version" >&2
+            exit 1
+          fi
+
           if [[ "${{ github.event_name }}" == "release" ]]; then
             expected_tag="v${package_version}"
             actual_tag="${{ github.event.release.tag_name }}"
@@ -49,19 +65,243 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Validate effective toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          electron_version="$(node -p "require('electron/package.json').version")"
+          builder_version="$(node -p "require('electron-builder/package.json').version")"
+          app_builder_lib_version="$(node -p "require('app-builder-lib/package.json').version")"
+
+          [[ "$electron_version" == "35.7.5" ]] || {
+            echo "Expected Electron 35.7.5, found $electron_version" >&2
+            exit 1
+          }
+          [[ "$builder_version" == "26.15.7" ]] || {
+            echo "Expected electron-builder 26.15.7, found $builder_version" >&2
+            exit 1
+          }
+          [[ "$app_builder_lib_version" == "26.15.7" ]] || {
+            echo "Expected app-builder-lib 26.15.7, found $app_builder_lib_version" >&2
+            exit 1
+          }
+
+          echo "Electron: $electron_version"
+          echo "electron-builder: $builder_version"
+          echo "app-builder-lib: $app_builder_lib_version"
+
       - name: Audit production dependencies
-        run: npm audit --omit=dev --audit-level=critical
+        run: npm audit --omit=dev
 
       - name: Run repository quality checks
         run: npm run quality:check
 
+      - name: Validate production web outputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected_files=(
+            dist/en/index.html
+            dist/en/update-history/index.html
+            dist/es-ar/index.html
+            dist/es-ar/update-history/index.html
+            dist/ca/index.html
+            dist/ca/manifest.json
+            dist/ca/update-history/index.html
+            dist/ko/index.html
+            dist/ko/update-history/index.html
+            dist/zh/index.html
+            dist/zh/update-history/index.html
+            dist/resources/integrated-menu.css
+          )
+
+          for file in "${expected_files[@]}"; do
+            if [[ ! -f "$file" ]]; then
+              echo "Missing expected production output: $file" >&2
+              exit 1
+            fi
+          done
+
+          if find dist -type f -name '*.map' -print -quit | grep -q .; then
+            echo "Production build contains source maps" >&2
+            find dist -type f -name '*.map' -print >&2
+            exit 1
+          fi
+
+          if ! grep -q 'lang="ca"' dist/ca/index.html; then
+            echo "Catalan index output does not declare lang=ca" >&2
+            exit 1
+          fi
+
+          release_version="$(node -p "require('./package.json').version")"
+          for locale in en es-ar ca ko zh; do
+            if ! grep -Fq "$release_version" "dist/$locale/update-history/index.html"; then
+              echo "Release history for $locale does not mention $release_version" >&2
+              exit 1
+            fi
+          done
+
       - name: Build Linux AppImage
         run: npm run build:desktop:linux -- --publish=never
+
+      - name: Inspect packaged application
+        shell: bash
+        run: |
+          set -euo pipefail
+          app_dir="release/linux-unpacked"
+          asar_path="$app_dir/resources/app.asar"
+
+          if [[ ! -d "$app_dir" ]]; then
+            echo "Missing unpacked application directory: $app_dir" >&2
+            exit 1
+          fi
+
+          mapfile -t locale_paks < <(find "$app_dir/locales" -maxdepth 1 -type f -name '*.pak' | sort)
+          if [[ "${#locale_paks[@]}" -ne 1 || "$(basename "${locale_paks[0]}")" != "en-US.pak" ]]; then
+            echo "Expected only Electron locale en-US.pak" >&2
+            printf 'Found: %s\n' "${locale_paks[@]}" >&2
+            exit 1
+          fi
+
+          locale_bytes=0
+          for locale_file in "${locale_paks[@]}"; do
+            locale_bytes=$((locale_bytes + $(stat -c%s "$locale_file")))
+          done
+
+          if [[ ! -f "$asar_path" ]]; then
+            echo "Missing packaged app archive: $asar_path" >&2
+            exit 1
+          fi
+
+          asar_listing="$(mktemp)"
+          trap 'rm -f "$asar_listing"' EXIT
+          npx --no-install asar list "$asar_path" > "$asar_listing"
+          packaged_node_modules="$(grep -c '^/node_modules/' "$asar_listing" || true)"
+          packaged_pixi_files="$(grep -c '^/node_modules/@pixi/' "$asar_listing" || true)"
+          app_asar_bytes="$(stat -c%s "$asar_path")"
+
+          if [[ "$packaged_node_modules" -ne 0 || "$packaged_pixi_files" -ne 0 ]]; then
+            echo "Packaged app still contains runtime node_modules" >&2
+            echo "node_modules files: $packaged_node_modules" >&2
+            echo "@pixi files: $packaged_pixi_files" >&2
+            exit 1
+          fi
+
+          echo "Electron locale packs: ${#locale_paks[@]}"
+          printf '  %s\n' "${locale_paks[@]}"
+          echo "Electron locale bytes: $locale_bytes"
+          echo "app.asar bytes: $app_asar_bytes"
+          echo "node_modules files in app.asar: $packaged_node_modules"
+          echo "@pixi files in app.asar: $packaged_pixi_files"
+
+          {
+            echo "## Packaged application inspection"
+            echo ""
+            echo "- Electron locale packs: \`${#locale_paks[@]}\`"
+            echo "- Electron locale bytes: \`$locale_bytes\`"
+            echo "- app.asar size: \`$app_asar_bytes\` bytes"
+            echo "- node_modules files in app.asar: \`$packaged_node_modules\`"
+            echo "- @pixi files in app.asar: \`$packaged_pixi_files\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Verify AppImage filesystem and sandbox policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t appimages < <(find release -maxdepth 1 -type f -name '*.AppImage' | sort)
+          if [[ "${#appimages[@]}" -ne 1 ]]; then
+            echo "Expected exactly one AppImage, found ${#appimages[@]}" >&2
+            exit 1
+          fi
+
+          appimage_path="${appimages[0]}"
+          chmod +x "$appimage_path"
+          offset="$($appimage_path --appimage-offset)"
+
+          compression_id="$(node -e "const fs=require('fs');const p=process.argv[1];const o=Number(process.argv[2]);const b=Buffer.alloc(32);const f=fs.openSync(p,'r');fs.readSync(f,b,0,b.length,o);fs.closeSync(f);if(b.toString('ascii',0,4)!=='hsqs')process.exit(2);process.stdout.write(String(b.readUInt16LE(20)));" "$appimage_path" "$offset")"
+          block_size="$(node -e "const fs=require('fs');const p=process.argv[1];const o=Number(process.argv[2]);const b=Buffer.alloc(32);const f=fs.openSync(p,'r');fs.readSync(f,b,0,b.length,o);fs.closeSync(f);process.stdout.write(String(b.readUInt32LE(12)));" "$appimage_path" "$offset")"
+
+          [[ "$compression_id" == "6" ]] || {
+            echo "Expected Zstd SquashFS compression id 6, found $compression_id" >&2
+            exit 1
+          }
+          [[ "$block_size" == "131072" ]] || {
+            echo "Expected 131072-byte SquashFS blocks, found $block_size" >&2
+            exit 1
+          }
+
+          extract_dir="$(mktemp -d)"
+          trap 'rm -rf "$extract_dir"' EXIT
+          (cd "$extract_dir" && "$GITHUB_WORKSPACE/$appimage_path" --appimage-extract >/dev/null)
+          root="$extract_dir/squashfs-root"
+          apprun="$root/AppRun"
+
+          bash -n "$apprun"
+          grep -Fq 'ERROR: sandbox-disabling Chromium switch is disabled by this AppImage security policy:' "$apprun"
+          grep -Fq 'ERROR: Chromium sandbox prerequisites are unavailable; refusing to launch unsandboxed.' "$apprun"
+          grep -Fq 'export LD_LIBRARY_PATH="${APPDIR}/usr/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"' "$apprun"
+          ! grep -Fq 'NO_SANDBOX=(--no-sandbox)' "$apprun"
+          ! grep -Fq 'NO_SANDBOX[@]' "$apprun"
+
+          mapfile -t desktop_files < <(find "$root" -maxdepth 1 -type f -name '*.desktop' | sort)
+          if [[ "${#desktop_files[@]}" -ne 1 ]]; then
+            echo "Expected exactly one desktop entry, found ${#desktop_files[@]}" >&2
+            exit 1
+          fi
+          grep -Fxq 'Exec=AppRun --enable-sandbox %U' "${desktop_files[0]}"
+
+          sandbox_switches=(
+            no-sandbox
+            disable-gpu-sandbox
+            disable-namespace-sandbox
+            disable-seccomp-filter-sandbox
+            disable-setuid-sandbox
+            no-zygote-sandbox
+            gpu-sandbox-allow-sysv-shm
+            allow-sandbox-debugging
+          )
+          switch_suffixes=(
+            ''
+            '='
+            '=true'
+            '=false'
+            '=1'
+          )
+
+          for switch_name in "${sandbox_switches[@]}"; do
+            for prefix in '--' '-'; do
+              for suffix in "${switch_suffixes[@]}"; do
+                argument="${prefix}${switch_name}${suffix}"
+                set +e
+                output="$("$apprun" "$argument" 2>&1)"
+                status=$?
+                set -e
+                [[ "$status" -eq 1 ]] || {
+                  echo "AppRun $argument returned $status instead of 1" >&2
+                  exit 1
+                }
+                [[ "$output" == "ERROR: sandbox-disabling Chromium switch is disabled by this AppImage security policy: $argument" ]] || {
+                  echo "Unexpected sandbox-switch rejection output for $argument: $output" >&2
+                  exit 1
+                }
+              done
+            done
+          done
+
+          echo "SquashFS compression: zstd"
+          echo "SquashFS block size: $block_size bytes"
+          echo "AppImage runtime offset: $offset bytes"
+          echo "Sandbox policy: fail-closed"
 
       - name: Verify AppImage and create checksum
         shell: bash
         run: |
           set -euo pipefail
+          v2_baseline_bytes=90911841
+          normal_compression_baseline_bytes=104271158
+          phase1_zstd_checkpoint_bytes=97094746
+          package_version="$(node -p "require('./package.json').version")"
+          expected_name="Pikachu-Volleyball-${package_version}-x86_64.AppImage"
           mapfile -t appimages < <(find release -maxdepth 1 -type f -name '*.AppImage' | sort)
 
           if [[ "${#appimages[@]}" -ne 1 ]]; then
@@ -76,8 +316,19 @@ jobs:
           fi
 
           appimage_name="$(basename "$appimage_path")"
+          if [[ "$appimage_name" != "$expected_name" ]]; then
+            echo "Unexpected AppImage name: $appimage_name (expected $expected_name)" >&2
+            exit 1
+          fi
+
           appimage_bytes="$(stat -c%s "$appimage_path")"
           appimage_mib="$(awk -v bytes="$appimage_bytes" 'BEGIN { printf "%.2f", bytes / 1024 / 1024 }')"
+          v2_delta_bytes=$((appimage_bytes - v2_baseline_bytes))
+          v2_delta_percent="$(awk -v delta="$v2_delta_bytes" -v baseline="$v2_baseline_bytes" 'BEGIN { printf "%+.2f", (delta / baseline) * 100 }')"
+          normal_delta_bytes=$((appimage_bytes - normal_compression_baseline_bytes))
+          normal_delta_percent="$(awk -v delta="$normal_delta_bytes" -v baseline="$normal_compression_baseline_bytes" 'BEGIN { printf "%+.2f", (delta / baseline) * 100 }')"
+          zstd_delta_bytes=$((appimage_bytes - phase1_zstd_checkpoint_bytes))
+          zstd_delta_percent="$(awk -v delta="$zstd_delta_bytes" -v baseline="$phase1_zstd_checkpoint_bytes" 'BEGIN { printf "%+.2f", (delta / baseline) * 100 }')"
 
           (
             cd release
@@ -86,6 +337,9 @@ jobs:
 
           echo "Built artifact: $appimage_name"
           echo "Artifact size: $appimage_bytes bytes (${appimage_mib} MiB)"
+          echo "Delta vs v2.0.0: $v2_delta_bytes bytes (${v2_delta_percent}%)"
+          echo "Delta vs validated v2.1 gzip baseline: $normal_delta_bytes bytes (${normal_delta_percent}%)"
+          echo "Delta vs accepted Phase 1 Zstd checkpoint: $zstd_delta_bytes bytes (${zstd_delta_percent}%)"
           cat release/SHA256SUMS.txt
 
           {
@@ -93,8 +347,25 @@ jobs:
             echo ""
             echo "- Artifact: \`$appimage_name\`"
             echo "- Size: \`$appimage_bytes\` bytes (\`${appimage_mib}\` MiB)"
+            echo "- v2.0.0 reference: \`$v2_baseline_bytes\` bytes"
+            echo "- Delta vs v2.0.0: \`$v2_delta_bytes\` bytes (\`${v2_delta_percent}%\`)"
+            echo "- Validated v2.1 gzip/normal baseline: \`$normal_compression_baseline_bytes\` bytes"
+            echo "- Delta vs v2.1 gzip/normal: \`$normal_delta_bytes\` bytes (\`${normal_delta_percent}%\`)"
+            echo "- Accepted Phase 1 Zstd checkpoint: \`$phase1_zstd_checkpoint_bytes\` bytes"
+            echo "- Delta vs Phase 1 Zstd checkpoint: \`$zstd_delta_bytes\` bytes (\`${zstd_delta_percent}%\`)"
             echo "- Checksum file: \`SHA256SUMS.txt\`"
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Report build sizes
+        run: node scripts/report-build-metrics.cjs release/build-metrics.json
+
+      - name: Measure packaged startup
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo chown root:root release/linux-unpacked/chrome-sandbox
+          sudo chmod 4755 release/linux-unpacked/chrome-sandbox
+          xvfb-run -a node scripts/measure-startup.cjs release/startup-metrics.json
 
       - name: Upload AppImage workflow artifact
         uses: actions/upload-artifact@v6
@@ -103,6 +374,8 @@ jobs:
           path: |
             release/*.AppImage
             release/SHA256SUMS.txt
+            release/build-metrics.json
+            release/startup-metrics.json
           if-no-files-found: error
 
       - name: Attach AppImage and checksum to GitHub release
