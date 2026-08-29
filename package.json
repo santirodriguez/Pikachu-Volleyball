@@ -86,7 +86,11 @@
       "category": "Game",
       "icon": "src/resources/assets/images/IDI_PIKAICON-1_gap_filled_512.png"
     },
+    "toolsets": {
+      "appimage": "1.0.2"
+    },
     "appImage": {
+      "compression": "zstd",
       "executableArgs": [
         "--enable-sandbox"
       ]
