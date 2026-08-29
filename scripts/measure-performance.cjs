@@ -14,9 +14,14 @@ const OUTPUT_PATH = path.resolve(
 const RUN_TIMEOUT_MS = 45000;
 const FILE_POLL_MS = 10;
 
-function findAppImage() {
-  const explicit = process.env.PV_APPIMAGE_PATH;
-  if (explicit) return path.resolve(explicit);
+function findTarget() {
+  const explicit = process.env.PV_PERFORMANCE_EXECUTABLE;
+  if (explicit) {
+    return {
+      executable: path.resolve(explicit),
+      kind: process.env.PV_PERFORMANCE_EXECUTABLE_KIND || 'custom',
+    };
+  }
 
   if (!fs.existsSync(RELEASE_DIR)) {
     throw new Error(`Missing release directory: ${RELEASE_DIR}`);
@@ -32,7 +37,8 @@ function findAppImage() {
       `Expected exactly one AppImage in ${RELEASE_DIR}; found: ${candidates.join(', ')}`
     );
   }
-  return candidates[0];
+
+  return { executable: candidates[0], kind: 'appimage' };
 }
 
 function roundNumber(value) {
@@ -121,7 +127,7 @@ function summarizeRenderer(report) {
   };
 }
 
-function runAppImage(appImage, label, userDataDir, outputDir) {
+function runExecutable(target, label, userDataDir, outputDir) {
   return new Promise((resolve, reject) => {
     const metricsPath = path.join(outputDir, `${label}.json`);
     fs.rmSync(metricsPath, { force: true });
@@ -130,8 +136,8 @@ function runAppImage(appImage, label, userDataDir, outputDir) {
     let stdout = '';
     let stderr = '';
 
-    const child = spawn(appImage, [], {
-      cwd: path.dirname(appImage),
+    const child = spawn(target.executable, [], {
+      cwd: path.dirname(target.executable),
       env: {
         ...process.env,
         PV_PERFORMANCE_METRICS_FILE: metricsPath,
@@ -176,24 +182,26 @@ function runAppImage(appImage, label, userDataDir, outputDir) {
         process.stderr.write(stderr);
         reject(
           new Error(
-            `${label} failed; exit=${code}, signal=${signal}, metrics=${metricsPath}`
+            `${label} (${target.kind}) failed; exit=${code}, signal=${signal}, metrics=${metricsPath}`
           )
         );
         return;
       }
 
       const report = JSON.parse(fs.readFileSync(metricsPath, 'utf8'));
-      const wrapperToMetricsMs = roundNumber(metricsObservedAt - startedAt);
+      const launchToMetricsMs = roundNumber(metricsObservedAt - startedAt);
       const processToReportWriteMs =
         report.endToEndMs?.processStartToReportWrite ?? null;
       const approximatePreElectronMs =
-        Number.isFinite(wrapperToMetricsMs) && Number.isFinite(processToReportWriteMs)
-          ? roundNumber(Math.max(0, wrapperToMetricsMs - processToReportWriteMs))
+        Number.isFinite(launchToMetricsMs) &&
+        Number.isFinite(processToReportWriteMs)
+          ? roundNumber(Math.max(0, launchToMetricsMs - processToReportWriteMs))
           : null;
 
-      report.wrapperMeasurement = {
-        appImageSpawnToMetricsObservedMs: wrapperToMetricsMs,
-        appImageSpawnToExitMs: roundNumber(exitedAt - startedAt),
+      report.launchMeasurement = {
+        executableKind: target.kind,
+        launchToMetricsObservedMs: launchToMetricsMs,
+        launchToExitMs: roundNumber(exitedAt - startedAt),
         metricsObservedToExitMs: roundNumber(exitedAt - metricsObservedAt),
         approximatePreElectronOrLauncherMs: approximatePreElectronMs,
         filePollingResolutionMs: FILE_POLL_MS,
@@ -206,30 +214,43 @@ function runAppImage(appImage, label, userDataDir, outputDir) {
 }
 
 function renderSummary(report) {
+  const isAppImage = report.target.kind === 'appimage';
   const lines = [
-    '## AppImage performance diagnostics',
+    `## ${isAppImage ? 'AppImage' : report.target.kind} performance diagnostics`,
     '',
-    '| Run | Spawn -> report | Approx. pre-Electron | Process -> first frame | Round p95 | Round max | >60 ms frames | Work p95 |',
+    '| Run | Launch -> report | Approx. pre-Electron | Process -> first frame | Round p95 | Round max | >60 ms frames | Work p95 |',
     '|---|---:|---:|---:|---:|---:|---:|---:|',
   ];
   for (const run of report.runs) {
     lines.push(
-      `| ${run.label} | ${run.wrapperMeasurement.appImageSpawnToMetricsObservedMs ?? 'n/a'} ms | ${run.wrapperMeasurement.approximatePreElectronOrLauncherMs ?? 'n/a'} ms | ${run.endToEndMs?.processStartToFirstGameFrame ?? 'n/a'} ms | ${run.framePacingSummary.intervalMs.p95 ?? 'n/a'} ms | ${run.framePacingSummary.intervalMs.max ?? 'n/a'} ms | ${run.framePacingSummary.lateFrames.over1_5xTarget} | ${run.framePacingSummary.workMs.totalP95 ?? 'n/a'} ms |`
+      `| ${run.label} | ${run.launchMeasurement.launchToMetricsObservedMs ?? 'n/a'} ms | ${run.launchMeasurement.approximatePreElectronOrLauncherMs ?? 'n/a'} ms | ${run.endToEndMs?.processStartToFirstGameFrame ?? 'n/a'} ms | ${run.framePacingSummary.intervalMs.p95 ?? 'n/a'} ms | ${run.framePacingSummary.intervalMs.max ?? 'n/a'} ms | ${run.framePacingSummary.lateFrames.over1_5xTarget} | ${run.framePacingSummary.workMs.totalP95 ?? 'n/a'} ms |`
     );
   }
   lines.push(
     '',
     `- First -> second launch, same profile: \`${report.comparisons.secondSameProfileMinusFirstMs ?? 'n/a'}\` ms`,
-    `- First -> third launch, fresh profile: \`${report.comparisons.thirdFreshProfileMinusFirstMs ?? 'n/a'}\` ms`,
-    '- Approx. pre-Electron time is wrapper spawn-to-report minus Electron process-to-report and includes AppImage/runtime work plus polling noise; it is diagnostic, not a precise mount benchmark.',
-    '- The first run is only a true cold-cache approximation if the surrounding environment explicitly cleared filesystem caches before this script.',
-    ''
+    `- First -> third launch, fresh profile: \`${report.comparisons.thirdFreshProfileMinusFirstMs ?? 'n/a'}\` ms`
   );
+  if (isAppImage) {
+    lines.push(
+      '- Approx. pre-Electron time includes AppImage launcher/mount work plus measurement noise; it is diagnostic, not a precise mount benchmark.',
+      '- The first run is only a true cold-cache approximation if the surrounding environment explicitly cleared filesystem caches before this script.'
+    );
+  } else {
+    lines.push(
+      '- This target is not an AppImage. Launch timings validate the diagnostic driver and Electron/renderer path only; they do not measure AppImage FUSE mount/launcher cost.'
+    );
+  }
+  lines.push('');
   return `${lines.join('\n')}\n`;
 }
 
 async function main() {
-  const appImage = findAppImage();
+  const target = findTarget();
+  if (!fs.existsSync(target.executable)) {
+    throw new Error(`Missing performance target: ${target.executable}`);
+  }
+
   const outputDir = path.join(path.dirname(OUTPUT_PATH), 'performance-runs');
   fs.mkdirSync(outputDir, { recursive: true });
   fs.rmSync(OUTPUT_PATH, { force: true });
@@ -245,16 +266,19 @@ async function main() {
     ];
     const runs = [];
     for (const [label, profile] of runDefinitions) {
-      const result = await runAppImage(appImage, label, profile, outputDir);
+      const result = await runExecutable(target, label, profile, outputDir);
       runs.push({ label, ...result });
     }
 
-    const first = runs[0].wrapperMeasurement.appImageSpawnToMetricsObservedMs;
-    const second = runs[1].wrapperMeasurement.appImageSpawnToMetricsObservedMs;
-    const third = runs[2].wrapperMeasurement.appImageSpawnToMetricsObservedMs;
+    const first = runs[0].launchMeasurement.launchToMetricsObservedMs;
+    const second = runs[1].launchMeasurement.launchToMetricsObservedMs;
+    const third = runs[2].launchMeasurement.launchToMetricsObservedMs;
     const report = {
       generatedAt: new Date().toISOString(),
-      appImage: path.basename(appImage),
+      target: {
+        kind: target.kind,
+        name: path.basename(target.executable),
+      },
       environmentNote: process.env.PV_PERFORMANCE_ENV_NOTE || null,
       runs,
       comparisons: {
