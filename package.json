@@ -11,7 +11,7 @@
     "build:web": "webpack --config webpack.prod.js",
     "start:desktop": "npm run build:web && electron .",
     "build:appimage": "npm run build:desktop:linux",
-    "build:desktop:linux": "npm run build:web && electron-builder --linux AppImage",
+    "build:desktop:linux": "npm run build:web && node scripts/patch-appimage-launcher.cjs && electron-builder --linux AppImage",
     "lint": "node ./node_modules/eslint/bin/eslint.js \"src/resources/js/**/*.{js,cjs}\" \"test/**/*.cjs\" \"desktop/**/*.js\" \"webpack.*.js\"",
     "quality:check": "npm run lint && npm run test:unit && npm run build:web"
   },
@@ -31,6 +31,8 @@
   "devDependencies": {
     "clean-webpack-plugin": "^4.0.0",
     "copy-webpack-plugin": "^11.0.0",
+    "electron": "^35.1.5",
+    "electron-builder": "26.15.7",
     "eslint": "^8.17.0",
     "eslint-plugin-prettier": "^4.0.0",
     "html-webpack-plugin": "^5.5.0",
@@ -39,9 +41,7 @@
     "webpack-cli": "^4.9.2",
     "webpack-dev-server": "^4.9.1",
     "webpack-merge": "^5.8.0",
-    "workbox-webpack-plugin": "^6.5.3",
-    "electron": "^35.1.5",
-    "electron-builder": "^26.0.12"
+    "workbox-webpack-plugin": "^6.5.3"
   },
   "dependencies": {
     "@pixi/canvas-display": "^6.4.2",
@@ -85,6 +85,11 @@
       ],
       "category": "Game",
       "icon": "src/resources/assets/images/IDI_PIKAICON-1_gap_filled_512.png"
+    },
+    "appImage": {
+      "executableArgs": [
+        "--enable-sandbox"
+      ]
     }
   }
 }
