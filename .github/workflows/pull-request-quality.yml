@@ -113,3 +113,105 @@ jobs:
             echo "README still advertises an alpha release" >&2
             exit 1
           fi
+
+  appimage-normal-compression:
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22.12.0
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify compression candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          compression="$(node -p "require('./package.json').build.compression")"
+          if [[ "$compression" != "normal" ]]; then
+            echo "Expected normal AppImage compression, found: $compression" >&2
+            exit 1
+          fi
+          echo "AppImage compression: $compression"
+
+      - name: Build Linux AppImage
+        run: npm run build:desktop:linux -- --publish=never
+
+      - name: Inspect packaged application
+        shell: bash
+        run: |
+          set -euo pipefail
+          app_dir="release/linux-unpacked"
+          asar_path="$app_dir/resources/app.asar"
+
+          mapfile -t locale_paks < <(find "$app_dir/locales" -maxdepth 1 -type f -name '*.pak' | sort)
+          if [[ "${#locale_paks[@]}" -ne 1 || "$(basename "${locale_paks[0]}")" != "en-US.pak" ]]; then
+            echo "Expected only Electron locale en-US.pak" >&2
+            exit 1
+          fi
+
+          asar_listing="$(mktemp)"
+          npx --no-install asar list "$asar_path" > "$asar_listing"
+          if grep -q '^/node_modules/' "$asar_listing"; then
+            echo "Packaged app still contains runtime node_modules" >&2
+            exit 1
+          fi
+
+          if find dist release/linux-unpacked/resources -type f -name '*.map' -print -quit | grep -q .; then
+            echo "Production package contains source maps" >&2
+            exit 1
+          fi
+
+      - name: Verify AppImage and create checksum
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t appimages < <(find release -maxdepth 1 -type f -name '*.AppImage' | sort)
+          if [[ "${#appimages[@]}" -ne 1 ]]; then
+            echo "Expected exactly one AppImage, found ${#appimages[@]}" >&2
+            exit 1
+          fi
+
+          appimage_path="${appimages[0]}"
+          appimage_name="$(basename "$appimage_path")"
+          appimage_bytes="$(stat -c%s "$appimage_path")"
+          appimage_mib="$(awk -v bytes="$appimage_bytes" 'BEGIN { printf "%.2f", bytes / 1024 / 1024 }')"
+          (
+            cd release
+            sha256sum "$appimage_name" > SHA256SUMS.txt
+          )
+
+          echo "Built artifact: $appimage_name"
+          echo "Artifact size: $appimage_bytes bytes (${appimage_mib} MiB)"
+          cat release/SHA256SUMS.txt
+
+          {
+            echo "## Normal-compression AppImage candidate"
+            echo ""
+            echo "- Artifact: \`$appimage_name\`"
+            echo "- Size: \`$appimage_bytes\` bytes (\`${appimage_mib}\` MiB)"
+            echo "- Compression: \`normal\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Report build sizes
+        run: node scripts/report-build-metrics.cjs release/build-metrics.json
+
+      - name: Upload normal-compression AppImage
+        uses: actions/upload-artifact@v6
+        with:
+          name: pikachu-volleyball-normal-compression
+          path: |
+            release/*.AppImage
+            release/SHA256SUMS.txt
+            release/build-metrics.json
+          if-no-files-found: error
+          compression-level: 0
