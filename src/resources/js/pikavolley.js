@@ -7,12 +7,15 @@ import { MenuView, GameView, FadeInOut, IntroView } from './view.js';
 import { PikaKeyboard } from './keyboard.js';
 import { PikaAudio } from './audio.js';
 import gameLifecycleModule from './game_lifecycle.cjs';
+import gamePresentationModule from './game_presentation.cjs';
 
 const {
   GAME_STATE_IDS,
   getGameStateHandlerName,
   isMatchInProgress: isGameMatchInProgress,
 } = gameLifecycleModule;
+const { createGamePresentationState, advancePunchEffect } =
+  gamePresentationModule;
 
 /** @typedef {import('@pixi/display').Container} Container */
 /** @typedef {import('@pixi/loaders').LoaderResource} LoaderResource */
@@ -353,7 +356,7 @@ export class PikachuVolleyball {
       this.physics.player1.initializeForNewRound();
       this.physics.player2.initializeForNewRound();
       this.physics.ball.initializeForNewRound(this.isPlayer2Serve);
-      this.view.game.drawPlayersAndBall(this.physics);
+      this.drawPlayersAndBall();
 
       this.view.fadeInOut.setBlackAlphaTo(1); // set black screen
       this.audio.sounds.bgm.play();
@@ -406,7 +409,7 @@ export class PikachuVolleyball {
     );
 
     this.playSoundEffect();
-    this.view.game.drawPlayersAndBall(this.physics);
+    this.drawPlayersAndBall();
     this.view.game.drawCloudsAndWave();
 
     if (this.gameEnded === true) {
@@ -494,7 +497,7 @@ export class PikachuVolleyball {
       this.physics.player1.initializeForNewRound();
       this.physics.player2.initializeForNewRound();
       this.physics.ball.initializeForNewRound(this.isPlayer2Serve);
-      this.view.game.drawPlayersAndBall(this.physics);
+      this.drawPlayersAndBall();
     }
 
     this.view.game.drawCloudsAndWave();
@@ -554,8 +557,19 @@ export class PikachuVolleyball {
    */
   resetBallForPractice() {
     this.physics.ball.initializeForNewRound(this.isPlayer2Serve);
-    this.view.game.drawPlayersAndBall(this.physics);
+    this.drawPlayersAndBall();
     this.view.game.drawCloudsAndWave();
+  }
+
+  /**
+   * Draw the current gameplay model through a detached presentation snapshot.
+   */
+  drawPlayersAndBall() {
+    const punchEffectRadius = advancePunchEffect(this.physics.ball);
+    const presentationState = createGamePresentationState(this.physics, {
+      punchEffectRadius,
+    });
+    this.view.game.drawPlayersAndBall(presentationState);
   }
 
   /**
