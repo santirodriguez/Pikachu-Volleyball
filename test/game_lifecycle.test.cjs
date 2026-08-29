@@ -4,8 +4,6 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
   GAME_STATE_IDS,
-  GAME_STATE_HANDLER_NAMES,
-  MATCH_IN_PROGRESS_STATE_IDS,
   getGameStateHandlerName,
   isMatchInProgress,
 } = require('../src/resources/js/game_lifecycle.cjs');
@@ -27,7 +25,7 @@ test('game lifecycle exposes stable explicit state ids', () => {
 });
 
 test('game lifecycle maps every state id to the existing state handler', () => {
-  assert.deepEqual(GAME_STATE_HANDLER_NAMES, {
+  const expectedHandlerNames = {
     intro: 'intro',
     menu: 'menu',
     'after-menu-selection': 'afterMenuSelection',
@@ -36,10 +34,10 @@ test('game lifecycle maps every state id to the existing state handler', () => {
     round: 'round',
     'after-end-of-round': 'afterEndOfRound',
     'before-start-of-next-round': 'beforeStartOfNextRound',
-  });
+  };
 
-  for (const stateId of Object.values(GAME_STATE_IDS)) {
-    assert.equal(typeof getGameStateHandlerName(stateId), 'string');
+  for (const [stateId, handlerName] of Object.entries(expectedHandlerNames)) {
+    assert.equal(getGameStateHandlerName(stateId), handlerName);
   }
   assert.equal(getGameStateHandlerName('unknown'), null);
 });
@@ -58,7 +56,6 @@ test('match-in-progress boundary preserves the current command semantics', () =>
     GAME_STATE_IDS.BEFORE_START_OF_NEXT_ROUND,
   ];
 
-  assert.deepEqual(MATCH_IN_PROGRESS_STATE_IDS, activeStateIds);
   for (const stateId of inactiveStateIds) {
     assert.equal(isMatchInProgress(stateId), false);
   }
