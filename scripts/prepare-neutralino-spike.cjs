@@ -45,6 +45,9 @@ function prepareProductionStage() {
   assertFile(path.join(SOURCE, 'neutralino.config.json'));
   assertFile(path.join(SOURCE, 'preload.js'));
   assertFile(path.join(SOURCE, 'smoke-probe.js'));
+  assertFile(path.join(SOURCE, 'external-link-probe.js'));
+  assertFile(path.join(SOURCE, 'host-navigation-probe.js'));
+  assertFile(path.join(SOURCE, 'extensions', 'external-link-linux.c'));
 
   for (const locale of REQUIRED_LOCALES) {
     assertFile(path.join(DIST, locale, 'index.html'));
@@ -83,6 +86,8 @@ function prepareSmokeStage() {
   assertFile(path.join(STAGE, 'neutralino.config.json'));
   assertFile(path.join(RESOURCES, 'neutralino-preload.js'));
   assertFile(path.join(SOURCE, 'smoke-probe.js'));
+  assertFile(path.join(SOURCE, 'external-link-probe.js'));
+  assertFile(path.join(SOURCE, 'host-navigation-probe.js'));
 
   const productionConfig = readProductionConfig();
   const preload = fs.readFileSync(path.join(SOURCE, 'preload.js'), 'utf8');
@@ -90,10 +95,18 @@ function prepareSmokeStage() {
     path.join(SOURCE, 'smoke-probe.js'),
     'utf8'
   );
+  const externalLinkProbe = fs.readFileSync(
+    path.join(SOURCE, 'external-link-probe.js'),
+    'utf8'
+  );
+  const hostNavigationProbe = fs.readFileSync(
+    path.join(SOURCE, 'host-navigation-probe.js'),
+    'utf8'
+  );
   const smokeBootstrap = `'use strict';\n(() => {\n  const args = Array.isArray(window.NL_ARGS) ? window.NL_ARGS : [];\n  const prefix = '--dev-pv-smoke-phase=';\n  const phaseArg = args.find((arg) => arg.startsWith(prefix));\n  const phase = phaseArg ? phaseArg.slice(prefix.length) : 'none';\n  const marker = \`PV_NEUTRALINO_BOOTSTRAP phase=\${phase} neutralino=\${window.Neutralino ? 'yes' : 'no'} args=\${args.length}\`;\n  console.error(marker);\n  if (phase !== 'write' && phase !== 'none') return;\n  const title = \`Pikachu Volleyball [PV_SMOKE injector=yes phase=\${phase} neutralino=\${window.Neutralino ? 'yes' : 'no'} args=\${args.length}]\`;\n  const mark = () => {\n    document.title = title;\n  };\n  mark();\n  window.addEventListener('DOMContentLoaded', mark, { once: true });\n  window.addEventListener('load', mark, { once: true });\n})();\n`;
   fs.writeFileSync(
     path.join(RESOURCES, 'neutralino-smoke-preload.js'),
-    `${smokeBootstrap}\n${preload}\n${smokeProbe}`
+    `${smokeBootstrap}\n${preload}\n${smokeProbe}\n${externalLinkProbe}\n${hostNavigationProbe}`
   );
 
   const smokeConfig = JSON.parse(JSON.stringify(productionConfig));

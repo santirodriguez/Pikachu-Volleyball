@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Version 3 is a staged desktop-runtime migration built on the stable Pikachu Volleyball 2.1 product state. The migration must preserve gameplay and web behavior while allowing the desktop implementation to change behind explicit validation gates.
+Version 3 is a staged desktop-runtime migration built on the stable Pikachu Volleyball 2.1 product state. The migration preserves gameplay and web behavior while desktop infrastructure changes behind explicit validation gates.
 
 The frozen source baseline is `main` commit `d7735b13654904a5b48a0c2d1217c8b8507a8409` (Pikachu Volleyball 2.1.0).
 
@@ -13,98 +13,77 @@ The frozen source baseline is `main` commit `d7735b13654904a5b48a0c2d1217c8b8507
 - `v3-<task>`: focused task branches targeting `v3`.
 - Final promotion: `v3` -> `main`, only after a separately approved release gate.
 
-Every task branch must start from the current verified `v3` head unless a task explicitly requires another base. Merge, release, tag, deployment, repository rename, and production publication remain separate actions requiring explicit authorization.
+Every task branch starts from the current verified `v3` head unless a task explicitly requires another base. Merge, release, tag, deployment, repository rename, and publication remain separate actions requiring explicit authorization.
 
 ## Preservation contract
 
-Unless an approved phase explicitly changes a requirement, v3 must preserve the accepted 2.1 behavior recorded in `docs/v2.1-preservation-baseline.md`, including:
+Unless an approved phase explicitly changes a requirement, v3 preserves the accepted 2.1 behavior recorded in `docs/v2.1-preservation-baseline.md`, including:
 
 - physics, collision equations, AI decisions, scoring rules, and historical game-state timing;
 - 25 FPS normal simulation and 5 FPS slow motion behavior;
 - intro, menu, inactivity, match, round, game-end, quick-rematch, and practice flows;
 - current default controls, remapping, settings persistence, audio, graphics, and theme behavior;
 - all five production locales and browser/PWA behavior;
-- startup ordering and first-frame observability semantics where the desktop runtime still exposes equivalent checkpoints;
-- desktop security properties and restricted external navigation during any phase that still uses Electron.
+- startup and first-frame observability semantics where the active desktop runtime exposes equivalent checkpoints;
+- Electron security properties and restricted external navigation while Electron remains present.
 
 Migration work may reorganize ownership and replace desktop infrastructure, but it must not silently change user-visible or simulation behavior.
 
-## Phase 0 - Foundation and regression baseline
+## Program roadmap
 
-Goal: create the v3 integration line and improve regression evidence before desktop-runtime changes begin.
+- Phase 0 — Foundation and regression baseline — complete
+- Phase 1 — Neutralino compatibility spike — complete (`NEUTRALINO_GO`)
+- Phase 2 — Desktop platform boundary — complete (`NEUTRALINO_SECURITY_GO`)
+- Phase 3 — Production Neutralino parity
+- Phase 4 — Electron retirement
+- Phase 5 — Linux distribution
+- Phase 6 — Internal rebranding
+- Phase 7 — Custom brand assets
+- Phase 8 — Classic / Enhanced presentation boundary
+- Phase 9 — Enhanced presentation
+- Phase 10 — Fine payload optimization
+- Phase 11 — Release readiness
+- Phase 12 — Final promotion / publication
 
-Deliverables:
+Completing a phase authorizes neither the next phase nor any merge, release, deployment, or publication action.
 
-- establish `v3` and the `v3-<task>` branch model;
-- retarget pull-request CI to `v3`;
-- freeze the exact 2.1 source, build, package, and startup evidence;
-- add material characterization coverage for physics, AI, timing, and lifecycle transitions;
-- keep package version `2.1.0` and make no Electron, gameplay, visual, asset, or branding changes.
+## Desktop responsibility ownership
 
-Exit gate:
+The desktop migration keeps application-facing capability deliberately narrow:
 
-- PR quality checks pass on the exact Phase 0 head;
-- the branch diff is limited to repository policy, CI, tests, and migration/baseline documentation;
-- `main` remains unchanged;
-- the Phase 0 PR is explicitly approved and merged into `v3`.
+| Responsibility | Owner |
+|---|---|
+| Desktop detection, runtime identity, application-initiated Quit | Renderer-facing application capability |
+| External-link validation/opening, navigation restrictions, renderer native permissions, Electron webPreferences | Host-owned security/navigation policy |
+| Electron development menu and inspector access | Development-only tooling |
+| Startup metrics, Neutralino probes, artifact-size reports, Linux smoke harnesses | Validation/measurement tooling |
 
-## Phase 1 - Desktop runtime boundary
+The common renderer contract is limited to `pvDesktop.isDesktop`, `pvDesktop.runtime`, and `pvDesktop.quit()`. Host navigation policy is not forced into that contract merely for runtime symmetry.
 
-Goal: define the smallest runtime-independent boundary required to host the existing web/game application in a replacement desktop shell.
+## Phase 2 accepted Neutralino boundary
 
-Expected work:
+Phase 2 completed with `NEUTRALINO_SECURITY_GO`. The accepted Linux candidate is Neutralino `6.9.0` rebuilt from pinned upstream commit `2cec764ac5e3ccc5b1b44d046d6e6d6c85c3099e` with the deterministic WebKitGTK host-navigation patch stored in the repository.
 
-- inventory Electron-specific assumptions and IPC/navigation/security behavior;
-- define runtime-neutral interfaces for the narrow desktop capabilities the renderer actually consumes;
-- preserve the current web build and game runtime unchanged where practical;
-- add equivalence tests before replacing Electron behavior.
+The trusted Neutralino desktop boundary consists of the patched native WebKitGTK navigation policy plus the Linux native external-link helper:
 
-Gate: no Electron removal or replacement is authorized merely by Phase 0. The concrete runtime choice and implementation require a separately reviewed Phase 1 blueprint.
+- top-level same-window navigation is host-owned and must not allow renderer-controlled navigation to leave trusted application content;
+- cross-origin navigation candidates are denied in the main WebView and may be forwarded only through the trusted external-opening path;
+- the native external-link helper performs final URL parsing and allowlist enforcement before invoking `xdg-open` directly without a shell;
+- unrestricted `Neutralino.os.open` remains unavailable to renderer JavaScript;
+- `extensions.dispatch` is the narrow renderer-to-helper IPC path, with `extensions.getStats` retained because Neutralino 6.9.0 requires it internally for extension dispatch;
+- Electron remains present with its existing trusted navigation and renderer-isolation properties.
 
-## Phase 2 - Replacement desktop runtime
+The host-owned same-window navigation restriction is a required security property of the accepted Neutralino path, not a smoke-only workaround or renderer-side convention.
 
-Goal: implement the approved desktop runtime behind the Phase 1 boundary while preserving the 2.1 application behavior.
+## Current migration gate
 
-Security requirement:
+Phase 2 is complete. Phase 3 is responsible for productionizing the accepted Neutralino candidate, including packaging integration, runtime provenance, reproducible patched-runtime building, maintenance of the pinned upstream commit and deterministic patch, and production parity around the trusted native helper and host-navigation boundary.
 
-- Production Neutralino external-link handling must not expose unrestricted `os.open` to renderer JavaScript. The URL policy must be enforced at a trustworthy boundary, or the native capability must remain unavailable.
-- The Phase 1 compatibility spike intentionally leaves final production external-link parity incomplete rather than weakening this boundary. Phase 2 must implement and validate an equivalent trustworthy external-link policy before Electron can be removed.
-
-Expected validation:
-
-- regression/characterization suite;
-- production web build and all locale outputs;
-- security/navigation behavior;
-- desktop startup and first usable frame/menu evidence;
-- real Linux artifact and smoke validation.
-
-## Phase 3 - Packaging and operational hardening
-
-Goal: make the replacement runtime reproducible and release-ready.
-
-Expected work:
-
-- deterministic packaging and artifact naming;
-- package-content and size reporting;
-- startup metrics comparable to the frozen 2.1 evidence where semantics are equivalent;
-- dependency and security checks appropriate to the replacement runtime;
-- migration cleanup only after replacement behavior is proven.
-
-## Phase 4 - Release readiness and promotion
-
-Goal: prepare a stable v3 candidate without publishing it prematurely.
-
-Required gates:
-
-- full automated validation on the exact candidate head;
-- real Linux artifact smoke test;
-- preservation review against the frozen 2.1 baseline;
-- documentation/release notes/version changes reviewed as a separate release-preparation step;
-- explicit authorization for the final `v3` -> `main` promotion.
+Phase 3 does not authorize Electron retirement. Electron retirement remains Phase 4 and requires its own approved gate.
 
 ## Publication rule
 
-No v3 tag, GitHub release, production deployment, repository rename, or other public release action is allowed before the final release gate is explicitly approved. A phase completion or `Go` for implementation does not imply permission to publish.
+No v3 tag, GitHub release, production deployment, repository rename, or other public release action is allowed before the final release gate is explicitly approved.
 
 ## Regression evidence hierarchy
 

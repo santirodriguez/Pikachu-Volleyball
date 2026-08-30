@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { app, BrowserWindow, Menu, ipcMain, shell } = require('electron');
+const { getAllowedExternalUrl } = require('./external-link-policy.cjs');
 
 const APP_NAME = 'Pikachu Volleyball';
 const STARTUP_METRICS_FILE = process.env.PV_STARTUP_METRICS_FILE || null;
@@ -9,14 +10,6 @@ const PROCESS_STARTED_AT_MS = Date.now() - process.uptime() * 1000;
 const startupMarks = {
   'pv-electron-process-start': 0,
 };
-const ALLOWED_EXTERNAL_URLS = new Set([
-  'https://github.com/santirodriguez/pikachu-volleyball',
-  'https://github.com/gorisanson/pikachu-volleyball',
-]);
-const ALLOWED_WEBSITE_ORIGINS = new Set([
-  'https://santiagorodriguez.com',
-  'https://www.santiagorodriguez.com',
-]);
 
 if (STARTUP_USER_DATA_DIR) {
   app.setPath('userData', STARTUP_USER_DATA_DIR);
@@ -27,16 +20,6 @@ let mainWindow = null;
 
 function markStartup(name) {
   startupMarks[name] = Number((Date.now() - PROCESS_STARTED_AT_MS).toFixed(2));
-}
-
-function isAllowedExternalUrl(urlString) {
-  try {
-    const url = new URL(urlString);
-    if (ALLOWED_WEBSITE_ORIGINS.has(url.origin)) return true;
-    return ALLOWED_EXTERNAL_URLS.has(`${url.origin}${url.pathname}`);
-  } catch {
-    return false;
-  }
 }
 
 function isLocalAppUrl(urlString) {
@@ -153,6 +136,13 @@ async function runStartupMeasurement() {
   app.quit();
 }
 
+function openAllowedExternalUrl(urlString) {
+  const allowedUrl = getAllowedExternalUrl(urlString);
+  if (!allowedUrl) return false;
+  shell.openExternal(allowedUrl);
+  return true;
+}
+
 function createMainWindow() {
   markStartup('pv-window-create-start');
   mainWindow = new BrowserWindow({
@@ -180,18 +170,14 @@ function createMainWindow() {
   loadEnglishApplication();
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (isAllowedExternalUrl(url)) {
-      shell.openExternal(url);
-    }
+    openAllowedExternalUrl(url);
     return { action: 'deny' };
   });
 
   mainWindow.webContents.on('will-navigate', (event, url) => {
     if (isLocalAppUrl(url)) return;
     event.preventDefault();
-    if (isAllowedExternalUrl(url)) {
-      shell.openExternal(url);
-    }
+    openAllowedExternalUrl(url);
   });
 
   mainWindow.webContents.on('did-finish-load', () => {

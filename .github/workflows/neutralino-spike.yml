@@ -4,15 +4,23 @@ on:
   push:
     branches:
       - v3-phase1-neutralino-spike
+      - v3-phase2-desktop-platform-boundary
   pull_request:
     branches:
       - v3
     paths:
       - '.github/workflows/neutralino-spike.yml'
+      - 'desktop/external-link-policy.cjs'
       - 'desktop/neutralino-spike/**'
+      - 'scripts/build-neutralino-external-link-extension.sh'
+      - 'scripts/build-neutralino-host-navigation-runtime.sh'
       - 'scripts/prepare-neutralino-spike.cjs'
       - 'scripts/report-neutralino-spike.cjs'
+      - 'scripts/run-neutralino-external-link-smoke.sh'
       - 'scripts/run-neutralino-fedora-smoke.sh'
+      - 'scripts/run-neutralino-host-navigation-smoke.sh'
+      - 'scripts/validate-neutralino-external-link-extension.cjs'
+      - 'test/desktop_platform_boundary.test.cjs'
       - 'test/neutralino_spike.test.cjs'
       - 'src/**'
       - 'webpack*.js'
@@ -30,7 +38,7 @@ concurrency:
 jobs:
   spike:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
 
     steps:
       - name: Check out repository
@@ -54,9 +62,75 @@ jobs:
       - name: Prepare production web output for Neutralino
         run: node scripts/prepare-neutralino-spike.cjs
 
-      - name: Fetch pinned Neutralino runtime
+      - name: Build trusted external-link extension
+        run: ./scripts/build-neutralino-external-link-extension.sh
+
+      - name: Validate Electron and Neutralino external-link policy equivalence
+        run: node scripts/validate-neutralino-external-link-extension.cjs
+
+      - name: Fetch pinned Neutralino runtime and client
         working-directory: .neutralino-spike
         run: npx -y @neutralinojs/neu@11.7.2 update
+
+      - name: Build patched host-navigation Neutralino runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          diagnostic_dir=".neutralino-spike/diagnostics"
+          diagnostic_log="$diagnostic_dir/host-navigation-runtime-build.log"
+          mkdir -p "$diagnostic_dir"
+          : > "$diagnostic_log"
+
+          set +e
+          {
+            printf 'PV_HOST_NAV_BUILD_HEAD=%s\n' "$GITHUB_SHA"
+            docker run --rm \
+              -v "$PWD:/workspace" \
+              -w /workspace \
+              ubuntu:20.04 \
+              bash -lc '
+                set -euxo pipefail
+                export DEBIAN_FRONTEND=noninteractive
+                printf "\n=== STAGE: dependency installation ===\n"
+                apt-get update
+                apt-get install -y -f \
+                  ca-certificates \
+                  git \
+                  g++ \
+                  pkg-config \
+                  cmake \
+                  ninja-build \
+                  libgtk-3-dev \
+                  libwebkit2gtk-4.0-dev
+                printf "\n=== STAGE: patched runtime build script ===\n"
+                /workspace/scripts/build-neutralino-host-navigation-runtime.sh \
+                  /workspace/.neutralino-spike/bin/neutralino-linux_x64
+              '
+            docker_status=$?
+            if [[ "$docker_status" -ne 0 ]]; then
+              printf 'PV_HOST_NAV_DOCKER_EXIT_CODE=%s\n' "$docker_status"
+              exit "$docker_status"
+            fi
+
+            printf '\n=== STAGE: ownership correction ===\n'
+            sudo chown "$(id -u):$(id -g)" \
+              .neutralino-spike/bin/neutralino-linux_x64 \
+              .neutralino-spike/neutralino-host-navigation-runtime.json
+          } 2>&1 | tee "$diagnostic_log"
+          build_status=${PIPESTATUS[0]}
+          set -e
+
+          printf 'PV_HOST_NAV_BUILD_EXIT_CODE=%s\n' "$build_status" | tee -a "$diagnostic_log"
+          exit "$build_status"
+
+      - name: Upload patched-runtime build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: neutralino-host-navigation-build-diagnostics
+          path: .neutralino-spike/diagnostics/host-navigation-runtime-build.log
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Build embedded Neutralino artifacts
         working-directory: .neutralino-spike
@@ -89,11 +163,18 @@ jobs:
                 gstreamer1-plugins-base \
                 gstreamer1-plugins-good \
                 dbus-x11 \
+                python3 \
                 shadow-utils
               useradd -m pvsmoke
               chmod -R a+rwX /workspace/.neutralino-spike
               runuser -u pvsmoke -- \
                 /workspace/scripts/run-neutralino-fedora-smoke.sh \
+                /workspace/.neutralino-spike
+              runuser -u pvsmoke -- \
+                /workspace/scripts/run-neutralino-external-link-smoke.sh \
+                /workspace/.neutralino-spike
+              runuser -u pvsmoke -- \
+                /workspace/scripts/run-neutralino-host-navigation-smoke.sh \
                 /workspace/.neutralino-spike
             '
 
@@ -105,6 +186,12 @@ jobs:
           mkdir -p neutralino-spike-artifact
           if [[ -d .neutralino-spike/fedora-smoke ]]; then
             cp -R .neutralino-spike/fedora-smoke neutralino-spike-artifact/
+          fi
+          if [[ -d .neutralino-spike/fedora-external-link-smoke ]]; then
+            cp -R .neutralino-spike/fedora-external-link-smoke neutralino-spike-artifact/
+          fi
+          if [[ -d .neutralino-spike/fedora-host-navigation-smoke ]]; then
+            cp -R .neutralino-spike/fedora-host-navigation-smoke neutralino-spike-artifact/
           fi
 
       - name: Upload experimental artifact
