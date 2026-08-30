@@ -16,22 +16,85 @@
     "lint": "node ./node_modules/eslint/bin/eslint.js \"src/resources/js/**/*.{js,cjs}\" \"test/**/*.cjs\" \"desktop/**/*.js\" \"webpack.*.js\"",
     "quality:check": "npm run lint && npm run test:unit && npm run build:web"
   },
-  "repository": {"type": "git", "url": "git+https://github.com/santirodriguez/pikachu-volleyball.git"},
-  "keywords": ["game"],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/santirodriguez/pikachu-volleyball.git"
+  },
+  "keywords": [
+    "game"
+  ],
   "author": "Kyutae Lee",
   "license": "UNLICENSED",
-  "bugs": {"url": "https://github.com/santirodriguez/pikachu-volleyball/issues"},
+  "bugs": {
+    "url": "https://github.com/santirodriguez/pikachu-volleyball/issues"
+  },
   "homepage": "https://github.com/santirodriguez/pikachu-volleyball#readme",
   "devDependencies": {
-    "clean-webpack-plugin": "^4.0.0", "copy-webpack-plugin": "^11.0.0", "electron": "^35.1.5", "electron-builder": "26.15.7", "eslint": "^8.17.0", "eslint-plugin-prettier": "^4.0.0", "html-webpack-plugin": "^5.5.0", "prettier": "^2.6.2", "webpack": "^5.76.0", "webpack-cli": "^4.9.2", "webpack-dev-server": "^4.9.1", "webpack-merge": "^5.8.0", "workbox-webpack-plugin": "^6.5.3"
+    "clean-webpack-plugin": "^4.0.0",
+    "copy-webpack-plugin": "^11.0.0",
+    "electron": "^35.1.5",
+    "electron-builder": "26.15.7",
+    "eslint": "^8.17.0",
+    "eslint-plugin-prettier": "^4.0.0",
+    "html-webpack-plugin": "^5.5.0",
+    "prettier": "^2.6.2",
+    "webpack": "^5.76.0",
+    "webpack-cli": "^4.9.2",
+    "webpack-dev-server": "^4.9.1",
+    "webpack-merge": "^5.8.0",
+    "workbox-webpack-plugin": "^6.5.3"
   },
   "dependencies": {
-    "@pixi/canvas-display": "^6.4.2", "@pixi/canvas-prepare": "^6.4.2", "@pixi/canvas-renderer": "^6.4.2", "@pixi/canvas-sprite": "^6.4.2", "@pixi/constants": "^6.4.2", "@pixi/core": "^6.4.2", "@pixi/display": "^6.4.2", "@pixi/loaders": "^6.4.2", "@pixi/prepare": "^6.4.2", "@pixi/settings": "^6.4.2", "@pixi/sound": "^4.2.1", "@pixi/sprite": "^6.4.2", "@pixi/sprite-animated": "^6.4.2", "@pixi/spritesheet": "^6.4.2", "@pixi/ticker": "^6.4.2"
+    "@pixi/canvas-display": "^6.4.2",
+    "@pixi/canvas-prepare": "^6.4.2",
+    "@pixi/canvas-renderer": "^6.4.2",
+    "@pixi/canvas-sprite": "^6.4.2",
+    "@pixi/constants": "^6.4.2",
+    "@pixi/core": "^6.4.2",
+    "@pixi/display": "^6.4.2",
+    "@pixi/loaders": "^6.4.2",
+    "@pixi/prepare": "^6.4.2",
+    "@pixi/settings": "^6.4.2",
+    "@pixi/sound": "^4.2.1",
+    "@pixi/sprite": "^6.4.2",
+    "@pixi/sprite-animated": "^6.4.2",
+    "@pixi/spritesheet": "^6.4.2",
+    "@pixi/ticker": "^6.4.2"
   },
   "main": "desktop/main.js",
   "build": {
-    "appId": "com.santirodriguez.pikachu-volleyball", "productName": "Pikachu Volleyball", "artifactName": "Pikachu-Volleyball-${version}-${arch}.${ext}", "compression": "normal", "electronLanguages": ["en-US"], "afterPack": "./scripts/prune-packaged-node-modules.cjs", "directories": {"output": "release"}, "files": ["dist/**/*", "!dist/**/*.map", "desktop/**/*", "package.json"],
-    "linux": {"target": ["AppImage"], "category": "Game", "icon": "src/resources/assets/images/IDI_PIKAICON-1_gap_filled_512.png"},
-    "toolsets": {"appimage": "1.0.2"}, "appImage": {"compression": "zstd", "executableArgs": ["--enable-sandbox"]}
+    "appId": "com.santirodriguez.pikachu-volleyball",
+    "productName": "Pikachu Volleyball",
+    "artifactName": "Pikachu-Volleyball-${version}-${arch}.${ext}",
+    "compression": "normal",
+    "electronLanguages": [
+      "en-US"
+    ],
+    "afterPack": "./scripts/prune-packaged-node-modules.cjs",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "!dist/**/*.map",
+      "desktop/**/*",
+      "package.json"
+    ],
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "Game",
+      "icon": "src/resources/assets/images/IDI_PIKAICON-1_gap_filled_512.png"
+    },
+    "toolsets": {
+      "appimage": "1.0.2"
+    },
+    "appImage": {
+      "compression": "zstd",
+      "executableArgs": [
+        "--enable-sandbox"
+      ]
+    }
   }
 }
