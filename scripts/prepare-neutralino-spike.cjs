@@ -14,6 +14,7 @@ const REQUIRED_ASSETS = [
   path.join('resources', 'assets', 'sounds', 'bgm.mp3'),
   path.join('resources', 'assets', 'sounds', 'WAVE145_1.wav'),
 ];
+const SMOKE_ONLY = process.argv.includes('--smoke-only');
 
 function assertFile(filePath) {
   if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
@@ -34,7 +35,13 @@ function findSourceMaps(directory) {
   return matches;
 }
 
-function main() {
+function readProductionConfig() {
+  return JSON.parse(
+    fs.readFileSync(path.join(SOURCE, 'neutralino.config.json'), 'utf8')
+  );
+}
+
+function prepareProductionStage() {
   assertFile(path.join(SOURCE, 'neutralino.config.json'));
   assertFile(path.join(SOURCE, 'preload.js'));
   assertFile(path.join(SOURCE, 'smoke-probe.js'));
@@ -57,39 +64,55 @@ function main() {
   fs.mkdirSync(RESOURCES, { recursive: true });
   fs.cpSync(DIST, RESOURCES, { recursive: true });
 
-  const config = JSON.parse(
-    fs.readFileSync(path.join(SOURCE, 'neutralino.config.json'), 'utf8')
-  );
+  const config = readProductionConfig();
   fs.writeFileSync(
     path.join(STAGE, 'neutralino.config.json'),
     `${JSON.stringify(config, null, 2)}\n`
   );
+  fs.copyFileSync(
+    path.join(SOURCE, 'preload.js'),
+    path.join(RESOURCES, 'neutralino-preload.js')
+  );
 
+  process.stdout.write(
+    `Prepared production Neutralino spike staging at ${STAGE}\n`
+  );
+}
+
+function prepareSmokeStage() {
+  assertFile(path.join(STAGE, 'neutralino.config.json'));
+  assertFile(path.join(RESOURCES, 'neutralino-preload.js'));
+  assertFile(path.join(SOURCE, 'smoke-probe.js'));
+
+  const productionConfig = readProductionConfig();
   const preload = fs.readFileSync(path.join(SOURCE, 'preload.js'), 'utf8');
   const smokeProbe = fs.readFileSync(
     path.join(SOURCE, 'smoke-probe.js'),
     'utf8'
   );
-  fs.writeFileSync(path.join(RESOURCES, 'neutralino-preload.js'), preload);
   fs.writeFileSync(
     path.join(RESOURCES, 'neutralino-smoke-preload.js'),
     `${preload}\n${smokeProbe}`
   );
 
-  const smokeConfig = JSON.parse(JSON.stringify(config));
+  const smokeConfig = JSON.parse(JSON.stringify(productionConfig));
   smokeConfig.nativeAllowList = [
-    ...config.nativeAllowList,
+    ...productionConfig.nativeAllowList,
     'app.writeProcessOutput',
   ];
   smokeConfig.logging = { enabled: true, writeToLogFile: false };
   smokeConfig.modes.window.injectScript =
     '/resources/neutralino-smoke-preload.js';
   fs.writeFileSync(
-    path.join(STAGE, 'neutralino.smoke.config.json'),
+    path.join(STAGE, 'neutralino.config.json'),
     `${JSON.stringify(smokeConfig, null, 2)}\n`
   );
 
-  process.stdout.write(`Prepared Neutralino spike staging at ${STAGE}\n`);
+  process.stdout.write(`Prepared Neutralino Fedora smoke staging at ${STAGE}\n`);
 }
 
-main();
+if (SMOKE_ONLY) {
+  prepareSmokeStage();
+} else {
+  prepareProductionStage();
+}
