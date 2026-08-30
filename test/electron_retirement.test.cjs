@@ -28,8 +28,14 @@ test('Electron packages and electron-builder are absent from the supported depen
   for (const dependencyName of ['electron', 'electron-builder']) {
     assert.equal(pkg.dependencies?.[dependencyName], undefined);
     assert.equal(pkg.devDependencies?.[dependencyName], undefined);
-    assert.equal(lock.packages?.['']?.dependencies?.[dependencyName], undefined);
-    assert.equal(lock.packages?.['']?.devDependencies?.[dependencyName], undefined);
+    assert.equal(
+      lock.packages?.['']?.dependencies?.[dependencyName],
+      undefined
+    );
+    assert.equal(
+      lock.packages?.['']?.devDependencies?.[dependencyName],
+      undefined
+    );
     assert.equal(lock.packages?.[`node_modules/${dependencyName}`], undefined);
   }
 });
@@ -41,14 +47,20 @@ test('package metadata exposes only the Neutralino desktop build path', () => {
   assert.equal(pkg.build, undefined);
   assert.equal(pkg.scripts['start:desktop'], undefined);
   assert.equal(pkg.scripts['build:appimage'], undefined);
-  assert.equal(pkg.scripts['build:desktop:linux'], 'npm run build:desktop:neutralino');
+  assert.equal(
+    pkg.scripts['build:desktop:linux'],
+    'npm run build:desktop:neutralino'
+  );
   assert.equal(
     pkg.scripts['build:desktop:neutralino'],
     'bash scripts/build-neutralino-production.sh'
   );
 
   for (const command of Object.values(pkg.scripts)) {
-    assert.doesNotMatch(command, /(?:^|\s)(?:electron|electron-builder)(?:\s|$)/);
+    assert.doesNotMatch(
+      command,
+      /(?:^|\s)(?:electron|electron-builder)(?:\s|$)/
+    );
   }
 });
 
@@ -61,7 +73,9 @@ test('retired Electron and AppImage implementation files are absent', () => {
     );
   }
 
-  assert.deepEqual(fs.readdirSync(path.join(ROOT, 'desktop')).sort(), ['neutralino']);
+  assert.deepEqual(fs.readdirSync(path.join(ROOT, 'desktop')).sort(), [
+    'neutralino',
+  ]);
 });
 
 test('accepted Neutralino renderer privilege boundary remains exact', () => {
