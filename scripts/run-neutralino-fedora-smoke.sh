@@ -33,7 +33,15 @@ cleanup() {
 trap cleanup EXIT
 sleep 1
 
-runtime_args=(--res-mode=directory --path=. --url=/en/index.html?desktop=1)
+runtime_args=(
+  --res-mode=directory
+  --path=.
+  --config-file=neutralino.config.json
+  --url=/en/index.html?desktop=1
+  --window-inject-globals=true
+  --window-inject-client-library=true
+  --window-inject-script=/resources/neutralino-smoke-preload.js
+)
 
 smoke_args() {
   local phase="$1"
