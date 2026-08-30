@@ -3,7 +3,25 @@
 (() => {
   const neutralino = window.Neutralino;
   const params = new URLSearchParams(window.location.search);
-  const phase = params.get('neutralinoSmoke');
+  const args = Array.isArray(window.NL_ARGS) ? window.NL_ARGS : [];
+  const getArg = (name) => {
+    const prefix = `--${name}=`;
+    const entry = args.find((arg) => arg.startsWith(prefix));
+    return entry ? entry.slice(prefix.length) : null;
+  };
+  const phase = getArg('dev-pv-smoke-phase') || params.get('neutralinoSmoke');
+  const holdMs = Math.max(
+    0,
+    Math.min(
+      Number(
+        getArg('dev-pv-smoke-hold-ms') || params.get('neutralinoSmokeHoldMs')
+      ) || 0,
+      5000
+    )
+  );
+  const startEpochMs = Number(
+    getArg('dev-pv-smoke-start-epoch-ms') || params.get('startEpochMs')
+  );
   const persistenceKey = 'pv-neutralino-spike-persistence';
   const persistenceValue = 'phase1-v1';
   const keyboardProbe = {
@@ -62,10 +80,6 @@
 
   async function finish(report, exitCode = 0) {
     await writeReport(report);
-    const holdMs = Math.max(
-      0,
-      Math.min(Number(params.get('neutralinoSmokeHoldMs')) || 0, 5000)
-    );
     if (holdMs > 0) await delay(holdMs);
     await neutralino.app.exit(exitCode);
   }
@@ -240,7 +254,6 @@
       () => performance.getEntriesByName('pv-first-game-frame').length > 0
     );
     const firstFrame = performance.getEntriesByName('pv-first-game-frame')[0];
-    const startEpochMs = Number(params.get('startEpochMs'));
     const processStartToFirstFrameApproxMs =
       firstFrame && Number.isFinite(startEpochMs)
         ? Number(
