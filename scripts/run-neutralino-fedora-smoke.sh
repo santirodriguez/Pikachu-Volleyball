@@ -139,15 +139,9 @@ fi
 
 xdotool windowfocus --sync "$keyboard_window_id"
 sleep 0.8
-xdotool keydown --window "$keyboard_window_id" d
-xdotool keydown --window "$keyboard_window_id" r
-xdotool keydown --window "$keyboard_window_id" Right
-xdotool keydown --window "$keyboard_window_id" Up
+xdotool keydown d keydown r keydown Right keydown Up
 sleep 0.35
-xdotool keyup --window "$keyboard_window_id" Up
-xdotool keyup --window "$keyboard_window_id" Right
-xdotool keyup --window "$keyboard_window_id" r
-xdotool keyup --window "$keyboard_window_id" d
+xdotool keyup Up keyup Right keyup r keyup d
 
 if ! wait "$keyboard_job"; then
   cat "$output_dir/keyboard.log" >&2
