@@ -3,7 +3,6 @@ set -euo pipefail
 
 stage="${1:-.neutralino-spike}"
 cd "$stage"
-stage_root="$(pwd)"
 
 binary="./bin/neutralino-linux_x64"
 output_dir="fedora-smoke"
@@ -37,7 +36,6 @@ sleep 1
 runtime_args=(
   --res-mode=directory
   --path=.
-  "--config-file=${stage_root}/neutralino.config.json"
   --url=/en/index.html?desktop=1
   --window-inject-globals=true
   --window-inject-client-library=true
