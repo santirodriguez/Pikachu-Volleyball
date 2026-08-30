@@ -37,7 +37,7 @@ Migration work may reorganize ownership and replace desktop infrastructure, but 
 - Phase 1 — Neutralino compatibility spike — complete (`NEUTRALINO_GO`)
 - Phase 2 — Desktop platform boundary — complete (`NEUTRALINO_SECURITY_GO`)
 - Phase 3 — Production Neutralino parity — complete and merged in PR #83
-- Phase 4 — Electron retirement — in progress on `v3-phase4-electron-retirement`
+- Phase 4 — Electron retirement — implementation and server-side validation complete on `v3-phase4-electron-retirement`; merge pending
 - Phase 5 — Linux distribution
 - Phase 6 — Internal rebranding
 - Phase 7 — Custom brand assets
@@ -142,13 +142,35 @@ The retirement scope is:
 - keep the reproducibility, exact-artifact, Fedora 44/WebKitGTK, persistence, input, audio, game-flow, Quit, external-link and adversarial navigation gates;
 - preserve the frozen 2.1 Electron/AppImage baseline as historical comparison evidence rather than deleting or rewriting it.
 
-The Neutralino runtime remains `6.9.0`; the pinned upstream runtime source, repository-owned WebKitGTK host-navigation patch, native external-link helper, application ID, production allowlist and four-file artifact contract remain unchanged.
+The Neutralino runtime remains `6.9.0`; the pinned upstream runtime source at `2cec764ac5e3ccc5b1b44d046d6e6d6c85c3099e`, repository-owned WebKitGTK host-navigation patch, native external-link helper, application ID, production allowlist and four-file runnable bundle contract remain unchanged.
 
-Phase 4 does not choose the final Linux distribution format. The historical 2.1 AppImage size of `97,094,772` bytes (`92.60 MiB`) remains a directional baseline only. Final installer/AppImage design, dependency bundling and end-user distribution policy belong to Phase 5.
+### Phase 4 implementation evidence
+
+The exact implementation head `629d02857db90fcbf184ec9e3dd868d32b129c98` passed the complete server-side `Neutralino Desktop Production` gate in GitHub Actions run `33332976254` before this closeout documentation commit.
+
+Retirement evidence on that head includes:
+
+- `electron` and `electron-builder` are absent from direct dependencies and the regenerated lockfile; direct development dependencies dropped from 13 to 11 and lockfile package entries dropped from 582 to 435;
+- `npm ci` installed 434 packages and audited 435 packages; the production dependency audit reported no blocking vulnerability;
+- the Electron main/preload/configuration path, Electron AppImage builder/launcher/pruning/metrics scripts and Electron release workflow are absent, and no supported desktop command invokes Electron, `electron-builder`, or the retired AppImage build path;
+- `quality:check` passed with all 63 Node tests, including preservation/characterization, desktop-boundary, Neutralino production and explicit Electron-retirement assertions; the five production locale web/PWA outputs remained part of the build gate;
+- two independent clean production builds were byte-identical across all compared layers;
+- the production tarball was `3,593,332` bytes (about `3.43 MiB`) with SHA-256 `fdfcee79477a7b3cd783ee1a07314593aa9aea638b26eb758aefa80fb7e2780a`;
+- the patched Neutralino runtime was `831,976` bytes with SHA-256 `323292ecea71af9d9ce6deb06cd7b9178d3ace661d6a536effdb468fbe6f13cf`;
+- the native external-link helper was `14,648` bytes with SHA-256 `afa1b13dced42ceb101265376dbed08c57591c236f43f09261b057947d7aea3d`;
+- real Fedora 44/WebKitGTK validation passed runtime startup, default/minimum window behavior, persistence across restart, renderer bridge shape, keyboard and touch input, original-style local/round/AI flows, pre-gesture audio behavior, legal Quit, approved external-link opening, and adversarial navigation attempts;
+- renderer privilege checks preserved the exact `app.exit`, `extensions.dispatch`, `extensions.getStats` allowlist while keeping `Neutralino.os.open` and `app.writeProcessOutput` unavailable;
+- the runnable Neutralino artifact contains no Electron runtime, `app.asar`, Electron preload/main process, or Chromium `chrome-sandbox` payload.
+
+The frozen 2.1 Electron AppImage remains `97,094,772` bytes (`92.60 MiB`). Comparing it directionally with the Phase 4 production tarball shows a large reduction in the repository-produced desktop payload, but this is not an apples-to-apples final distribution comparison: Phase 5 still owns final Linux packaging, dependency bundling, installer/AppImage decisions and end-user distribution footprint.
+
+The final Phase 4 closeout commit must be validated again because provenance and final artifact hashes are source-SHA-specific. As in Phase 3, the exact final closeout SHA, final-run artifact hashes and exact-head Codex result belong in the pull-request closeout evidence rather than in a tracked file that would need another commit to describe itself.
+
+Phase 4 does not choose the final Linux distribution format. Final installer/AppImage design, dependency bundling and end-user distribution policy belong to Phase 5.
 
 ## Current migration gate
 
-Phase 3 is merged and complete. Phase 4 implementation is isolated on `v3-phase4-electron-retirement` and must pass exact-head server-side validation plus a fresh exact-head Codex review before it is ready for a separate merge decision.
+Phase 3 is merged and complete. Phase 4 implementation and its pre-closeout server-side validation are complete on `v3-phase4-electron-retirement`. The closeout documentation commit still requires its own exact-head server-side validation and a fresh exact-head Codex review before the branch is ready for a separate merge decision.
 
 Phase 4 does not authorize Phase 5, a merge, a release, a tag, publication, repository rename, deployment or any change to `main`.
 
