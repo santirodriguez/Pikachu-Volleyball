@@ -5,7 +5,7 @@
   "private": true,
   "scripts": {
     "test": "npm run quality:check",
-    "test:unit": "node --test",
+    "test:unit": "node --test test/*.test.cjs test/neutralino/*.test.cjs",
     "start": "webpack serve --config webpack.dev.js",
     "build": "npm run build:web",
     "build:web": "webpack --config webpack.prod.js",
