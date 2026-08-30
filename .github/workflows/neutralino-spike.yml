@@ -65,6 +65,9 @@ jobs:
       - name: Report Linux artifact metrics
         run: node scripts/report-neutralino-spike.cjs
 
+      - name: Prepare Fedora smoke instrumentation
+        run: node scripts/prepare-neutralino-spike.cjs --smoke-only
+
       - name: Run Fedora 44 WebKitGTK smoke
         shell: bash
         run: |
