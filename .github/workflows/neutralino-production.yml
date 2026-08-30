@@ -67,6 +67,7 @@ jobs:
         with:
           name: neutralino-production-reproducibility
           path: .neutralino-reproducibility/
+          include-hidden-files: true
           if-no-files-found: warn
           retention-days: 14
       - name: Verify artifact checksum and contents

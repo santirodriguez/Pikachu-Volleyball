@@ -21,7 +21,12 @@ Validation-only probes live under `test/neutralino/` and are not copied into the
 - Neutralino client: `6.9.0`.
 - Neutralino CLI: `@neutralinojs/neu@11.7.2`.
 - Neutralino upstream source commit: `2cec764ac5e3ccc5b1b44d046d6e6d6c85c3099e`.
+- Linux build container: `ubuntu:focal-20250404@sha256:c664f8f86ed5a386b0a340d981b8f81714e21a8b9c73f658c4bea56aa179d54a` on `linux/amd64`.
+- Ubuntu package snapshot: `20250404T000000Z`.
+- Runtime and native helper use the same GCC/G++/binutils and development packages resolved from that pinned snapshot. Their exact package versions, compiler identities, builder image, platform and snapshot are recorded in build provenance.
 - Repository-owned host-navigation patch and native external-link helper are hashed into build provenance.
+
+The runner CA bundle is mounted only to bootstrap TLS verification while reaching the pinned signed Ubuntu snapshot; it is removed from the container APT override before compilation and is not packaged into the candidate.
 
 Build the experimental production-parity candidate with:
 
@@ -29,7 +34,26 @@ Build the experimental production-parity candidate with:
 npm run build:desktop:neutralino
 ```
 
-The build records the source commit, pinned runtime inputs, patch/runtime/helper hashes, sizes, artifact contents, and checksums.
+The build records the source commit, pinned runtime inputs, patch/runtime/helper hashes, sizes, artifact contents, checksums and resolved build-toolchain identities.
+
+## Reproducibility gate
+
+The Phase 3 Actions gate proves reproducibility with two independent clean builds from the exact same source commit. The harness creates two detached temporary Git worktrees at that SHA. Each worktree independently runs `npm ci` and the complete `build:desktop:neutralino` path using the pinned builder described above; build outputs and dependency trees are not shared between the two worktrees.
+
+Each build captures SHA-256 and size for these layers, in order:
+
+1. raw patched Neutralino runtime;
+2. native external-link helper;
+3. embedded production Neutralino binary;
+4. `provenance.json`;
+5. `SHA256SUMS`;
+6. final `.tar.gz` artifact.
+
+The gate succeeds only when all required components, including the final tarball, are byte-identical across both builds. Resource content and metadata trees are also recorded. If a binary differs, the evidence includes ELF note/build-ID and section diagnostics; text-manifest differences include the first differing line; all binary differences include the first differing byte offset. The first divergent required component is reported explicitly rather than reducing the failure to two final tar hashes.
+
+Reproducibility evidence is stored outside the temporary worktrees and uploaded with failure-safe Actions steps, including hidden evidence files. Build-stage status and real exit codes are persisted. The first successful candidate is copied to the workflow workspace before the second build begins, so a later build or validation failure does not discard the exact available candidate and its diagnostics.
+
+Final archive creation is deterministic: entries are name-sorted, archive ownership is normalized to numeric root, mtimes are normalized to the Unix epoch, and gzip timestamp/name metadata is disabled with `gzip -n`.
 
 ## Identity and persistence
 
@@ -80,6 +104,8 @@ If required GTK/WebKitGTK shared libraries are absent, the executable cannot sta
 
 ## Validation boundary
 
-GitHub Actions runs the repository production dependency audit, full `quality:check`, production web/PWA build for all five locales, Neutralino static tests, a clean launch of the extracted embedded artifact, and Fedora 44/WebKitGTK parity/security probes. The exact embedded binary is then reused for the validation overlay so the deeper tests do not silently exercise a different development runtime.
+GitHub Actions runs the repository production dependency audit, full `quality:check`, production web/PWA build for all five locales, Neutralino static tests, two-build component-level reproducibility gate, checksum/exact-content verification, a clean launch of the extracted embedded artifact, and Fedora 44/WebKitGTK parity/security probes. The exact embedded binary is then reused for the validation overlay so the deeper tests do not silently exercise a different development runtime.
+
+The Fedora validation records named stage transitions and the real container exit code. Production-build diagnostics, reproducibility evidence, Fedora parity/security evidence, and the available production candidate are uploaded with failure-safe behavior so an ordinary validation failure remains diagnosable server-side.
 
 Startup and memory observations are diagnostic only. They must not be treated as Neutralino-versus-Electron performance claims unless measurement boundaries are made directly comparable.
