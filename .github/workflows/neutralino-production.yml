@@ -375,7 +375,7 @@ jobs:
             apt-get update
             apt-get install -y --no-install-recommends "/workspace/linux-distribution/${PV_PACKAGE_NAME}_${PV_PACKAGE_VERSION}_${PV_DEB_ARCH}.deb"
             apt-get install -y --no-install-recommends xvfb openbox xdotool procps desktop-file-utils dbus-x11 passwd
-            dpkg-query -W -f="${Package} ${Version} ${Architecture}\n" "$PV_PACKAGE_NAME"
+            dpkg-query -W "$PV_PACKAGE_NAME"
             test -x "/usr/bin/$PV_LAUNCHER_NAME"
             test -x "$PV_INSTALL_DIR/$PV_BINARY_NAME"
             test -x "$PV_INSTALL_DIR/extensions/$PV_EXTENSION_NAME"
