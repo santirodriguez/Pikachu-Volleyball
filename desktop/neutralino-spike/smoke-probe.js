@@ -164,7 +164,7 @@
     document.querySelector('[data-modal-action="accept"]')?.click();
     const closed = await waitFor(() => {
       const overlay = document.getElementById('pv-menu-overlay');
-      return Boolean(overlay?.hidden);
+      return !overlay || overlay.hidden;
     });
     window.removeEventListener('pv-pause-changed', onPause);
 
