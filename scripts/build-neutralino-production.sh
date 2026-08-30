@@ -7,6 +7,12 @@ cd "$root"
 builder_image="ubuntu:focal-20250404@sha256:c664f8f86ed5a386b0a340d981b8f81714e21a8b9c73f658c4bea56aa179d54a"
 builder_platform="linux/amd64"
 apt_snapshot="20250404T000000Z"
+host_ca_bundle="/etc/ssl/certs/ca-certificates.crt"
+
+if [[ ! -s "$host_ca_bundle" ]]; then
+  echo "Missing host CA bundle required to bootstrap the pinned Ubuntu snapshot: $host_ca_bundle" >&2
+  exit 1
+fi
 
 npm run build:web
 node scripts/prepare-neutralino-production.cjs
@@ -20,6 +26,7 @@ printf 'PV_NEUTRALINO_PRODUCTION_BUILD_HEAD=%s\n' "${PV_SOURCE_SHA:-${GITHUB_SHA
 printf 'PV_NEUTRALINO_BUILDER_IMAGE=%s\n' "$builder_image"
 printf 'PV_NEUTRALINO_BUILDER_PLATFORM=%s\n' "$builder_platform"
 printf 'PV_NEUTRALINO_APT_SNAPSHOT=%s\n' "$apt_snapshot"
+printf 'PV_NEUTRALINO_TLS_BOOTSTRAP_CA=%s\n' "$host_ca_bundle"
 
 (
   cd .neutralino-production
@@ -32,13 +39,16 @@ set +e
     -e PV_NEUTRALINO_BUILDER_IMAGE="$builder_image" \
     -e PV_NEUTRALINO_BUILDER_PLATFORM="$builder_platform" \
     -e PV_NEUTRALINO_APT_SNAPSHOT="$apt_snapshot" \
+    --mount "type=bind,src=$host_ca_bundle,dst=/tmp/pv-host-ca.crt,readonly" \
     -v "$PWD:/workspace" -w /workspace "$builder_image" bash -lc '
       set -euxo pipefail
       export DEBIAN_FRONTEND=noninteractive
-      sed -i "s/^deb /deb [snapshot=yes] /" /etc/apt/sources.list
-      printf "APT::Snapshot \"%s\";\n" "$PV_NEUTRALINO_APT_SNAPSHOT" > /etc/apt/apt.conf.d/50snapshot
-      apt-get update
+      sed -i "s/^deb /deb [snapshot=$PV_NEUTRALINO_APT_SNAPSHOT] /" /etc/apt/sources.list
+      printf "Acquire::https::CaInfo \"/tmp/pv-host-ca.crt\";\n" > /etc/apt/apt.conf.d/49pv-bootstrap-ca
+      apt-get update 2>&1 | tee /tmp/pv-apt-update.log
+      grep -F "snapshot.ubuntu.com/ubuntu/$PV_NEUTRALINO_APT_SNAPSHOT" /tmp/pv-apt-update.log >/dev/null
       apt-get install -y -f ca-certificates git gcc g++ binutils pkg-config cmake ninja-build libgtk-3-dev libwebkit2gtk-4.0-dev
+      rm -f /etc/apt/apt.conf.d/49pv-bootstrap-ca
 
       export CC=gcc
       export CXX=g++
