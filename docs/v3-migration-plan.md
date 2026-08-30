@@ -37,8 +37,8 @@ Migration work may reorganize ownership and replace desktop infrastructure, but 
 - Phase 1 — Neutralino compatibility spike — complete (`NEUTRALINO_GO`)
 - Phase 2 — Desktop platform boundary — complete (`NEUTRALINO_SECURITY_GO`)
 - Phase 3 — Production Neutralino parity — complete and merged in PR #83
-- Phase 4 — Electron retirement — implementation and server-side validation complete on `v3-phase4-electron-retirement`; merge pending
-- Phase 5 — Linux distribution
+- Phase 4 — Electron retirement — complete and merged in PR #84
+- Phase 5 — Linux distribution — implementation and server-side validation in progress on `v3-phase5-linux-distribution`
 - Phase 6 — Internal rebranding
 - Phase 7 — Custom brand assets
 - Phase 8 — Classic / Enhanced presentation boundary
@@ -58,7 +58,7 @@ The desktop migration keeps application-facing capability deliberately narrow:
 | Desktop detection, runtime identity, application-initiated Quit | Renderer-facing application capability |
 | External-link validation/opening, navigation restrictions, renderer native permissions | Host-owned security/navigation policy |
 | Neutralino runtime patching, native helper build, reproducibility, startup probes and artifact-size reports | Desktop build/validation tooling |
-| Final Linux packaging, bundled runtime dependencies and distribution format | Phase 5 Linux distribution work |
+| Linux archive/native package metadata, system dependency declarations and desktop integration | Phase 5 Linux distribution work |
 
 The common renderer contract is limited to `pvDesktop.isDesktop`, `pvDesktop.runtime`, and `pvDesktop.quit()`. Host navigation policy is not forced into that contract merely for runtime symmetry.
 
@@ -129,11 +129,11 @@ PR #83 merged into `v3` at `6a374c4661b47ef9507694682d1039003f31c217`. Phase 3 i
 
 ## Phase 4 Electron retirement
 
-Phase 4 removes Electron only after Neutralino production parity has been accepted and merged. The accepted Neutralino architecture is not redesigned during retirement.
+Phase 4 removed Electron only after Neutralino production parity had been accepted and merged. The accepted Neutralino architecture was not redesigned during retirement.
 
-The retirement scope is:
+The retirement scope was:
 
-- remove the direct `electron` and `electron-builder` dependencies and regenerate the npm lockfile so their unreachable package graph disappears;
+- remove the direct `electron` and `electron-builder` dependencies and their unreachable npm lockfile graph;
 - remove the Electron main process, Electron preload, Electron-only JavaScript external-link policy, Electron AppImage launcher patch, packaged-module pruning, Electron startup/build metrics, and Electron AppImage release workflow;
 - remove `start:desktop` and `build:appimage`; retarget the generic `build:desktop:linux` command to the supported `build:desktop:neutralino` path;
 - keep the renderer-facing `pvDesktop` usage runtime-neutral and keep the accepted Neutralino preload contract unchanged;
@@ -144,41 +144,43 @@ The retirement scope is:
 
 The Neutralino runtime remains `6.9.0`; the pinned upstream runtime source at `2cec764ac5e3ccc5b1b44d046d6e6d6c85c3099e`, repository-owned WebKitGTK host-navigation patch, native external-link helper, application ID, production allowlist and four-file runnable bundle contract remain unchanged.
 
-### Phase 4 implementation evidence
+Phase 4 was reviewed at head `f4f5c313e313f248a8937628afd33b75d6b28307` and merged by PR #84 into `v3` at `b080f3e4fbfa77c0327ac8c89628acd63614a47e`. Its exact-head server-side gate passed clean installation, dependency audit, all quality tests, two independent reproducible Neutralino builds, exact four-file artifact validation and Fedora 44/WebKitGTK runtime/security validation. Electron is no longer part of the supported v3 desktop toolchain.
 
-The exact implementation head `629d02857db90fcbf184ec9e3dd868d32b129c98` passed the complete server-side `Neutralino Desktop Production` gate in GitHub Actions run `33332976254` before this closeout documentation commit.
+The frozen 2.1 Electron AppImage remains historical comparison evidence only. Phase 4 deliberately left Linux packaging and end-user dependency policy to Phase 5.
 
-Retirement evidence on that head includes:
+## Phase 5 Linux distribution
 
-- `electron` and `electron-builder` are absent from direct dependencies and the regenerated lockfile; direct development dependencies dropped from 13 to 11 and lockfile package entries dropped from 582 to 435;
-- `npm ci` installed 434 packages and audited 435 packages; the production dependency audit reported no blocking vulnerability;
-- the Electron main/preload/configuration path, Electron AppImage builder/launcher/pruning/metrics scripts and Electron release workflow are absent, and no supported desktop command invokes Electron, `electron-builder`, or the retired AppImage build path;
-- `quality:check` passed with all 63 Node tests, including preservation/characterization, desktop-boundary, Neutralino production and explicit Electron-retirement assertions; the five production locale web/PWA outputs remained part of the build gate;
-- two independent clean production builds were byte-identical across all compared layers;
-- the production tarball was `3,593,332` bytes (about `3.43 MiB`) with SHA-256 `fdfcee79477a7b3cd783ee1a07314593aa9aea638b26eb758aefa80fb7e2780a`;
-- the patched Neutralino runtime was `831,976` bytes with SHA-256 `323292ecea71af9d9ce6deb06cd7b9178d3ace661d6a536effdb468fbe6f13cf`;
-- the native external-link helper was `14,648` bytes with SHA-256 `afa1b13dced42ceb101265376dbed08c57591c236f43f09261b057947d7aea3d`;
-- real Fedora 44/WebKitGTK validation passed runtime startup, default/minimum window behavior, persistence across restart, renderer bridge shape, keyboard and touch input, original-style local/round/AI flows, pre-gesture audio behavior, legal Quit, approved external-link opening, and adversarial navigation attempts;
-- renderer privilege checks preserved the exact `app.exit`, `extensions.dispatch`, `extensions.getStats` allowlist while keeping `Neutralino.os.open` and `app.writeProcessOutput` unavailable;
-- the runnable Neutralino artifact contains no Electron runtime, `app.asar`, Electron preload/main process, or Chromium `chrome-sandbox` payload.
+Phase 5 keeps the accepted four-file Neutralino production bundle as the canonical runtime input and adds a distribution layer around those exact runtime/helper bytes. It does not rebuild or relink the accepted runtime while packaging.
 
-The frozen 2.1 Electron AppImage remains `97,094,772` bytes (`92.60 MiB`). Comparing it directionally with the Phase 4 production tarball shows a large reduction in the repository-produced desktop payload, but this is not an apples-to-apples final distribution comparison: Phase 5 still owns final Linux packaging, dependency bundling, installer/AppImage decisions and end-user distribution footprint.
+The selected x86_64/amd64 formats are:
 
-The final Phase 4 closeout commit must be validated again because provenance and final artifact hashes are source-SHA-specific. As in Phase 3, the exact final closeout SHA, final-run artifact hashes and exact-head Codex result belong in the pull-request closeout evidence rather than in a tracked file that would need another commit to describe itself.
+- a deterministic portable `.tar.gz` as the canonical low-level artifact;
+- an amd64 `.deb` for current Debian/Ubuntu systems;
+- an x86_64 `.rpm` validated for Fedora-family systems, with Fedora 44 as the concrete runtime gate.
 
-Phase 4 does not choose the final Linux distribution format. Final installer/AppImage design, dependency bundling and end-user distribution policy belong to Phase 5.
+GTK 3, WebKitGTK, GStreamer and `xdg-utils` remain system-native dependencies. The packages declare the distribution-facing dependency names rather than bundling a large WebKitGTK/GStreamer stack. AppImage is intentionally not selected because bundling that stack would materially undermine the size/maintenance advantage of the system-webview architecture, while leaving it unbundled would add little over the portable archive. Flatpak is deferred because no demonstrated dependency problem justifies introducing a second application sandbox/security model. ARM64 is deferred until the patched runtime, native helper, reproducibility and real runtime/security validation can be maintained as a first-class matrix.
+
+Package identity, provisional application ID, install paths, architecture names and dependency declarations are centralized under `packaging/linux/metadata.env` so the later rebranding phase does not need to duplicate identity changes across unrelated packaging logic.
+
+Native packages install the application under `/usr/lib/pikachu-volleyball-neutralino`, expose a small `/usr/bin/pikachu-volleyball-neutralino` launcher, install a `.desktop` file and reuse the existing repository 512px icon. No new branding asset is introduced.
+
+The Neutralino production workflow now has durable `v3` / `v3-*` coverage instead of a phase-specific push trigger. The Phase 5 gate builds all selected formats twice, requires byte-identical package outputs, checks that the accepted runtime/helper bytes remain identical across formats, inspects package metadata and dependencies, tests a controlled portable failure without required desktop libraries, and performs clean install/launch/uninstall validation on Debian 12, Ubuntu 22.04, Ubuntu 24.04 and Fedora 44. Exact-head final results and artifact hashes belong in the Phase 5 pull-request closeout evidence.
+
+See `docs/linux-distribution.md` for the distribution contract and package layout.
 
 ## Current migration gate
 
-Phase 3 is merged and complete. Phase 4 implementation and its pre-closeout server-side validation are complete on `v3-phase4-electron-retirement`. The closeout documentation commit still requires its own exact-head server-side validation and a fresh exact-head Codex review before the branch is ready for a separate merge decision.
+Phases 0 through 4 are merged and complete. Phase 5 is active on `v3-phase5-linux-distribution`; its implementation must pass the complete exact-head runtime, reproducibility, packaging and clean-install matrix before a separate merge decision.
 
-Phase 4 does not authorize Phase 5, a merge, a release, a tag, publication, repository rename, deployment or any change to `main`.
+Phase 5 does not authorize Phase 6, a merge, a release, a tag, publication, repository rename, deployment or any change to `main`.
 
 ## Linux runtime dependencies / limitations
 
-The Neutralino artifact intentionally relies on Linux system facilities rather than bundling the final distribution environment. Fedora 44 validation uses GTK 3, WebKitGTK 4.1, X11 tooling, GStreamer base/good plugins for exercised MP3/WAV playback, and `xdg-open` for approved external URLs.
+The Neutralino runtime intentionally relies on Linux system facilities rather than bundling a browser engine. The executable directly depends on the GTK 3/GLib/Cairo/GdkPixbuf/X11/XCB/libpng/C/C++ runtime stack, while WebKitGTK is loaded dynamically by the accepted Neutralino runtime (4.1 preferred, 4.0 fallback where available).
 
-Missing required GTK/WebKitGTK shared libraries prevents normal native-WebView startup. Final dependency bundling and AppImage/distribution policy remain deferred to Phase 5. No Node.js, Python or backend runtime is bundled in the production four-file artifact.
+The validated MP3/WAV path requires GStreamer Good plugins. Approved external URLs require `xdg-open` from `xdg-utils` after native helper validation. Native `.deb`/`.rpm` packages declare these dependencies; the portable archive documents them. Missing required GTK/WebKitGTK libraries prevents normal native-WebView startup and is treated as an understandable dependency failure rather than a reason to bundle WebKitGTK.
+
+No Node.js, Python, Electron, Chromium, compiler or development package is an end-user runtime dependency.
 
 ## Publication rule
 
