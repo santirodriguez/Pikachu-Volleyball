@@ -1,0 +1,54 @@
+{
+  "$schema": "https://raw.githubusercontent.com/neutralinojs/neutralinojs/main/schemas/neutralino.config.schema.json",
+  "applicationId": "com.santirodriguez.pikachuvolleyball.neutralino-spike",
+  "version": "2.1.0",
+  "defaultMode": "window",
+  "port": 48471,
+  "documentRoot": "/resources/",
+  "url": "/en/index.html?desktop=1",
+  "enableServer": true,
+  "enableNativeAPI": true,
+  "singlePageServe": false,
+  "tokenSecurity": "one-time",
+  "exportAuthInfo": false,
+  "enableExtensions": false,
+  "extensions": [],
+  "nativeAllowList": ["app.exit", "os.open"],
+  "logging": {
+    "enabled": false,
+    "writeToLogFile": false
+  },
+  "dataLocation": "system",
+  "modes": {
+    "window": {
+      "title": "Pikachu Volleyball",
+      "width": 1024,
+      "height": 768,
+      "minWidth": 800,
+      "minHeight": 600,
+      "center": true,
+      "fullScreen": false,
+      "alwaysOnTop": false,
+      "enableInspector": false,
+      "openInspectorOnStartup": false,
+      "borderless": false,
+      "maximize": false,
+      "hidden": false,
+      "resizable": true,
+      "exitProcessOnClose": true,
+      "useSavedState": false,
+      "useLogicalPixels": true,
+      "injectGlobals": true,
+      "injectClientLibrary": true,
+      "injectScript": "/resources/neutralino-preload.js",
+      "newWindowPolicy": "custom"
+    }
+  },
+  "cli": {
+    "binaryName": "pikachu-volleyball-neutralino-spike",
+    "resourcesPath": "/resources/",
+    "distributionPath": "/neutralino-dist",
+    "binaryVersion": "6.9.0",
+    "clientVersion": "6.9.0"
+  }
+}
