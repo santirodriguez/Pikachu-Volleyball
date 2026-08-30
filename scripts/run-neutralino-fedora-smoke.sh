@@ -176,7 +176,7 @@ fi
 ensure_success_marker keyboard
 
 run_phase quit 0
-ensure_success_marker quit ',\"bridgeAvailable\":true'
+ensure_success_marker quit ',"bridgeAvailable":true'
 
 cat "$output_dir/read.log"
 cat "$output_dir/read-time.txt"
