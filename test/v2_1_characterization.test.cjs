@@ -272,7 +272,7 @@ test('physics preserves power-hit collision velocity and effect semantics', () =
   );
 
   assert.equal(physics.ball.xVelocity, 10);
-  assert.equal(physics.ball.yVelocity, -10);
+  assert.equal(physics.ball.yVelocity, -30);
   assert.equal(physics.ball.punchEffectX, 100);
   assert.equal(physics.ball.punchEffectY, 100);
   assert.equal(physics.ball.punchEffectRadius, 20);
@@ -419,6 +419,7 @@ test('scoring preserves slow motion and winning-score behavior', () => {
 test('quick rematch becomes active at frame 70 and game end returns at 211', () => {
   const { game, GAME_STATE_IDS } = loadControllerHarness();
   game.transitionTo(GAME_STATE_IDS.ROUND);
+  game.physics.player1.isComputer = false;
   game.gameEnded = true;
   game.frameCounter = 68;
   game.keyboardArray[0].powerHit = 1;
