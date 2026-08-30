@@ -82,6 +82,7 @@ test('Neutralino spike pins a minimal stable runtime configuration', () => {
   const config = readConfig();
   assert.equal(config.cli.binaryVersion, '6.9.0');
   assert.equal(config.cli.clientVersion, '6.9.0');
+  assert.equal(config.cli.clientLibrary, '/resources/neutralino.js');
   assert.equal(config.port, 48471);
   assert.equal(config.enableServer, true);
   assert.equal(config.enableNativeAPI, true);

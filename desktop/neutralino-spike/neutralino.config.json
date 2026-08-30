@@ -47,6 +47,7 @@
   "cli": {
     "binaryName": "pikachu-volleyball-neutralino-spike",
     "resourcesPath": "/resources/",
+    "clientLibrary": "/resources/neutralino.js",
     "distributionPath": "/neutralino-dist",
     "binaryVersion": "6.9.0",
     "clientVersion": "6.9.0"
