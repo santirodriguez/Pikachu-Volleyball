@@ -11,9 +11,14 @@
   "singlePageServe": false,
   "tokenSecurity": "one-time",
   "exportAuthInfo": false,
-  "enableExtensions": false,
-  "extensions": [],
-  "nativeAllowList": ["app.exit"],
+  "enableExtensions": true,
+  "extensions": [
+    {
+      "id": "com.santirodriguez.pikachuvolleyball.externallinks",
+      "commandLinux": "${NL_PATH}/extensions/pv-external-link-linux_x64"
+    }
+  ],
+  "nativeAllowList": ["app.exit", "extensions.dispatch"],
   "logging": {
     "enabled": false,
     "writeToLogFile": false
@@ -47,6 +52,7 @@
   "cli": {
     "binaryName": "pikachu-volleyball-neutralino-spike",
     "resourcesPath": "/resources/",
+    "extensionsPath": "/extensions/",
     "clientLibrary": "/resources/neutralino.js",
     "distributionPath": "/neutralino-dist",
     "binaryVersion": "6.9.0",

@@ -4,15 +4,21 @@ on:
   push:
     branches:
       - v3-phase1-neutralino-spike
+      - v3-phase2-desktop-platform-boundary
   pull_request:
     branches:
       - v3
     paths:
       - '.github/workflows/neutralino-spike.yml'
+      - 'desktop/external-link-policy.cjs'
       - 'desktop/neutralino-spike/**'
+      - 'scripts/build-neutralino-external-link-extension.sh'
       - 'scripts/prepare-neutralino-spike.cjs'
       - 'scripts/report-neutralino-spike.cjs'
+      - 'scripts/run-neutralino-external-link-smoke.sh'
       - 'scripts/run-neutralino-fedora-smoke.sh'
+      - 'scripts/validate-neutralino-external-link-extension.cjs'
+      - 'test/desktop_platform_boundary.test.cjs'
       - 'test/neutralino_spike.test.cjs'
       - 'src/**'
       - 'webpack*.js'
@@ -53,6 +59,12 @@ jobs:
 
       - name: Prepare production web output for Neutralino
         run: node scripts/prepare-neutralino-spike.cjs
+
+      - name: Build trusted external-link extension
+        run: ./scripts/build-neutralino-external-link-extension.sh
+
+      - name: Validate Electron and Neutralino external-link policy equivalence
+        run: node scripts/validate-neutralino-external-link-extension.cjs
 
       - name: Fetch pinned Neutralino runtime
         working-directory: .neutralino-spike
@@ -95,6 +107,9 @@ jobs:
               runuser -u pvsmoke -- \
                 /workspace/scripts/run-neutralino-fedora-smoke.sh \
                 /workspace/.neutralino-spike
+              runuser -u pvsmoke -- \
+                /workspace/scripts/run-neutralino-external-link-smoke.sh \
+                /workspace/.neutralino-spike
             '
 
       - name: Collect experimental Linux artifact
@@ -105,6 +120,9 @@ jobs:
           mkdir -p neutralino-spike-artifact
           if [[ -d .neutralino-spike/fedora-smoke ]]; then
             cp -R .neutralino-spike/fedora-smoke neutralino-spike-artifact/
+          fi
+          if [[ -d .neutralino-spike/fedora-external-link-smoke ]]; then
+            cp -R .neutralino-spike/fedora-external-link-smoke neutralino-spike-artifact/
           fi
 
       - name: Upload experimental artifact
