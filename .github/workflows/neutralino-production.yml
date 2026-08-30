@@ -47,57 +47,18 @@ jobs:
         run: npm audit --omit=dev --audit-level=critical
       - name: Run repository quality checks
         run: npm run quality:check
-      - name: Build reproducible Neutralino production candidate
+      - name: Build twice and assert component-level reproducibility
         shell: bash
-        run: |
-          set -euo pipefail
-          artifact=pikachu-volleyball-neutralino-production-parity-linux-x64.tar.gz
-          rm -rf dist .neutralino-production neutralino-production-artifact
-          rm -f "$artifact" "$artifact.sha256"
-          npm run build:desktop:neutralino
-      - name: Assert production artifact reproducibility
-        shell: bash
-        run: |
-          set -euo pipefail
-          artifact=pikachu-volleyball-neutralino-production-parity-linux-x64.tar.gz
-          evidence=.neutralino-reproducibility
-          rm -rf "$evidence"
-          mkdir -p "$evidence"
-
-          first_sha="$(sha256sum "$artifact" | awk '{print $1}')"
-          first_bytes="$(stat -c%s "$artifact")"
-          {
-            printf 'source_sha=%s\n' "$PV_SOURCE_SHA"
-            printf 'first_sha256=%s\n' "$first_sha"
-            printf 'first_bytes=%s\n' "$first_bytes"
-          } > "$evidence/result.txt"
-
-          rm -rf dist .neutralino-production neutralino-production-artifact
-          rm -f "$artifact" "$artifact.sha256"
-          npm run build:desktop:neutralino
-
-          second_sha="$(sha256sum "$artifact" | awk '{print $1}')"
-          second_bytes="$(stat -c%s "$artifact")"
-          {
-            printf 'second_sha256=%s\n' "$second_sha"
-            printf 'second_bytes=%s\n' "$second_bytes"
-          } >> "$evidence/result.txt"
-
-          if [[ "$first_sha" != "$second_sha" ]]; then
-            printf 'match=false\n' >> "$evidence/result.txt"
-            cat "$evidence/result.txt" >&2
-            echo 'Neutralino production artifact is not reproducible across two clean same-source builds.' >&2
-            exit 1
-          fi
-
-          printf 'match=true\n' >> "$evidence/result.txt"
-          cat "$evidence/result.txt"
+        run: bash scripts/run-neutralino-reproducibility.sh
       - name: Upload production-build diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: neutralino-production-build-diagnostics
-          path: .neutralino-production/diagnostics/production-build.log
+          path: |
+            .neutralino-production/diagnostics/production-build.log
+            .neutralino-reproducibility/*-build-command.log
+            .neutralino-reproducibility/*/partial-diagnostics/
           if-no-files-found: warn
           retention-days: 14
       - name: Upload reproducibility evidence
