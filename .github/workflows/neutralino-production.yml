@@ -3,14 +3,18 @@ name: Neutralino Desktop Production
 on:
   push:
     branches:
-      - v3-phase4-electron-retirement
+      - v3
+      - 'v3-*'
     paths:
       - '.github/workflows/neutralino-production.yml'
       - 'desktop/**'
+      - 'packaging/linux/**'
       - 'scripts/*neutralino*'
+      - 'scripts/package-neutralino-linux.sh'
       - 'scripts/validate-neutralino-external-link-extension.cjs'
       - 'test/neutralino/**'
       - 'test/neutralino_production.test.cjs'
+      - 'test/linux_distribution.test.cjs'
       - 'test/desktop_platform_boundary.test.cjs'
       - 'test/electron_retirement.test.cjs'
       - 'src/**'
@@ -21,16 +25,20 @@ on:
       - 'README.md'
       - 'docs/v3-migration-plan.md'
       - 'docs/neutralino-production-runtime.md'
+      - 'docs/linux-distribution.md'
   pull_request:
     branches:
       - v3
     paths:
       - '.github/workflows/neutralino-production.yml'
       - 'desktop/**'
+      - 'packaging/linux/**'
       - 'scripts/*neutralino*'
+      - 'scripts/package-neutralino-linux.sh'
       - 'scripts/validate-neutralino-external-link-extension.cjs'
       - 'test/neutralino/**'
       - 'test/neutralino_production.test.cjs'
+      - 'test/linux_distribution.test.cjs'
       - 'test/desktop_platform_boundary.test.cjs'
       - 'test/electron_retirement.test.cjs'
       - 'src/**'
@@ -41,6 +49,7 @@ on:
       - 'README.md'
       - 'docs/v3-migration-plan.md'
       - 'docs/neutralino-production-runtime.md'
+      - 'docs/linux-distribution.md'
   workflow_dispatch:
 
 permissions:
@@ -50,13 +59,17 @@ concurrency:
   group: neutralino-production-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+env:
+  PV_DEBIAN12_IMAGE: debian:bookworm-20260824-slim@sha256:88200866dfff7ea7f5cbcb6ec7c8a701889efe6fe859fe64d6990e4b07ea4171
+  PV_FEDORA44_IMAGE: fedora:44@sha256:be9d65e2344d805cc11114319c685ecaa96b6d9b4350a0a6460cdb931babbd19
+  PV_RPM_BUILD_PACKAGE: rpm-build-6.0.2-1.fc44
+
 jobs:
   desktop:
     runs-on: ubuntu-latest
     timeout-minutes: 75
     env:
       PV_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-      PV_PHASE4_BASE_SHA: 6a374c4661b47ef9507694682d1039003f31c217
     steps:
       - uses: actions/checkout@v5
         with:
@@ -69,26 +82,6 @@ jobs:
       - run: npm ci
       - name: Assert Electron retirement
         run: node --test test/electron_retirement.test.cjs
-      - name: Report dependency metadata footprint
-        shell: bash
-        run: |
-          set -euo pipefail
-          base_lock_bytes="$(git show "$PV_PHASE4_BASE_SHA:package-lock.json" | wc -c)"
-          current_lock_bytes="$(wc -c < package-lock.json)"
-          installed_bytes="$(du -sb node_modules | cut -f1)"
-          node <<'NODE'
-          const fs = require('node:fs');
-          const { execFileSync } = require('node:child_process');
-          const baseSha = process.env.PV_PHASE4_BASE_SHA;
-          const base = JSON.parse(execFileSync('git', ['show', `${baseSha}:package-lock.json`], { encoding: 'utf8' }));
-          const current = JSON.parse(fs.readFileSync('package-lock.json', 'utf8'));
-          const count = (lock) => Object.keys(lock.packages || {}).length;
-          console.log(`PV_DEPENDENCY_LOCK_PACKAGES_BASE=${count(base)}`);
-          console.log(`PV_DEPENDENCY_LOCK_PACKAGES_CURRENT=${count(current)}`);
-          NODE
-          echo "PV_DEPENDENCY_LOCK_BYTES_BASE=$base_lock_bytes"
-          echo "PV_DEPENDENCY_LOCK_BYTES_CURRENT=$current_lock_bytes"
-          echo "PV_DEPENDENCY_INSTALLED_BYTES_CURRENT=$installed_bytes"
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=critical
       - name: Run repository quality checks
@@ -148,10 +141,9 @@ jobs:
           : > "$stage_status"
 
           set +e
-          docker run --rm --shm-size=1g -v "$PWD:/workspace" -w /workspace fedora:44 bash -lc '
+          docker run --rm --platform linux/amd64 --shm-size=1g -v "$PWD:/workspace" -w /workspace "$PV_FEDORA44_IMAGE" bash -lc '
             set -euo pipefail
             stage_status=/workspace/.neutralino-production/fedora-validation/stages.txt
-
             run_stage() {
               local stage="$1"
               shift
@@ -167,17 +159,14 @@ jobs:
               printf "PV_FEDORA_STAGE_FAIL stage=%s exit_code=%s\n" "$stage" "$status" | tee -a "$stage_status" >&2
               return "$status"
             }
-
             prepare_validation_overlay() {
               cp /workspace/.neutralino-artifact-extracted/pikachu-volleyball-neutralino-production-parity-linux-x64/pikachu-volleyball-neutralino-linux_x64 /workspace/.neutralino-production/bin/neutralino-linux_x64 || return $?
               runuser -u pvsmoke -- node /workspace/scripts/prepare-neutralino-production.cjs --smoke-only || return $?
             }
-
-            dnf -y install nodejs webkit2gtk4.1 gtk3 xorg-x11-server-Xvfb openbox xdotool procps-ng time gstreamer1-plugins-base gstreamer1-plugins-good dbus-x11 python3 shadow-utils
+            dnf -y install nodejs webkit2gtk4.1 gtk3 xorg-x11-server-Xvfb openbox xdotool procps-ng time gstreamer1-plugins-base gstreamer1-plugins-good dbus-x11 python3 shadow-utils xdg-utils
             useradd -m pvsmoke
             chmod -R a+rwX /workspace/.neutralino-production /workspace/.neutralino-artifact-extracted
             bundle=/workspace/.neutralino-artifact-extracted/pikachu-volleyball-neutralino-production-parity-linux-x64
-
             run_stage extracted-production-artifact-smoke runuser -u pvsmoke -- /workspace/scripts/run-neutralino-production-smoke.sh "$bundle"
             run_stage production-validation-overlay-preparation prepare_validation_overlay
             run_stage baseline-fedora-runtime-smoke runuser -u pvsmoke -- /workspace/scripts/run-neutralino-fedora-smoke.sh /workspace/.neutralino-production
@@ -186,7 +175,6 @@ jobs:
           ' 2>&1 | tee -a "$combined_log"
           status=${PIPESTATUS[0]}
           set -e
-
           printf 'PV_FEDORA_VALIDATION_EXIT_CODE=%s\n' "$status" | tee -a "$combined_log"
           printf '%s\n' "$status" > "$diagnostic_dir/exit-code.txt"
           exit "$status"
@@ -214,3 +202,237 @@ jobs:
             pikachu-volleyball-neutralino-production-parity-linux-x64.tar.gz.sha256
           if-no-files-found: error
           retention-days: 14
+
+  distribution:
+    needs: desktop
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/download-artifact@v5
+        with:
+          name: pikachu-volleyball-neutralino-production-parity-linux-x64
+          path: .linux-distribution-input
+      - name: Verify production input and ELF dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd .linux-distribution-input && sha256sum -c pikachu-volleyball-neutralino-production-parity-linux-x64.tar.gz.sha256)
+          rm -rf .linux-distribution-extracted .linux-distribution-evidence
+          mkdir -p .linux-distribution-extracted .linux-distribution-evidence
+          tar -xzf .linux-distribution-input/pikachu-volleyball-neutralino-production-parity-linux-x64.tar.gz -C .linux-distribution-extracted
+          bundle=.linux-distribution-extracted/pikachu-volleyball-neutralino-production-parity-linux-x64
+          {
+            echo '[Neutralino executable]'
+            readelf -d "$bundle/pikachu-volleyball-neutralino-linux_x64" | grep NEEDED
+            echo '[External-link helper]'
+            readelf -d "$bundle/extensions/pv-external-link-linux_x64" | grep NEEDED
+          } | tee .linux-distribution-evidence/elf-needed.txt
+      - name: Build Linux distribution twice
+        shell: bash
+        run: |
+          set -euo pipefail
+          source packaging/linux/metadata.env
+          host_uid="$(id -u)"
+          host_gid="$(id -g)"
+          build_once() {
+            local name="$1"
+            rm -rf ".linux-distribution-repro/$name"
+            mkdir -p ".linux-distribution-repro/$name"
+            docker run --rm --platform linux/amd64 \
+              -e PV_PRODUCTION_BUNDLE="/workspace/.linux-distribution-extracted/$PV_INTERNAL_BUNDLE_NAME" \
+              -e PV_DISTRIBUTION_OUTPUT="/workspace/.linux-distribution-repro/$name" \
+              -e PV_HOST_UID="$host_uid" -e PV_HOST_GID="$host_gid" \
+              -v "$PWD:/workspace" -w /workspace "$PV_DEBIAN12_IMAGE" bash -lc '
+                set -euo pipefail
+                bash scripts/package-neutralino-linux.sh --format portable
+                bash scripts/package-neutralino-linux.sh --format deb
+              '
+            docker run --rm --platform linux/amd64 \
+              -e PV_PRODUCTION_BUNDLE="/workspace/.linux-distribution-extracted/$PV_INTERNAL_BUNDLE_NAME" \
+              -e PV_DISTRIBUTION_OUTPUT="/workspace/.linux-distribution-repro/$name" \
+              -e PV_HOST_UID="$host_uid" -e PV_HOST_GID="$host_gid" \
+              -e PV_RPM_BUILD_PACKAGE="$PV_RPM_BUILD_PACKAGE" \
+              -v "$PWD:/workspace" -w /workspace "$PV_FEDORA44_IMAGE" bash -lc '
+                set -euo pipefail
+                dnf -y install "$PV_RPM_BUILD_PACKAGE"
+                rpm -q "$PV_RPM_BUILD_PACKAGE"
+                bash scripts/package-neutralino-linux.sh --format rpm
+              '
+          }
+          build_once first
+          build_once second
+          portable="${PV_PORTABLE_BUNDLE_NAME}.tar.gz"
+          deb="${PV_PACKAGE_NAME}_${PV_PACKAGE_VERSION}_${PV_DEB_ARCH}.deb"
+          rpm="${PV_PACKAGE_NAME}-${PV_PACKAGE_VERSION}-${PV_PACKAGE_RELEASE}.${PV_RPM_ARCH}.rpm"
+          for artifact in "$portable" "$deb" "$rpm"; do
+            cmp ".linux-distribution-repro/first/$artifact" ".linux-distribution-repro/second/$artifact"
+          done
+          rm -rf linux-distribution
+          mkdir linux-distribution
+          cp ".linux-distribution-repro/first/$portable" linux-distribution/
+          cp ".linux-distribution-repro/first/$deb" linux-distribution/
+          cp ".linux-distribution-repro/first/$rpm" linux-distribution/
+          (cd linux-distribution && sha256sum "$portable" "$deb" "$rpm" > SHA256SUMS && sha256sum -c SHA256SUMS)
+      - name: Inspect package metadata and exact payload bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          source packaging/linux/metadata.env
+          portable="linux-distribution/${PV_PORTABLE_BUNDLE_NAME}.tar.gz"
+          deb="linux-distribution/${PV_PACKAGE_NAME}_${PV_PACKAGE_VERSION}_${PV_DEB_ARCH}.deb"
+          rpm="linux-distribution/${PV_PACKAGE_NAME}-${PV_PACKAGE_VERSION}-${PV_PACKAGE_RELEASE}.${PV_RPM_ARCH}.rpm"
+          internal="$PWD/.linux-distribution-extracted/$PV_INTERNAL_BUNDLE_NAME"
+          rm -rf .linux-portable-check .linux-deb-check
+          mkdir .linux-portable-check .linux-deb-check
+          tar -xzf "$portable" -C .linux-portable-check
+          portable_bundle="$PWD/.linux-portable-check/$PV_PORTABLE_BUNDLE_NAME"
+          test "$(find "$portable_bundle" -type f | wc -l)" -eq 5
+          (cd "$portable_bundle" && sha256sum -c SHA256SUMS)
+          cmp "$internal/$PV_BINARY_NAME" "$portable_bundle/$PV_BINARY_NAME"
+          cmp "$internal/extensions/$PV_EXTENSION_NAME" "$portable_bundle/extensions/$PV_EXTENSION_NAME"
+          dpkg-deb -f "$deb" Package Version Architecture Depends Homepage | tee .linux-distribution-evidence/deb-control.txt
+          test "$(dpkg-deb -f "$deb" Package)" = "$PV_PACKAGE_NAME"
+          test "$(dpkg-deb -f "$deb" Version)" = "$PV_PACKAGE_VERSION"
+          test "$(dpkg-deb -f "$deb" Architecture)" = "$PV_DEB_ARCH"
+          dpkg-deb -x "$deb" .linux-deb-check
+          cmp "$internal/$PV_BINARY_NAME" ".linux-deb-check$PV_INSTALL_DIR/$PV_BINARY_NAME"
+          cmp "$internal/extensions/$PV_EXTENSION_NAME" ".linux-deb-check$PV_INSTALL_DIR/extensions/$PV_EXTENSION_NAME"
+          test -f ".linux-deb-check/usr/share/applications/$PV_APPLICATION_ID.desktop"
+          test -f ".linux-deb-check/usr/share/icons/hicolor/512x512/apps/$PV_APPLICATION_ID.png"
+          docker run --rm --platform linux/amd64 -v "$PWD:/workspace" -w /workspace "$PV_FEDORA44_IMAGE" bash -lc "rpm -qpi /workspace/$rpm && rpm -qpl /workspace/$rpm && rpm -qpR /workspace/$rpm" | tee .linux-distribution-evidence/rpm-metadata.txt
+      - name: Validate understandable portable failure without desktop dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          source packaging/linux/metadata.env
+          portable="linux-distribution/${PV_PORTABLE_BUNDLE_NAME}.tar.gz"
+          docker run --rm --platform linux/amd64 -v "$PWD:/workspace" -w /workspace "$PV_DEBIAN12_IMAGE" bash -lc "
+            set -euo pipefail
+            rm -rf /tmp/pv-portable
+            mkdir /tmp/pv-portable
+            tar -xzf /workspace/$portable -C /tmp/pv-portable
+            set +e
+            /tmp/pv-portable/$PV_PORTABLE_BUNDLE_NAME/$PV_BINARY_NAME > /workspace/.linux-distribution-evidence/missing-dependency.log 2>&1
+            status=\$?
+            set -e
+            test \"\$status\" -ne 0
+            grep -Eq 'error while loading shared libraries|WebKitGTK|webview' /workspace/.linux-distribution-evidence/missing-dependency.log
+          "
+      - name: Report Linux distribution sizes
+        shell: bash
+        run: |
+          set -euo pipefail
+          while read -r hash file; do
+            printf 'PV_LINUX_DISTRIBUTION file=%s bytes=%s sha256=%s\n' "$file" "$(stat -c%s "linux-distribution/$file")" "$hash"
+          done < linux-distribution/SHA256SUMS
+      - name: Upload Linux distribution artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pikachu-volleyball-linux-distribution-x86_64
+          path: |
+            linux-distribution/
+            .linux-distribution-evidence/
+          if-no-files-found: error
+          retention-days: 14
+
+  deb-validation:
+    needs: distribution
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: debian-12
+            image: debian:bookworm-20260824-slim@sha256:88200866dfff7ea7f5cbcb6ec7c8a701889efe6fe859fe64d6990e4b07ea4171
+          - label: ubuntu-22.04
+            image: ubuntu:jammy-20260810
+          - label: ubuntu-24.04
+            image: ubuntu:noble-20260810
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/download-artifact@v5
+        with:
+          name: pikachu-volleyball-linux-distribution-x86_64
+          path: .distribution-download
+      - name: Validate Debian-family package
+        shell: bash
+        env:
+          PV_VALIDATION_IMAGE: ${{ matrix.image }}
+        run: |
+          set -euo pipefail
+          cp -a .distribution-download/linux-distribution ./linux-distribution
+          source packaging/linux/metadata.env
+          docker run --rm --platform linux/amd64 --shm-size=1g -v "$PWD:/workspace" -w /workspace "$PV_VALIDATION_IMAGE" bash -lc '
+            set -euo pipefail
+            export DEBIAN_FRONTEND=noninteractive
+            source /workspace/packaging/linux/metadata.env
+            apt-get update
+            apt-get install -y --no-install-recommends "/workspace/linux-distribution/${PV_PACKAGE_NAME}_${PV_PACKAGE_VERSION}_${PV_DEB_ARCH}.deb"
+            apt-get install -y --no-install-recommends xvfb openbox xdotool procps desktop-file-utils dbus-x11 passwd
+            dpkg-query -W -f="${Package} ${Version} ${Architecture}\n" "$PV_PACKAGE_NAME"
+            test -x "/usr/bin/$PV_LAUNCHER_NAME"
+            test -x "$PV_INSTALL_DIR/$PV_BINARY_NAME"
+            test -x "$PV_INSTALL_DIR/extensions/$PV_EXTENSION_NAME"
+            desktop-file-validate "/usr/share/applications/$PV_APPLICATION_ID.desktop"
+            test -f "/usr/share/icons/hicolor/512x512/apps/$PV_APPLICATION_ID.png"
+            rm -rf /tmp/pv-portable /tmp/pv-installed-smoke
+            mkdir -p /tmp/pv-portable /tmp/pv-installed-smoke
+            tar -xzf "/workspace/linux-distribution/${PV_PORTABLE_BUNDLE_NAME}.tar.gz" -C /tmp/pv-portable
+            cmp "/tmp/pv-portable/$PV_PORTABLE_BUNDLE_NAME/$PV_BINARY_NAME" "$PV_INSTALL_DIR/$PV_BINARY_NAME"
+            cmp "/tmp/pv-portable/$PV_PORTABLE_BUNDLE_NAME/extensions/$PV_EXTENSION_NAME" "$PV_INSTALL_DIR/extensions/$PV_EXTENSION_NAME"
+            useradd -m pvsmoke
+            chown -R pvsmoke:pvsmoke /tmp/pv-installed-smoke
+            runuser -u pvsmoke -- env PV_NEUTRALINO_SMOKE_OUTPUT_DIR=/tmp/pv-installed-smoke /workspace/scripts/run-neutralino-production-smoke.sh "$PV_INSTALL_DIR" "/usr/bin/$PV_LAUNCHER_NAME"
+            apt-get remove -y "$PV_PACKAGE_NAME"
+            test ! -e "$PV_INSTALL_DIR/$PV_BINARY_NAME"
+            test ! -e "/usr/bin/$PV_LAUNCHER_NAME"
+          '
+
+  rpm-validation:
+    needs: distribution
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/download-artifact@v5
+        with:
+          name: pikachu-volleyball-linux-distribution-x86_64
+          path: .distribution-download
+      - name: Validate Fedora RPM package
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp -a .distribution-download/linux-distribution ./linux-distribution
+          source packaging/linux/metadata.env
+          docker run --rm --platform linux/amd64 --shm-size=1g -v "$PWD:/workspace" -w /workspace "$PV_FEDORA44_IMAGE" bash -lc '
+            set -euo pipefail
+            source /workspace/packaging/linux/metadata.env
+            rpm_file="/workspace/linux-distribution/${PV_PACKAGE_NAME}-${PV_PACKAGE_VERSION}-${PV_PACKAGE_RELEASE}.${PV_RPM_ARCH}.rpm"
+            dnf -y install "$rpm_file" xorg-x11-server-Xvfb openbox xdotool procps-ng desktop-file-utils dbus-x11 shadow-utils tar gzip
+            rpm -q "$PV_PACKAGE_NAME"
+            rpm -qR "$PV_PACKAGE_NAME"
+            test -x "/usr/bin/$PV_LAUNCHER_NAME"
+            test -x "$PV_INSTALL_DIR/$PV_BINARY_NAME"
+            test -x "$PV_INSTALL_DIR/extensions/$PV_EXTENSION_NAME"
+            desktop-file-validate "/usr/share/applications/$PV_APPLICATION_ID.desktop"
+            test -f "/usr/share/icons/hicolor/512x512/apps/$PV_APPLICATION_ID.png"
+            rm -rf /tmp/pv-portable /tmp/pv-installed-smoke
+            mkdir -p /tmp/pv-portable /tmp/pv-installed-smoke
+            tar -xzf "/workspace/linux-distribution/${PV_PORTABLE_BUNDLE_NAME}.tar.gz" -C /tmp/pv-portable
+            cmp "/tmp/pv-portable/$PV_PORTABLE_BUNDLE_NAME/$PV_BINARY_NAME" "$PV_INSTALL_DIR/$PV_BINARY_NAME"
+            cmp "/tmp/pv-portable/$PV_PORTABLE_BUNDLE_NAME/extensions/$PV_EXTENSION_NAME" "$PV_INSTALL_DIR/extensions/$PV_EXTENSION_NAME"
+            useradd -m pvsmoke
+            chown -R pvsmoke:pvsmoke /tmp/pv-installed-smoke
+            runuser -u pvsmoke -- env PV_NEUTRALINO_SMOKE_OUTPUT_DIR=/tmp/pv-installed-smoke /workspace/scripts/run-neutralino-production-smoke.sh "$PV_INSTALL_DIR" "/usr/bin/$PV_LAUNCHER_NAME"
+            dnf -y remove "$PV_PACKAGE_NAME"
+            test ! -e "$PV_INSTALL_DIR/$PV_BINARY_NAME"
+            test ! -e "/usr/bin/$PV_LAUNCHER_NAME"
+          '
