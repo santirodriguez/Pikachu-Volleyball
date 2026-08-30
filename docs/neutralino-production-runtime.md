@@ -26,7 +26,7 @@ Validation-only probes live under `test/neutralino/` and are not copied into the
 - Runtime and native helper use the same GCC/G++/binutils and development packages resolved from that pinned snapshot. Their exact package versions, compiler identities, builder image, platform and snapshot are recorded in build provenance.
 - Repository-owned host-navigation patch and native external-link helper are hashed into build provenance.
 
-The runner CA bundle is mounted only to bootstrap TLS verification while reaching the pinned signed Ubuntu snapshot; it is removed from the container APT override before compilation and is not packaged into the candidate.
+The build derives `SOURCE_DATE_EPOCH` from the exact source commit unless it is explicitly supplied, propagates it to the native builder, records it in provenance, and normalizes production staging-resource mtimes to that value before resource embedding. The runner CA bundle is mounted only to bootstrap TLS verification while reaching the pinned signed Ubuntu snapshot; it is removed from the container APT override before compilation and is not packaged into the candidate.
 
 Build the experimental production-parity candidate with:
 
@@ -34,7 +34,7 @@ Build the experimental production-parity candidate with:
 npm run build:desktop:neutralino
 ```
 
-The build records the source commit, pinned runtime inputs, patch/runtime/helper hashes, sizes, artifact contents, checksums and resolved build-toolchain identities.
+The build records the source commit, source date epoch, pinned runtime inputs, patch/runtime/helper hashes, sizes, artifact contents, checksums and resolved build-toolchain identities.
 
 ## Reproducibility gate
 
@@ -49,7 +49,7 @@ Each build captures SHA-256 and size for these layers, in order:
 5. `SHA256SUMS`;
 6. final `.tar.gz` artifact.
 
-The gate succeeds only when all required components, including the final tarball, are byte-identical across both builds. Resource content and metadata trees are also recorded. If a binary differs, the evidence includes ELF note/build-ID and section diagnostics; text-manifest differences include the first differing line; all binary differences include the first differing byte offset. The first divergent required component is reported explicitly rather than reducing the failure to two final tar hashes.
+The gate succeeds only when all required components, including the final tarball, are byte-identical across both builds. Staged resource content and metadata trees must also match after `SOURCE_DATE_EPOCH` normalization. If a binary differs, the evidence includes ELF note/build-ID and section diagnostics; text-manifest differences include the first differing line; all binary differences include the first differing byte offset. The first divergent required component or resource-input layer is reported explicitly rather than reducing the failure to two final tar hashes.
 
 Reproducibility evidence is stored outside the temporary worktrees and uploaded with failure-safe Actions steps, including hidden evidence files. Build-stage status and real exit codes are persisted. The first successful candidate is copied to the workflow workspace before the second build begins, so a later build or validation failure does not discard the exact available candidate and its diagnostics.
 

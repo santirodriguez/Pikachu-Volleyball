@@ -116,6 +116,9 @@ const resourceComparison = {
 };
 if (!resourceComparison.contentMatch || !resourceComparison.metadataMatch) {
   resourceComparison.firstDifference = firstResourceDifference();
+  if (!firstDifference) {
+    firstDifference = resourceComparison.contentMatch ? 'resources.metadata' : 'resources.content';
+  }
 }
 
 const result = {

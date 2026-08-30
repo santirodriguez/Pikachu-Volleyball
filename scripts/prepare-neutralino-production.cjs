@@ -37,6 +37,28 @@ function readProductionConfig() {
   return JSON.parse(fs.readFileSync(path.join(SOURCE, 'neutralino.config.json'), 'utf8'));
 }
 
+function sourceDate() {
+  const raw = process.env.SOURCE_DATE_EPOCH;
+  if (!raw || !/^\d+$/.test(raw)) {
+    throw new Error('SOURCE_DATE_EPOCH must be a non-negative integer for production staging.');
+  }
+  const date = new Date(Number(raw) * 1000);
+  if (!Number.isFinite(date.getTime())) {
+    throw new Error(`Invalid SOURCE_DATE_EPOCH: ${raw}`);
+  }
+  return date;
+}
+
+function normalizeTreeTimestamp(directory, date) {
+  const entries = fs.readdirSync(directory, { withFileTypes: true });
+  for (const entry of entries) {
+    const entryPath = path.join(directory, entry.name);
+    if (entry.isDirectory()) normalizeTreeTimestamp(entryPath, date);
+    else if (entry.isFile()) fs.utimesSync(entryPath, date, date);
+  }
+  fs.utimesSync(directory, date, date);
+}
+
 function prepareProductionStage() {
   assertFile(path.join(SOURCE, 'neutralino.config.json'));
   assertFile(path.join(SOURCE, 'preload.js'));
@@ -52,7 +74,11 @@ function prepareProductionStage() {
   fs.cpSync(DIST, RESOURCES, { recursive: true });
   fs.writeFileSync(path.join(STAGE, 'neutralino.config.json'), `${JSON.stringify(readProductionConfig(), null, 2)}\n`);
   fs.copyFileSync(path.join(SOURCE, 'preload.js'), path.join(RESOURCES, 'neutralino-preload.js'));
-  process.stdout.write(`Prepared production Neutralino staging at ${STAGE}\n`);
+
+  const deterministicDate = sourceDate();
+  normalizeTreeTimestamp(RESOURCES, deterministicDate);
+  fs.utimesSync(path.join(STAGE, 'neutralino.config.json'), deterministicDate, deterministicDate);
+  process.stdout.write(`Prepared production Neutralino staging at ${STAGE} with SOURCE_DATE_EPOCH=${process.env.SOURCE_DATE_EPOCH}\n`);
 }
 
 function prepareSmokeStage() {

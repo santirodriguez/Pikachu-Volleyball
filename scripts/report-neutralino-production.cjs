@@ -93,6 +93,7 @@ const requiredToolchainKeys = [
   'builder_image',
   'builder_platform',
   'apt_snapshot',
+  'source_date_epoch',
   'cc_path',
   'cc_version',
   'cxx_path',
@@ -103,6 +104,9 @@ for (const key of requiredToolchainKeys) {
   if (!toolchainMetadata[key]) {
     throw new Error(`Missing Neutralino build-toolchain provenance key: ${key}`);
   }
+}
+if (!/^\d+$/.test(toolchainMetadata.source_date_epoch)) {
+  throw new Error(`Invalid Neutralino source_date_epoch provenance: ${toolchainMetadata.source_date_epoch}`);
 }
 const buildPackages = Object.fromEntries(
   BUILD_PACKAGES.map((packageName) => [
@@ -118,6 +122,7 @@ const productionRuntimeAndHelperBytes = binaryStats.size + extensionStats.size;
 
 const report = {
   sourceCommit: process.env.PV_SOURCE_SHA || process.env.GITHUB_SHA || null,
+  sourceDateEpoch: Number(toolchainMetadata.source_date_epoch),
   frameworkVersion: config.cli.binaryVersion,
   upstreamCommit: hostNavigationRuntime.upstreamCommit,
   cliVersion: '11.7.2',

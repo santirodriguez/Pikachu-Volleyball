@@ -8,11 +8,20 @@ builder_image="ubuntu:focal-20250404@sha256:c664f8f86ed5a386b0a340d981b8f81714e2
 builder_platform="linux/amd64"
 apt_snapshot="20250404T000000Z"
 host_ca_bundle="/etc/ssl/certs/ca-certificates.crt"
+source_sha="${PV_SOURCE_SHA:-${GITHUB_SHA:-$(git rev-parse HEAD)}}"
+source_date_epoch="${SOURCE_DATE_EPOCH:-$(git show -s --format=%ct "$source_sha")}"
 
+if [[ ! "$source_date_epoch" =~ ^[0-9]+$ ]]; then
+  echo "Invalid SOURCE_DATE_EPOCH: $source_date_epoch" >&2
+  exit 1
+fi
 if [[ ! -s "$host_ca_bundle" ]]; then
   echo "Missing host CA bundle required to bootstrap the pinned Ubuntu snapshot: $host_ca_bundle" >&2
   exit 1
 fi
+
+export PV_SOURCE_SHA="$source_sha"
+export SOURCE_DATE_EPOCH="$source_date_epoch"
 
 npm run build:web
 node scripts/prepare-neutralino-production.cjs
@@ -22,7 +31,8 @@ diagnostic_log="$diagnostic_dir/production-build.log"
 mkdir -p "$diagnostic_dir"
 : > "$diagnostic_log"
 exec > >(tee -a "$diagnostic_log") 2>&1
-printf 'PV_NEUTRALINO_PRODUCTION_BUILD_HEAD=%s\n' "${PV_SOURCE_SHA:-${GITHUB_SHA:-unknown}}"
+printf 'PV_NEUTRALINO_PRODUCTION_BUILD_HEAD=%s\n' "$PV_SOURCE_SHA"
+printf 'PV_NEUTRALINO_SOURCE_DATE_EPOCH=%s\n' "$SOURCE_DATE_EPOCH"
 printf 'PV_NEUTRALINO_BUILDER_IMAGE=%s\n' "$builder_image"
 printf 'PV_NEUTRALINO_BUILDER_PLATFORM=%s\n' "$builder_platform"
 printf 'PV_NEUTRALINO_APT_SNAPSHOT=%s\n' "$apt_snapshot"
@@ -34,11 +44,12 @@ printf 'PV_NEUTRALINO_TLS_BOOTSTRAP_CA=%s\n' "$host_ca_bundle"
 )
 set +e
 {
-  printf 'PV_HOST_NAV_BUILD_HEAD=%s\n' "${PV_SOURCE_SHA:-${GITHUB_SHA:-unknown}}"
+  printf 'PV_HOST_NAV_BUILD_HEAD=%s\n' "$PV_SOURCE_SHA"
   docker run --rm --platform "$builder_platform" \
     -e PV_NEUTRALINO_BUILDER_IMAGE="$builder_image" \
     -e PV_NEUTRALINO_BUILDER_PLATFORM="$builder_platform" \
     -e PV_NEUTRALINO_APT_SNAPSHOT="$apt_snapshot" \
+    -e SOURCE_DATE_EPOCH="$SOURCE_DATE_EPOCH" \
     --mount "type=bind,src=$host_ca_bundle,dst=/tmp/pv-host-ca.crt,readonly" \
     -v "$PWD:/workspace" -w /workspace "$builder_image" bash -lc '
       set -euxo pipefail
@@ -60,6 +71,7 @@ set +e
         printf "builder_image=%s\n" "$PV_NEUTRALINO_BUILDER_IMAGE"
         printf "builder_platform=%s\n" "$PV_NEUTRALINO_BUILDER_PLATFORM"
         printf "apt_snapshot=%s\n" "$PV_NEUTRALINO_APT_SNAPSHOT"
+        printf "source_date_epoch=%s\n" "$SOURCE_DATE_EPOCH"
         printf "cc_path=%s\n" "$(readlink -f "$(command -v "$CC")")"
         printf "cc_version=%s\n" "$("$CC" -dumpfullversion -dumpversion)"
         printf "cxx_path=%s\n" "$(readlink -f "$(command -v "$CXX")")"
