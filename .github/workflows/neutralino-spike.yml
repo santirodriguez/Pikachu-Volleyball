@@ -76,29 +76,61 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          docker run --rm \
-            -v "$PWD:/workspace" \
-            -w /workspace \
-            ubuntu:20.04 \
-            bash -lc '
-              set -euo pipefail
-              export DEBIAN_FRONTEND=noninteractive
-              apt-get update
-              apt-get install -y -f \
-                ca-certificates \
-                git \
-                g++ \
-                pkg-config \
-                cmake \
-                ninja-build \
-                libgtk-3-dev \
-                libwebkit2gtk-4.0-dev
-              /workspace/scripts/build-neutralino-host-navigation-runtime.sh \
-                /workspace/.neutralino-spike/bin/neutralino-linux_x64
-            '
-          sudo chown "$(id -u):$(id -g)" \
-            .neutralino-spike/bin/neutralino-linux_x64 \
-            .neutralino-spike/neutralino-host-navigation-runtime.json
+          diagnostic_dir=".neutralino-spike/diagnostics"
+          diagnostic_log="$diagnostic_dir/host-navigation-runtime-build.log"
+          mkdir -p "$diagnostic_dir"
+          : > "$diagnostic_log"
+
+          set +e
+          {
+            printf 'PV_HOST_NAV_BUILD_HEAD=%s\n' "$GITHUB_SHA"
+            docker run --rm \
+              -v "$PWD:/workspace" \
+              -w /workspace \
+              ubuntu:20.04 \
+              bash -lc '
+                set -euxo pipefail
+                export DEBIAN_FRONTEND=noninteractive
+                printf "\n=== STAGE: dependency installation ===\n"
+                apt-get update
+                apt-get install -y -f \
+                  ca-certificates \
+                  git \
+                  g++ \
+                  pkg-config \
+                  cmake \
+                  ninja-build \
+                  libgtk-3-dev \
+                  libwebkit2gtk-4.0-dev
+                printf "\n=== STAGE: patched runtime build script ===\n"
+                /workspace/scripts/build-neutralino-host-navigation-runtime.sh \
+                  /workspace/.neutralino-spike/bin/neutralino-linux_x64
+              '
+            docker_status=$?
+            if [[ "$docker_status" -ne 0 ]]; then
+              printf 'PV_HOST_NAV_DOCKER_EXIT_CODE=%s\n' "$docker_status"
+              exit "$docker_status"
+            fi
+
+            printf '\n=== STAGE: ownership correction ===\n'
+            sudo chown "$(id -u):$(id -g)" \
+              .neutralino-spike/bin/neutralino-linux_x64 \
+              .neutralino-spike/neutralino-host-navigation-runtime.json
+          } 2>&1 | tee "$diagnostic_log"
+          build_status=${PIPESTATUS[0]}
+          set -e
+
+          printf 'PV_HOST_NAV_BUILD_EXIT_CODE=%s\n' "$build_status" | tee -a "$diagnostic_log"
+          exit "$build_status"
+
+      - name: Upload patched-runtime build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: neutralino-host-navigation-build-diagnostics
+          path: .neutralino-spike/diagnostics/host-navigation-runtime-build.log
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Build embedded Neutralino artifacts
         working-directory: .neutralino-spike
