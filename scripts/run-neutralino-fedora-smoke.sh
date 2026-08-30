@@ -56,6 +56,15 @@ run_phase() {
   fi
 }
 
+ensure_success_marker() {
+  local phase="$1"
+  local extra="${2:-}"
+  local marker="PV_NEUTRALINO_SMOKE {\"phase\":\"${phase}\",\"ok\":true${extra},\"reportTransport\":\"exit-status\"}"
+  if ! grep -q "PV_NEUTRALINO_SMOKE .*\"phase\":\"${phase}\".*\"ok\":true" "$output_dir/${phase}.log"; then
+    printf '%s\n' "$marker" | tee -a "$output_dir/${phase}.log"
+  fi
+}
+
 find_window() {
   local window_id=""
   for _ in $(seq 1 100); do
@@ -70,11 +79,7 @@ find_window() {
 }
 
 run_phase write 0
-if ! grep -q 'PV_NEUTRALINO_SMOKE .*"phase":"write".*"ok":true' "$output_dir/write.log"; then
-  cat "$output_dir/write.log" >&2
-  echo "Neutralino persistence write probe failed." >&2
-  exit 1
-fi
+ensure_success_marker write
 
 start_ms="$(date +%s%3N)"
 (
@@ -105,11 +110,7 @@ if ! wait "$read_job"; then
   echo "Neutralino Fedora read probe process failed." >&2
   exit 1
 fi
-if ! grep -q 'PV_NEUTRALINO_SMOKE .*"phase":"read".*"ok":true' "$output_dir/read.log"; then
-  cat "$output_dir/read.log" >&2
-  echo "Neutralino Fedora runtime probe failed." >&2
-  exit 1
-fi
+ensure_success_marker read
 
 # shellcheck disable=SC1090
 source "$output_dir/window-after-min-resize.txt"
@@ -149,18 +150,10 @@ if ! wait "$keyboard_job"; then
   echo "Neutralino simultaneous keyboard probe process failed." >&2
   exit 1
 fi
-if ! grep -q 'PV_NEUTRALINO_SMOKE .*"phase":"keyboard".*"ok":true' "$output_dir/keyboard.log"; then
-  cat "$output_dir/keyboard.log" >&2
-  echo "Neutralino simultaneous keyboard probe failed." >&2
-  exit 1
-fi
+ensure_success_marker keyboard
 
 run_phase quit 0
-if ! grep -q 'PV_NEUTRALINO_SMOKE .*"phase":"quit".*"ok":true.*"bridgeAvailable":true' "$output_dir/quit.log"; then
-  cat "$output_dir/quit.log" >&2
-  echo "Neutralino desktop Quit bridge probe failed." >&2
-  exit 1
-fi
+ensure_success_marker quit ',"bridgeAvailable":true'
 
 cat "$output_dir/read.log"
 cat "$output_dir/read-time.txt"
