@@ -3,7 +3,6 @@
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
-const { getAllowedExternalUrl } = require('../desktop/external-link-policy.cjs');
 
 const binary = path.resolve(
   __dirname,
@@ -14,42 +13,41 @@ const binary = path.resolve(
 );
 
 const cases = [
-  'https://santiagorodriguez.com',
-  'https://santiagorodriguez.com/about?from=desktop#phase2',
-  'https://www.santiagorodriguez.com/',
-  'https://github.com/santirodriguez/pikachu-volleyball',
-  'https://github.com:443/gorisanson/pikachu-volleyball?tab=readme#readme',
-  'file:///tmp/pikachu-volleyball',
-  'javascript:alert(1)',
-  'data:text/html,pikachu',
-  'not a url',
-  'http://santiagorodriguez.com',
-  'https://example.com',
-  'https://github.com.evil.example/santirodriguez/pikachu-volleyball',
-  'https://evil.github.com/santirodriguez/pikachu-volleyball',
-  'https://sub.santiagorodriguez.com/',
-  'https://santiagorodriguez.com.evil.example/',
-  'https://github.com/santirodriguez/pikachu-volleyball/issues',
-  'https://github.com/santirodriguez/pikachu-volleyball/',
-  'https://github.com/gorisanson/pikachu-volleyball/tree/master',
-  'https://user@santiagorodriguez.com/',
-  'https://santiagorodriguez.com:444/',
-  'https://github.com\\@evil.example/santirodriguez/pikachu-volleyball',
+  ['https://santiagorodriguez.com', true],
+  ['https://santiagorodriguez.com/about?from=desktop#phase2', true],
+  ['https://www.santiagorodriguez.com/', true],
+  ['https://github.com/santirodriguez/pikachu-volleyball', true],
+  ['https://github.com:443/gorisanson/pikachu-volleyball?tab=readme#readme', true],
+  ['file:///tmp/pikachu-volleyball', false],
+  ['javascript:alert(1)', false],
+  ['data:text/html,pikachu', false],
+  ['not a url', false],
+  ['http://santiagorodriguez.com', false],
+  ['https://example.com', false],
+  ['https://github.com.evil.example/santirodriguez/pikachu-volleyball', false],
+  ['https://evil.github.com/santirodriguez/pikachu-volleyball', false],
+  ['https://sub.santiagorodriguez.com/', false],
+  ['https://santiagorodriguez.com.evil.example/', false],
+  ['https://github.com/santirodriguez/pikachu-volleyball/issues', false],
+  ['https://github.com/santirodriguez/pikachu-volleyball/', false],
+  ['https://github.com/gorisanson/pikachu-volleyball/tree/master', false],
+  ['https://user@santiagorodriguez.com/', false],
+  ['https://santiagorodriguez.com:444/', false],
+  ['https://github.com\\@evil.example/santirodriguez/pikachu-volleyball', false],
 ];
 
-for (const candidate of cases) {
-  const electronAllowed = getAllowedExternalUrl(candidate) !== null;
+for (const [candidate, expectedAllowed] of cases) {
   const result = spawnSync(binary, ['--check-url', candidate], {
     encoding: 'utf8',
   });
   const neutralinoAllowed = result.status === 0;
   assert.equal(
     neutralinoAllowed,
-    electronAllowed,
-    `Desktop external-link policy diverged for ${candidate}`
+    expectedAllowed,
+    `Neutralino external-link policy produced an unexpected result for ${candidate}`
   );
 }
 
 process.stdout.write(
-  `Validated ${cases.length} Electron/Neutralino URL policy cases.\n`
+  `Validated ${cases.length} Neutralino external-link URL policy cases.\n`
 );

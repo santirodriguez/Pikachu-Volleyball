@@ -36,10 +36,11 @@ These rules apply to all future work in this repository.
 ## Web and desktop boundaries
 
 - Keep the web build and static locale outputs working.
-- Keep desktop-only code under `desktop/` and expose only narrow, secure APIs to the renderer.
-- Preserve the current Electron desktop behavior until a separately approved migration phase replaces it.
-- Keep `contextIsolation`, sandboxing, and external-navigation restrictions enabled while Electron remains present.
-- Linux packaging remains AppImage-only until an approved v3 migration phase changes the desktop packaging contract.
+- Neutralino is the supported v3 desktop runtime after Phase 4 Electron retirement.
+- Keep desktop-only runtime code under `desktop/neutralino/` and expose only the narrow `pvDesktop` renderer contract.
+- Preserve the accepted Neutralino 6.9.0 WebKitGTK host-navigation patch, native external-link mediator, renderer privilege allowlist, window behavior, persistence, input, audio, and Quit behavior unless a separately approved phase changes them.
+- Keep unrestricted `Neutralino.os.open` unavailable to renderer JavaScript.
+- Final Linux distribution format, dependency bundling, installer/AppImage design, and end-user packaging policy belong to Phase 5; do not infer them from the retired 2.1 Electron/AppImage toolchain.
 
 ## Validation
 
@@ -47,7 +48,7 @@ These rules apply to all future work in this repository.
 - Run additional characterization tests introduced by the affected area.
 - Validate every supported locale output after localization or build-template changes.
 - State clearly in the pull request when a check could not be run and why.
-- Packaging-sensitive changes require a real desktop artifact build and Linux validation before release.
+- Desktop-runtime changes require a reproducible Neutralino artifact build and real Linux/WebKitGTK validation before merge readiness.
 - During runtime migration, compare behavior against the frozen 2.1 preservation and regression baseline rather than relying only on implementation-level tests.
 
 ## Pull request expectations
