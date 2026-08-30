@@ -16,6 +16,7 @@ const REQUIRED_ASSETS = [
   path.join('resources', 'assets', 'sounds', 'WAVE145_1.wav'),
 ];
 const SMOKE_ONLY = process.argv.includes('--smoke-only');
+const NORMALIZE_ONLY = process.argv.includes('--normalize-only');
 
 function assertFile(filePath) {
   if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
@@ -59,6 +60,17 @@ function normalizeTreeTimestamp(directory, date) {
   fs.utimesSync(directory, date, date);
 }
 
+function normalizeProductionStage() {
+  assertFile(path.join(STAGE, 'neutralino.config.json'));
+  if (!fs.existsSync(RESOURCES) || !fs.statSync(RESOURCES).isDirectory()) {
+    throw new Error(`Missing Neutralino production resources directory: ${RESOURCES}`);
+  }
+  const deterministicDate = sourceDate();
+  normalizeTreeTimestamp(RESOURCES, deterministicDate);
+  fs.utimesSync(path.join(STAGE, 'neutralino.config.json'), deterministicDate, deterministicDate);
+  process.stdout.write(`Normalized production Neutralino staging with SOURCE_DATE_EPOCH=${process.env.SOURCE_DATE_EPOCH}\n`);
+}
+
 function prepareProductionStage() {
   assertFile(path.join(SOURCE, 'neutralino.config.json'));
   assertFile(path.join(SOURCE, 'preload.js'));
@@ -75,10 +87,8 @@ function prepareProductionStage() {
   fs.writeFileSync(path.join(STAGE, 'neutralino.config.json'), `${JSON.stringify(readProductionConfig(), null, 2)}\n`);
   fs.copyFileSync(path.join(SOURCE, 'preload.js'), path.join(RESOURCES, 'neutralino-preload.js'));
 
-  const deterministicDate = sourceDate();
-  normalizeTreeTimestamp(RESOURCES, deterministicDate);
-  fs.utimesSync(path.join(STAGE, 'neutralino.config.json'), deterministicDate, deterministicDate);
-  process.stdout.write(`Prepared production Neutralino staging at ${STAGE} with SOURCE_DATE_EPOCH=${process.env.SOURCE_DATE_EPOCH}\n`);
+  normalizeProductionStage();
+  process.stdout.write(`Prepared production Neutralino staging at ${STAGE}\n`);
 }
 
 function prepareSmokeStage() {
@@ -106,4 +116,5 @@ function prepareSmokeStage() {
 }
 
 if (SMOKE_ONLY) prepareSmokeStage();
+else if (NORMALIZE_ONLY) normalizeProductionStage();
 else prepareProductionStage();
