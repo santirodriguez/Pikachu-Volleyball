@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-stage="${1:-.neutralino-spike}"
+stage="${1:-.neutralino-production}"
 cd "$stage"
 
 binary="./bin/neutralino-linux_x64"
