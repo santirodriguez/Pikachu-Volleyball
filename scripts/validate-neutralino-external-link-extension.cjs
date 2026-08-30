@@ -8,7 +8,7 @@ const { getAllowedExternalUrl } = require('../desktop/external-link-policy.cjs')
 const binary = path.resolve(
   __dirname,
   '..',
-  '.neutralino-spike',
+  '.neutralino-production',
   'extensions',
   'pv-external-link-linux_x64'
 );
@@ -50,4 +50,6 @@ for (const candidate of cases) {
   );
 }
 
-process.stdout.write(`Validated ${cases.length} Electron/Neutralino URL policy cases.\n`);
+process.stdout.write(
+  `Validated ${cases.length} Electron/Neutralino URL policy cases.\n`
+);

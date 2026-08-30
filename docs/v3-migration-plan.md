@@ -34,7 +34,7 @@ Migration work may reorganize ownership and replace desktop infrastructure, but 
 - Phase 0 — Foundation and regression baseline — complete
 - Phase 1 — Neutralino compatibility spike — complete (`NEUTRALINO_GO`)
 - Phase 2 — Desktop platform boundary — complete (`NEUTRALINO_SECURITY_GO`)
-- Phase 3 — Production Neutralino parity
+- Phase 3 — Production Neutralino parity — validation complete, merge pending
 - Phase 4 — Electron retirement
 - Phase 5 — Linux distribution
 - Phase 6 — Internal rebranding
@@ -75,11 +75,68 @@ The trusted Neutralino desktop boundary consists of the patched native WebKitGTK
 
 The host-owned same-window navigation restriction is a required security property of the accepted Neutralino path, not a smoke-only workaround or renderer-side convention.
 
+## Phase 3 production parity closure
+
+Phase 3 productionizes the accepted Phase 2 Neutralino boundary without changing the runtime selection, renderer/native trust model, gameplay semantics, Electron fallback, or final Linux distribution policy.
+
+The production renderer native allowlist remains exactly:
+
+```text
+app.exit
+extensions.dispatch
+extensions.getStats
+```
+
+`Neutralino.os.open` remains unavailable to renderer JavaScript. The Linux external-link mediator and patched WebKitGTK same-window navigation boundary remain the accepted security architecture.
+
+The production build is reproducible from a clean source commit using pinned artifact-producing inputs:
+
+- Neutralino framework/runtime `6.9.0` from upstream commit `2cec764ac5e3ccc5b1b44d046d6e6d6c85c3099e`;
+- Neutralino CLI `11.7.2` from CLI source commit `387dca0aa4a100b3b69ef17774185fd6cb2c3da4`, installed from its lockfile;
+- Node.js `22.12.0` Linux x64 distribution verified by SHA-256;
+- pinned Ubuntu Focal builder image digest and Ubuntu archive snapshot;
+- recorded npm, project lockfile, CLI lockfile, compiler and package identities;
+- source-derived `SOURCE_DATE_EPOCH` with staged resource mtimes normalized after `neu update` and before resource embedding;
+- dirty or source-SHA-mismatched production working trees rejected before building.
+
+CI performs two independent detached clean builds of the same exact source SHA and compares the first differing layer across the raw patched runtime, native helper, embedded production binary, `provenance.json`, `SHA256SUMS`, final tarball, resource contents and resource metadata. A mismatch fails the gate and persists component diagnostics.
+
+The last implementation validation before this closeout documentation change was exact source `29113a52a01fb41109ba163fdebb1f24339d69b3`. Both the push and pull-request production-parity workflows passed completely. The two isolated builds matched at every compared layer:
+
+- raw patched runtime: `2,876,248` bytes, SHA-256 `4ece99c126a7e17dfc86605221c2258ee546585687fb9425eea7e3917d54da33`;
+- external-link helper: `18,568` bytes, SHA-256 `20872aeac3ff8ed173b26bcb016135f0dcce35eb6b5eff146e9838658b38d794`;
+- embedded production binary: `6,025,488` bytes, SHA-256 `c2c6c7391d8576af434c1a8c9075486e1c0b712c1e65fe28cbb969ce53baeec9`;
+- resource content tree SHA-256: `8eec5de5bdc30bb0bac1e178f1a925c0549149a07d43a0c05a3bf5004f5fbb27`;
+- resource metadata tree SHA-256: `02ba8b171320b078296664651b4684d933b5432b36b89ef9c53648e449f480fc`.
+
+That validation produced byte-identical final tarballs in both isolated builds. Run-specific final source/provenance/tarball hashes are recorded in PR #83 closeout evidence because tracked documentation cannot contain the SHA of the commit that contains itself without creating another commit.
+
+The runnable production-parity bundle contains exactly four files:
+
+```text
+pikachu-volleyball-neutralino-linux_x64
+extensions/pv-external-link-linux_x64
+provenance.json
+SHA256SUMS
+```
+
+The server-side Phase 3 gate covers production dependency audit, `quality:check`, deterministic/characterization tests, five locale web/PWA outputs, exact artifact composition and checksums, extracted production artifact startup, Fedora 44 with real WebKitGTK/GTK, persistence, desktop runtime identity, default/minimum window sizing, keyboard/input, exercised MP3/WAV audio and game-flow settings/restart behavior, Quit, external-link policy and adversarial same-window navigation attempts.
+
+Fedora validation requires the extracted production bundle to launch before any CI-only validation overlay is added. The validation overlay may temporarily add `app.writeProcessOutput`; that permission and the smoke probes are not part of the production artifact. Validation diagnostics, reproducibility evidence and the candidate artifact are uploaded with failure-safe behavior so a failing candidate remains inspectable.
+
+Fedora 44 validation demonstrated that the main WebView stayed on the trusted application origin through `location.assign`, direct `window.location.href`, `location.replace`, same-window anchor, `data:` and `file:` navigation attempts, plus an approved external destination. Approved external navigation used the trusted native helper instead. Direct renderer `Neutralino.os.open` remained blocked.
+
+Phase 3 intentionally retains Electron. It does not begin Electron retirement, final AppImage/distribution dependency bundling, release, tag, deployment, publication, repository rename or `main` modification.
+
 ## Current migration gate
 
-Phase 2 is complete. Phase 3 is responsible for productionizing the accepted Neutralino candidate, including packaging integration, runtime provenance, reproducible patched-runtime building, maintenance of the pinned upstream commit and deterministic patch, and production parity around the trusted native helper and host-navigation boundary.
+Phase 3 implementation, exact-head server-side validation, and Codex closeout review are complete on PR #83. Phase 3 is ready for a separate explicit merge decision. Phase 3 does not authorize Electron retirement. Electron retirement remains Phase 4 and requires its own approved gate.
 
-Phase 3 does not authorize Electron retirement. Electron retirement remains Phase 4 and requires its own approved gate.
+## Linux runtime dependencies / limitations
+
+The Phase 3 Neutralino artifact intentionally relies on Linux system facilities rather than bundling the final distribution environment. Fedora 44 validation uses GTK 3, WebKitGTK 4.1, X11 tooling, GStreamer base/good plugins for exercised MP3/WAV playback, and `xdg-open` for approved external URLs.
+
+Missing required GTK/WebKitGTK shared libraries prevents normal native-WebView startup. Final dependency bundling and AppImage/distribution policy remain deferred to the later Linux distribution phase. No Node.js, Python or backend runtime is bundled in the production four-file artifact.
 
 ## Publication rule
 

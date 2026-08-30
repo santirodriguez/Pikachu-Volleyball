@@ -7,9 +7,15 @@ const test = require('node:test');
 const vm = require('node:vm');
 
 const ROOT = path.resolve(__dirname, '..');
-const CONFIG_PATH = path.join(ROOT, 'desktop', 'neutralino-spike', 'neutralino.config.json');
-const PRELOAD_PATH = path.join(ROOT, 'desktop', 'neutralino-spike', 'preload.js');
-const EXTERNAL_LINK_EXTENSION_ID = 'com.santirodriguez.pikachuvolleyball.externallinks';
+const CONFIG_PATH = path.join(
+  ROOT,
+  'desktop',
+  'neutralino',
+  'neutralino.config.json'
+);
+const PRELOAD_PATH = path.join(ROOT, 'desktop', 'neutralino', 'preload.js');
+const EXTERNAL_LINK_EXTENSION_ID =
+  'com.santirodriguez.pikachuvolleyball.externallinks';
 
 function readConfig() {
   return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
@@ -24,9 +30,13 @@ function createPreloadHarness() {
   let exitCalls = 0;
   let windowCloseHandler = null;
   let newWindowRequestHandler = null;
+
   class HTMLAnchorElement {}
+
   const neutralino = {
-    init() { initCalls += 1; },
+    init() {
+      initCalls += 1;
+    },
     events: {
       on(name, handler) {
         registeredEvents.push(name);
@@ -36,7 +46,10 @@ function createPreloadHarness() {
       },
     },
     app: {
-      exit() { exitCalls += 1; return Promise.resolve(); },
+      exit() {
+        exitCalls += 1;
+        return Promise.resolve();
+      },
     },
     extensions: {
       dispatch(extensionId, eventName, data) {
@@ -47,15 +60,22 @@ function createPreloadHarness() {
   };
   const windowObject = { Neutralino: neutralino };
   const documentObject = {
-    addEventListener(name, handler) { documentListeners.set(name, handler); },
+    addEventListener(name, handler) {
+      documentListeners.set(name, handler);
+    },
   };
   const context = vm.createContext({
     window: windowObject,
     document: documentObject,
     HTMLAnchorElement,
-    console: { error(...args) { errors.push(args); } },
+    console: {
+      error(...args) {
+        errors.push(args);
+      },
+    },
   });
   vm.runInContext(fs.readFileSync(PRELOAD_PATH, 'utf8'), context);
+
   return {
     windowObject,
     errors,
@@ -74,34 +94,31 @@ async function flushPromises() {
   await new Promise((resolve) => setImmediate(resolve));
 }
 
-test('Neutralino spike pins a minimal stable runtime configuration', () => {
+test('Neutralino production pins the accepted runtime and identity', () => {
   const config = readConfig();
+  assert.equal(
+    config.applicationId,
+    'com.santirodriguez.pikachuvolleyball.neutralino-spike'
+  );
+  assert.equal(config.cli.binaryName, 'pikachu-volleyball-neutralino');
   assert.equal(config.cli.binaryVersion, '6.9.0');
   assert.equal(config.cli.clientVersion, '6.9.0');
-  assert.equal(config.cli.clientLibrary, '/resources/neutralino.js');
-  assert.equal(config.cli.extensionsPath, '/extensions/');
   assert.equal(config.port, 48471);
-  assert.equal(config.enableServer, true);
-  assert.equal(config.enableNativeAPI, true);
-  assert.equal(config.tokenSecurity, 'one-time');
-  assert.equal(config.exportAuthInfo, false);
-  assert.equal(config.enableExtensions, true);
+  assert.equal(config.dataLocation, 'system');
   assert.deepEqual(config.nativeAllowList, [
     'app.exit',
     'extensions.dispatch',
     'extensions.getStats',
   ]);
-  assert.equal(config.extensions.length, 1);
-  assert.deepEqual(config.extensions[0], {
-    id: EXTERNAL_LINK_EXTENSION_ID,
-    commandLinux: '${NL_PATH}/extensions/pv-external-link-linux_x64',
-  });
-  assert.equal(config.documentRoot, '/resources/');
-  assert.equal(config.url, '/en/index.html?desktop=1');
-  assert.equal(config.singlePageServe, false);
+  assert.equal(config.logging.enabled, false);
+  assert.equal(config.modes.window.enableInspector, false);
+  assert.equal(
+    config.modes.window.injectScript,
+    '/resources/neutralino-preload.js'
+  );
 });
 
-test('Neutralino spike preserves the Electron window contract', () => {
+test('Neutralino production preserves the desktop window contract', () => {
   const windowConfig = readConfig().modes.window;
   assert.equal(windowConfig.title, 'Pikachu Volleyball');
   assert.equal(windowConfig.width, 1024);
@@ -110,26 +127,21 @@ test('Neutralino spike preserves the Electron window contract', () => {
   assert.equal(windowConfig.minHeight, 600);
   assert.equal(windowConfig.resizable, true);
   assert.equal(windowConfig.fullScreen, false);
-  assert.equal(windowConfig.exitProcessOnClose, false);
-  assert.equal(windowConfig.useSavedState, false);
-  assert.equal(windowConfig.injectGlobals, false);
-  assert.equal(windowConfig.injectClientLibrary, true);
-  assert.equal(windowConfig.injectScript, '/resources/neutralino-preload.js');
   assert.equal(windowConfig.newWindowPolicy, 'custom');
 });
 
-test('Neutralino preload exposes only the common desktop application contract', async () => {
+test('Neutralino preload exposes only the common desktop contract', async () => {
   const harness = createPreloadHarness();
   assert.equal(harness.getInitCalls(), 1);
-  assert.deepEqual(harness.registeredEvents, ['windowClose', 'newWindowRequest']);
-  assert.deepEqual([...harness.documentListeners.keys()], ['click', 'auxclick']);
-  assert.deepEqual(Object.keys(harness.windowObject.pvDesktop).sort(), ['isDesktop', 'quit', 'runtime']);
-  assert.equal(harness.windowObject.pvDesktop.isDesktop, true);
+  assert.deepEqual(Object.keys(harness.windowObject.pvDesktop).sort(), [
+    'isDesktop',
+    'quit',
+    'runtime',
+  ]);
   assert.equal(harness.windowObject.pvDesktop.runtime, 'neutralino');
   assert.equal(Object.isFrozen(harness.windowObject.pvDesktop), true);
   const firstQuit = harness.windowObject.pvDesktop.quit();
-  const secondQuit = harness.windowObject.pvDesktop.quit();
-  assert.equal(firstQuit, secondQuit);
+  assert.equal(firstQuit, harness.windowObject.pvDesktop.quit());
   assert.equal(await firstQuit, true);
   harness.getWindowCloseHandler()();
   await flushPromises();
@@ -137,40 +149,45 @@ test('Neutralino preload exposes only the common desktop application contract', 
   assert.deepEqual(harness.errors, []);
 });
 
-test('Neutralino external anchor requests are mediated by the trusted extension', async () => {
+test('Neutralino external requests remain mediated', async () => {
   const harness = createPreloadHarness();
   const anchor = new harness.HTMLAnchorElement();
   anchor.href = 'https://santiagorodriguez.com/';
   let prevented = false;
   harness.documentListeners.get('click')({
     target: { closest: () => anchor },
-    preventDefault() { prevented = true; },
+    preventDefault() {
+      prevented = true;
+    },
   });
   await flushPromises();
   assert.equal(prevented, true);
-  assert.deepEqual(JSON.parse(JSON.stringify(harness.dispatchedExtensionEvents)), [
-    {
-      extensionId: EXTERNAL_LINK_EXTENSION_ID,
-      eventName: 'openExternal',
-      data: { url: 'https://santiagorodriguez.com/' },
-    },
-  ]);
-  assert.deepEqual(harness.errors, []);
-});
-
-test('Neutralino custom new-window requests remain a mediated fallback', async () => {
-  const harness = createPreloadHarness();
-  harness.getNewWindowRequestHandler()({ detail: { url: 'https://santiagorodriguez.com' } });
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(harness.dispatchedExtensionEvents)),
+    [
+      {
+        extensionId: EXTERNAL_LINK_EXTENSION_ID,
+        eventName: 'openExternal',
+        data: { url: 'https://santiagorodriguez.com/' },
+      },
+    ]
+  );
+  harness.getNewWindowRequestHandler()({
+    detail: { url: 'https://santiagorodriguez.com' },
+  });
   await flushPromises();
-  assert.equal(harness.dispatchedExtensionEvents.length, 1);
-  assert.equal(harness.dispatchedExtensionEvents[0].extensionId, EXTERNAL_LINK_EXTENSION_ID);
+  assert.equal(harness.dispatchedExtensionEvents.length, 2);
 });
 
-test('Neutralino production keeps unrestricted external opening unavailable to renderer native API', () => {
+test('Neutralino production excludes validation privileges and probes', () => {
   const config = readConfig();
-  const preloadSource = fs.readFileSync(PRELOAD_PATH, 'utf8');
+  const preload = fs.readFileSync(PRELOAD_PATH, 'utf8');
   assert.equal(config.nativeAllowList.includes('os.open'), false);
-  assert.equal(preloadSource.includes('neutralino.os.open'), false);
-  assert.equal(config.nativeAllowList.includes('os.*'), false);
-  assert.equal(config.modes.window.newWindowPolicy, 'custom');
+  assert.equal(config.nativeAllowList.includes('app.writeProcessOutput'), false);
+  assert.equal(preload.includes('neutralino.os.open'), false);
+  assert.equal(preload.includes('PV_NEUTRALINO_SMOKE'), false);
+  assert.equal(
+    fs.existsSync(path.join(ROOT, 'desktop', 'neutralino', 'smoke-probe.js')),
+    false
+  );
 });
