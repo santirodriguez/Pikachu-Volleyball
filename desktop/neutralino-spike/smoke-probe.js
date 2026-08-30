@@ -389,13 +389,15 @@
     }
   }
 
-  window.addEventListener(
-    'load',
-    () => {
-      run().catch((error) => {
-        finish({ phase, ok: false, error: String(error?.stack || error) }, 1);
-      });
-    },
-    { once: true }
-  );
+  function start() {
+    run().catch((error) => {
+      finish({ phase, ok: false, error: String(error?.stack || error) }, 1);
+    });
+  }
+
+  if (document.readyState === 'complete') {
+    start();
+  } else {
+    window.addEventListener('load', start, { once: true });
+  }
 })();
