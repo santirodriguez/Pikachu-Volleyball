@@ -22,13 +22,6 @@
     return quitPromise;
   }
 
-  function getRequestedUrl(event) {
-    if (typeof event?.detail === 'string') return event.detail;
-    if (typeof event?.detail?.url === 'string') return event.detail.url;
-    if (typeof event?.url === 'string') return event.url;
-    return null;
-  }
-
   async function mediateExternalLink(url) {
     if (typeof url !== 'string') return false;
     await neutralino.extensions.dispatch(
@@ -39,7 +32,30 @@
     return true;
   }
 
+  function getExternalAnchor(event) {
+    const anchor = event?.target?.closest?.('a[target="_blank"][href]');
+    return anchor instanceof HTMLAnchorElement ? anchor : null;
+  }
+
+  function mediateAnchorEvent(event) {
+    const anchor = getExternalAnchor(event);
+    if (!anchor) return;
+    event.preventDefault();
+    mediateExternalLink(anchor.href).catch((error) => {
+      console.error('Unable to mediate external link.', error);
+    });
+  }
+
+  function getRequestedUrl(event) {
+    if (typeof event?.detail === 'string') return event.detail;
+    if (typeof event?.detail?.url === 'string') return event.detail.url;
+    if (typeof event?.url === 'string') return event.url;
+    return null;
+  }
+
   neutralino.init();
+  document.addEventListener('click', mediateAnchorEvent, true);
+  document.addEventListener('auxclick', mediateAnchorEvent, true);
   neutralino.events.on('windowClose', () => {
     quit().catch((error) => {
       console.error('Unable to exit Neutralino cleanly.', error);

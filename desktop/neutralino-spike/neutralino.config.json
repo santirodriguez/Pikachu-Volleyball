@@ -18,7 +18,7 @@
       "commandLinux": "${NL_PATH}/extensions/pv-external-link-linux_x64"
     }
   ],
-  "nativeAllowList": ["app.exit", "extensions.dispatch"],
+  "nativeAllowList": ["app.exit", "extensions.dispatch", "extensions.getStats"],
   "logging": {
     "enabled": false,
     "writeToLogFile": false

@@ -3,9 +3,7 @@
 (() => {
   const neutralino = window.Neutralino;
   const args = Array.isArray(window.NL_ARGS) ? window.NL_ARGS : [];
-  const phaseArg = args.find((arg) =>
-    arg.startsWith('--dev-pv-smoke-phase=')
-  );
+  const phaseArg = args.find((arg) => arg.startsWith('--dev-pv-smoke-phase='));
   const phase = phaseArg ? phaseArg.slice('--dev-pv-smoke-phase='.length) : null;
   if (!neutralino || phase !== 'external-links') return;
 
@@ -21,7 +19,6 @@
     'https://sub.santiagorodriguez.com/',
     'https://github.com/santirodriguez/pikachu-volleyball/issues',
   ];
-  const observedNewWindowUrls = [];
 
   function delay(ms) {
     return new Promise((resolve) => window.setTimeout(resolve, ms));
@@ -36,22 +33,6 @@
     return false;
   }
 
-  function requestedUrl(event) {
-    if (typeof event?.detail === 'string') return event.detail;
-    if (typeof event?.detail?.url === 'string') return event.detail.url;
-    if (typeof event?.url === 'string') return event.url;
-    return null;
-  }
-
-  function describeError(error) {
-    if (!error) return String(error);
-    try {
-      return JSON.stringify(error);
-    } catch {
-      return String(error?.stack || error);
-    }
-  }
-
   async function writeReport(report) {
     const write = neutralino.app
       .writeProcessOutput(`PV_NEUTRALINO_EXTERNAL_LINK ${JSON.stringify(report)}\n`)
@@ -59,37 +40,18 @@
     await Promise.race([write, delay(500)]);
   }
 
-  window.addEventListener('unhandledrejection', (event) => {
-    console.error(
-      `PV_NEUTRALINO_EXTERNAL_LINK_UNHANDLED ${describeError(event.reason)}`
-    );
-  });
-
   async function run() {
-    console.error('PV_NEUTRALINO_EXTERNAL_LINK_STAGE register-new-window');
-    await neutralino.events.on('newWindowRequest', (event) => {
-      const url = requestedUrl(event);
-      console.error(`PV_NEUTRALINO_EXTERNAL_LINK_EVENT ${String(url)}`);
-      if (url) observedNewWindowUrls.push(url);
-    });
-
-    console.error('PV_NEUTRALINO_EXTERNAL_LINK_STAGE wait-frame');
     const firstFrameReady = await waitFor(
       () => performance.getEntriesByName('pv-first-game-frame').length > 0
     );
 
-    console.error('PV_NEUTRALINO_EXTERNAL_LINK_STAGE direct-os-open');
     let directOsOpenBlocked = false;
     try {
       await neutralino.os.open('https://example.com');
-    } catch (error) {
+    } catch {
       directOsOpenBlocked = true;
-      console.error(
-        `PV_NEUTRALINO_EXTERNAL_LINK_OS_OPEN_BLOCKED ${describeError(error)}`
-      );
     }
 
-    console.error('PV_NEUTRALINO_EXTERNAL_LINK_STAGE click-anchor');
     const anchor = document.createElement('a');
     anchor.href = allowedUrl;
     anchor.target = '_blank';
@@ -97,34 +59,22 @@
     anchor.textContent = 'external-link-smoke';
     document.body.appendChild(anchor);
     anchor.click();
-
-    const newWindowRequestSeen = await waitFor(() =>
-      observedNewWindowUrls.includes(allowedUrl)
-    );
     anchor.remove();
-    console.error(
-      `PV_NEUTRALINO_EXTERNAL_LINK_STAGE anchor-result seen=${newWindowRequestSeen}`
-    );
 
     for (const url of forbiddenUrls) {
-      console.error(`PV_NEUTRALINO_EXTERNAL_LINK_STAGE dispatch-forbidden ${url}`);
       await neutralino.extensions.dispatch(EXTENSION_ID, 'openExternal', { url });
     }
     await delay(500);
 
-    console.error('PV_NEUTRALINO_EXTERNAL_LINK_STAGE report');
     await writeReport({
       phase: 'external-links',
       ok:
         firstFrameReady &&
-        newWindowRequestSeen &&
         directOsOpenBlocked &&
         window.pvDesktop?.isDesktop === true &&
         window.pvDesktop?.runtime === 'neutralino' &&
         typeof window.pvDesktop?.quit === 'function',
       firstFrameReady,
-      newWindowRequestSeen,
-      observedNewWindowUrls,
       directOsOpenBlocked,
       forbiddenDispatchCount: forbiddenUrls.length,
       desktopRuntime: window.pvDesktop?.runtime || null,
@@ -133,18 +83,14 @@
 
   function start() {
     run().catch((error) => {
-      console.error(`PV_NEUTRALINO_EXTERNAL_LINK_ERROR ${describeError(error)}`);
       writeReport({
         phase: 'external-links',
         ok: false,
-        error: describeError(error),
+        error: String(error?.stack || error),
       }).catch(() => {});
     });
   }
 
-  if (document.readyState === 'complete') {
-    start();
-  } else {
-    window.addEventListener('load', start, { once: true });
-  }
+  if (document.readyState === 'complete') start();
+  else window.addEventListener('load', start, { once: true });
 })();
