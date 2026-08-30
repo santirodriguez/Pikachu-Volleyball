@@ -1,0 +1,117 @@
+name: Neutralino Compatibility Spike
+
+on:
+  push:
+    branches:
+      - v3-phase1-neutralino-spike
+  pull_request:
+    branches:
+      - v3
+    paths:
+      - '.github/workflows/neutralino-spike.yml'
+      - 'desktop/neutralino-spike/**'
+      - 'scripts/prepare-neutralino-spike.cjs'
+      - 'scripts/report-neutralino-spike.cjs'
+      - 'scripts/run-neutralino-fedora-smoke.sh'
+      - 'test/neutralino_spike.test.cjs'
+      - 'src/**'
+      - 'webpack*.js'
+      - 'package.json'
+      - 'package-lock.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: neutralino-spike-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  spike:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22.12.0
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=critical
+
+      - name: Run repository quality checks
+        run: npm run quality:check
+
+      - name: Prepare production web output for Neutralino
+        run: node scripts/prepare-neutralino-spike.cjs
+
+      - name: Fetch pinned Neutralino runtime
+        working-directory: .neutralino-spike
+        run: npx -y @neutralinojs/neu@11.7.2 update
+
+      - name: Build embedded Neutralino artifacts
+        working-directory: .neutralino-spike
+        run: npx -y @neutralinojs/neu@11.7.2 build --embed-resources
+
+      - name: Report Linux artifact metrics
+        run: node scripts/report-neutralino-spike.cjs
+
+      - name: Prepare Fedora smoke instrumentation
+        run: node scripts/prepare-neutralino-spike.cjs --smoke-only
+
+      - name: Run Fedora 44 WebKitGTK smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm --shm-size=1g \
+            -v "$PWD:/workspace" \
+            -w /workspace \
+            fedora:44 \
+            bash -lc '
+              set -euo pipefail
+              dnf -y install \
+                webkit2gtk4.1 \
+                gtk3 \
+                xorg-x11-server-Xvfb \
+                openbox \
+                xdotool \
+                procps-ng \
+                time \
+                gstreamer1-plugins-base \
+                gstreamer1-plugins-good \
+                dbus-x11 \
+                shadow-utils
+              useradd -m pvsmoke
+              chmod -R a+rwX /workspace/.neutralino-spike
+              runuser -u pvsmoke -- \
+                /workspace/scripts/run-neutralino-fedora-smoke.sh \
+                /workspace/.neutralino-spike
+            '
+
+      - name: Collect experimental Linux artifact
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p neutralino-spike-artifact
+          if [[ -d .neutralino-spike/fedora-smoke ]]; then
+            cp -R .neutralino-spike/fedora-smoke neutralino-spike-artifact/
+          fi
+
+      - name: Upload experimental artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: neutralino-spike-linux-x64
+          path: neutralino-spike-artifact/
+          if-no-files-found: error
+          retention-days: 14

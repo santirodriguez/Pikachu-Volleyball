@@ -65,6 +65,11 @@ Gate: no Electron removal or replacement is authorized merely by Phase 0. The co
 
 Goal: implement the approved desktop runtime behind the Phase 1 boundary while preserving the 2.1 application behavior.
 
+Security requirement:
+
+- Production Neutralino external-link handling must not expose unrestricted `os.open` to renderer JavaScript. The URL policy must be enforced at a trustworthy boundary, or the native capability must remain unavailable.
+- The Phase 1 compatibility spike intentionally leaves final production external-link parity incomplete rather than weakening this boundary. Phase 2 must implement and validate an equivalent trustworthy external-link policy before Electron can be removed.
+
 Expected validation:
 
 - regression/characterization suite;
