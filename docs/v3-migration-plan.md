@@ -33,7 +33,7 @@ Migration work may reorganize ownership and replace desktop infrastructure, but 
 
 - Phase 0 — Foundation and regression baseline — complete
 - Phase 1 — Neutralino compatibility spike — complete (`NEUTRALINO_GO`)
-- Phase 2 — Desktop platform boundary
+- Phase 2 — Desktop platform boundary — complete (`NEUTRALINO_SECURITY_GO`)
 - Phase 3 — Production Neutralino parity
 - Phase 4 — Electron retirement
 - Phase 5 — Linux distribution
@@ -60,9 +60,26 @@ The desktop migration keeps application-facing capability deliberately narrow:
 
 The common renderer contract is limited to `pvDesktop.isDesktop`, `pvDesktop.runtime`, and `pvDesktop.quit()`. Host navigation policy is not forced into that contract merely for runtime symmetry.
 
+## Phase 2 accepted Neutralino boundary
+
+Phase 2 completed with `NEUTRALINO_SECURITY_GO`. The accepted Linux candidate is Neutralino `6.9.0` rebuilt from pinned upstream commit `2cec764ac5e3ccc5b1b44d046d6e6d6c85c3099e` with the deterministic WebKitGTK host-navigation patch stored in the repository.
+
+The trusted Neutralino desktop boundary consists of the patched native WebKitGTK navigation policy plus the Linux native external-link helper:
+
+- top-level same-window navigation is host-owned and must not allow renderer-controlled navigation to leave trusted application content;
+- cross-origin navigation candidates are denied in the main WebView and may be forwarded only through the trusted external-opening path;
+- the native external-link helper performs final URL parsing and allowlist enforcement before invoking `xdg-open` directly without a shell;
+- unrestricted `Neutralino.os.open` remains unavailable to renderer JavaScript;
+- `extensions.dispatch` is the narrow renderer-to-helper IPC path, with `extensions.getStats` retained because Neutralino 6.9.0 requires it internally for extension dispatch;
+- Electron remains present with its existing trusted navigation and renderer-isolation properties.
+
+The host-owned same-window navigation restriction is a required security property of the accepted Neutralino path, not a smoke-only workaround or renderer-side convention.
+
 ## Current migration gate
 
-Phase 2 must preserve Electron as the production comparison/fallback runtime while demonstrating a trustworthy Neutralino external-link mediator. Production Neutralino must not grant unrestricted `os.open` to renderer JavaScript. Electron retirement remains Phase 4 and is not authorized by Phase 2 or Phase 3 alone.
+Phase 2 is complete. Phase 3 is responsible for productionizing the accepted Neutralino candidate, including packaging integration, runtime provenance, reproducible patched-runtime building, maintenance of the pinned upstream commit and deterministic patch, and production parity around the trusted native helper and host-navigation boundary.
+
+Phase 3 does not authorize Electron retirement. Electron retirement remains Phase 4 and requires its own approved gate.
 
 ## Publication rule
 
