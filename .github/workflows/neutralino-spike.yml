@@ -100,14 +100,6 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p neutralino-spike-artifact
-          binary=.neutralino-spike/neutralino-dist/pikachu-volleyball-neutralino-spike-linux_x64
-          if [[ -f "$binary" ]]; then
-            cp "$binary" neutralino-spike-artifact/
-            chmod +x neutralino-spike-artifact/pikachu-volleyball-neutralino-spike-linux_x64
-          fi
-          if [[ -f neutralino-spike-artifact/metrics.json ]]; then
-            :
-          fi
           if [[ -d .neutralino-spike/fedora-smoke ]]; then
             cp -R .neutralino-spike/fedora-smoke neutralino-spike-artifact/
           fi
