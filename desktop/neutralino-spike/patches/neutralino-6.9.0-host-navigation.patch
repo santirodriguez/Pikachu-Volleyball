@@ -1,7 +1,7 @@
 diff --git a/lib/webview/webview.h b/lib/webview/webview.h
 --- a/lib/webview/webview.h
 +++ b/lib/webview/webview.h
-@@ -329,7 +329,21 @@ public:
+@@ -331,6 +331,18 @@ public:
  
      g_signal_connect(G_OBJECT(m_webview), "decide-policy",
 -      G_CALLBACK(+[](WebKitWebView*, WebKitPolicyDecision* decision, WebKitPolicyDecisionType type, gpointer) {
@@ -21,7 +21,7 @@ diff --git a/lib/webview/webview.h b/lib/webview/webview.h
          if(type == WEBKIT_POLICY_DECISION_TYPE_NEW_WINDOW_ACTION) {
            WebKitNavigationPolicyDecision *nav = (WebKitNavigationPolicyDecision*)decision;
            WebKitNavigationAction *action = webkit_navigation_policy_decision_get_navigation_action(nav);
-@@ -343,7 +357,7 @@ public:
+@@ -343,7 +355,7 @@ public:
          }
          return false;
      }),
@@ -30,7 +30,7 @@ diff --git a/lib/webview/webview.h b/lib/webview/webview.h
  
  
      if(emitDropEvents) {
-@@ -465,15 +479,40 @@ public:
+@@ -468,15 +480,42 @@ public:
    }
  
    void navigate(const std::string url) {
