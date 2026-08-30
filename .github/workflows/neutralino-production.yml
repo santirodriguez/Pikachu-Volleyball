@@ -31,9 +31,13 @@ concurrency:
 jobs:
   parity:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 75
+    env:
+      PV_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: actions/setup-node@v5
         with:
           node-version: 22.12.0
@@ -44,13 +48,64 @@ jobs:
       - name: Run repository quality checks
         run: npm run quality:check
       - name: Build reproducible Neutralino production candidate
-        run: npm run build:desktop:neutralino
+        shell: bash
+        run: |
+          set -euo pipefail
+          artifact=pikachu-volleyball-neutralino-production-parity-linux-x64.tar.gz
+          rm -rf dist .neutralino-production neutralino-production-artifact
+          rm -f "$artifact" "$artifact.sha256"
+          npm run build:desktop:neutralino
+      - name: Assert production artifact reproducibility
+        shell: bash
+        run: |
+          set -euo pipefail
+          artifact=pikachu-volleyball-neutralino-production-parity-linux-x64.tar.gz
+          evidence=.neutralino-reproducibility
+          rm -rf "$evidence"
+          mkdir -p "$evidence"
+
+          first_sha="$(sha256sum "$artifact" | awk '{print $1}')"
+          first_bytes="$(stat -c%s "$artifact")"
+          {
+            printf 'source_sha=%s\n' "$PV_SOURCE_SHA"
+            printf 'first_sha256=%s\n' "$first_sha"
+            printf 'first_bytes=%s\n' "$first_bytes"
+          } > "$evidence/result.txt"
+
+          rm -rf dist .neutralino-production neutralino-production-artifact
+          rm -f "$artifact" "$artifact.sha256"
+          npm run build:desktop:neutralino
+
+          second_sha="$(sha256sum "$artifact" | awk '{print $1}')"
+          second_bytes="$(stat -c%s "$artifact")"
+          {
+            printf 'second_sha256=%s\n' "$second_sha"
+            printf 'second_bytes=%s\n' "$second_bytes"
+          } >> "$evidence/result.txt"
+
+          if [[ "$first_sha" != "$second_sha" ]]; then
+            printf 'match=false\n' >> "$evidence/result.txt"
+            cat "$evidence/result.txt" >&2
+            echo 'Neutralino production artifact is not reproducible across two clean same-source builds.' >&2
+            exit 1
+          fi
+
+          printf 'match=true\n' >> "$evidence/result.txt"
+          cat "$evidence/result.txt"
       - name: Upload production-build diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: neutralino-production-build-diagnostics
           path: .neutralino-production/diagnostics/production-build.log
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Upload reproducibility evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: neutralino-production-reproducibility
+          path: .neutralino-reproducibility/
           if-no-files-found: warn
           retention-days: 14
       - name: Verify artifact checksum and contents
@@ -72,25 +127,63 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          diagnostic_dir=.neutralino-production/fedora-validation
+          combined_log="$diagnostic_dir/combined.log"
+          stage_status="$diagnostic_dir/stages.txt"
+          mkdir -p "$diagnostic_dir"
+          : > "$combined_log"
+          : > "$stage_status"
+
+          set +e
           docker run --rm --shm-size=1g -v "$PWD:/workspace" -w /workspace fedora:44 bash -lc '
             set -euo pipefail
+            stage_status=/workspace/.neutralino-production/fedora-validation/stages.txt
+
+            run_stage() {
+              local stage="$1"
+              shift
+              printf "PV_FEDORA_STAGE_START stage=%s\n" "$stage" | tee -a "$stage_status"
+              set +e
+              "$@"
+              local status=$?
+              set -e
+              if [[ "$status" -eq 0 ]]; then
+                printf "PV_FEDORA_STAGE_PASS stage=%s exit_code=0\n" "$stage" | tee -a "$stage_status"
+                return 0
+              fi
+              printf "PV_FEDORA_STAGE_FAIL stage=%s exit_code=%s\n" "$stage" "$status" | tee -a "$stage_status" >&2
+              return "$status"
+            }
+
+            prepare_validation_overlay() {
+              cp /workspace/.neutralino-artifact-extracted/pikachu-volleyball-neutralino-production-parity-linux-x64/pikachu-volleyball-neutralino-linux_x64 /workspace/.neutralino-production/bin/neutralino-linux_x64 || return $?
+              runuser -u pvsmoke -- node /workspace/scripts/prepare-neutralino-production.cjs --smoke-only || return $?
+            }
+
             dnf -y install webkit2gtk4.1 gtk3 xorg-x11-server-Xvfb openbox xdotool procps-ng time gstreamer1-plugins-base gstreamer1-plugins-good dbus-x11 python3 shadow-utils
             useradd -m pvsmoke
             chmod -R a+rwX /workspace/.neutralino-production /workspace/.neutralino-artifact-extracted
             bundle=/workspace/.neutralino-artifact-extracted/pikachu-volleyball-neutralino-production-parity-linux-x64
-            runuser -u pvsmoke -- /workspace/scripts/run-neutralino-production-smoke.sh "$bundle"
-            cp "$bundle/pikachu-volleyball-neutralino-linux_x64" /workspace/.neutralino-production/bin/neutralino-linux_x64
-            runuser -u pvsmoke -- node /workspace/scripts/prepare-neutralino-production.cjs --smoke-only
-            runuser -u pvsmoke -- /workspace/scripts/run-neutralino-fedora-smoke.sh /workspace/.neutralino-production
-            runuser -u pvsmoke -- /workspace/scripts/run-neutralino-external-link-smoke.sh /workspace/.neutralino-production
-            runuser -u pvsmoke -- /workspace/scripts/run-neutralino-host-navigation-smoke.sh /workspace/.neutralino-production
-          '
+
+            run_stage extracted-production-artifact-smoke runuser -u pvsmoke -- /workspace/scripts/run-neutralino-production-smoke.sh "$bundle"
+            run_stage production-validation-overlay-preparation prepare_validation_overlay
+            run_stage baseline-fedora-runtime-smoke runuser -u pvsmoke -- /workspace/scripts/run-neutralino-fedora-smoke.sh /workspace/.neutralino-production
+            run_stage external-link-smoke runuser -u pvsmoke -- /workspace/scripts/run-neutralino-external-link-smoke.sh /workspace/.neutralino-production
+            run_stage host-navigation-adversarial-smoke runuser -u pvsmoke -- /workspace/scripts/run-neutralino-host-navigation-smoke.sh /workspace/.neutralino-production
+          ' 2>&1 | tee -a "$combined_log"
+          status=${PIPESTATUS[0]}
+          set -e
+
+          printf 'PV_FEDORA_VALIDATION_EXIT_CODE=%s\n' "$status" | tee -a "$combined_log"
+          printf '%s\n' "$status" > "$diagnostic_dir/exit-code.txt"
+          exit "$status"
       - name: Upload production parity evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: neutralino-production-parity-evidence
           path: |
+            .neutralino-production/fedora-validation/
             .neutralino-production/fedora-smoke/
             .neutralino-production/fedora-external-link-smoke/
             .neutralino-production/fedora-host-navigation-smoke/

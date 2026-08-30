@@ -64,8 +64,7 @@ const rawRuntimeAndHelperBytes = rawRuntimeBytes + extensionStats.size;
 const productionRuntimeAndHelperBytes = binaryStats.size + extensionStats.size;
 
 const report = {
-  generatedAt: new Date().toISOString(),
-  sourceCommit: process.env.GITHUB_SHA || process.env.PV_SOURCE_SHA || null,
+  sourceCommit: process.env.PV_SOURCE_SHA || process.env.GITHUB_SHA || null,
   frameworkVersion: config.cli.binaryVersion,
   upstreamCommit: hostNavigationRuntime.upstreamCommit,
   cliVersion: '11.7.2',
