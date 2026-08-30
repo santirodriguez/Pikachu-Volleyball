@@ -130,7 +130,7 @@ Phase 3 intentionally retains Electron. It does not begin Electron retirement, f
 
 ## Current migration gate
 
-Phase 3 implementation and server-side validation are complete on PR #83, subject to the final exact-head CI and Codex closeout review and a separate explicit merge decision. Phase 3 does not authorize Electron retirement. Electron retirement remains Phase 4 and requires its own approved gate.
+Phase 3 implementation, exact-head server-side validation, and Codex closeout review are complete on PR #83. Phase 3 is ready for a separate explicit merge decision. Phase 3 does not authorize Electron retirement. Electron retirement remains Phase 4 and requires its own approved gate.
 
 ## Linux runtime dependencies / limitations
 
