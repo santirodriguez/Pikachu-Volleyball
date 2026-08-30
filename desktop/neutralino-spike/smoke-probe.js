@@ -24,6 +24,7 @@
   );
   const persistenceKey = 'pv-neutralino-spike-persistence';
   const persistenceValue = 'phase1-v1';
+  const pixiResolution = 2;
   const keyboardProbe = {
     down: new Set(),
     seen: new Set(),
@@ -261,17 +262,19 @@
 
     const canvas = document.getElementById('game-canvas');
     const canvasRect = canvas?.getBoundingClientRect();
-    const logicalWidth = canvasRect ? Number(canvasRect.width.toFixed(2)) : null;
-    const logicalHeight = canvasRect
-      ? Number(canvasRect.height.toFixed(2))
-      : null;
+    const backingWidth = canvas?.width || null;
+    const backingHeight = canvas?.height || null;
+    const logicalWidth = backingWidth ? backingWidth / pixiResolution : null;
+    const logicalHeight = backingHeight ? backingHeight / pixiResolution : null;
+    const cssWidth = canvasRect ? Number(canvasRect.width.toFixed(2)) : null;
+    const cssHeight = canvasRect ? Number(canvasRect.height.toFixed(2)) : null;
     const canvasOk = Boolean(
       canvas &&
         canvas.tagName === 'CANVAS' &&
-        canvas.width === 864 &&
-        canvas.height === 608 &&
         logicalWidth === 432 &&
-        logicalHeight === 304
+        logicalHeight === 304 &&
+        backingWidth === 864 &&
+        backingHeight === 608
     );
     const persistenceOk =
       localStorage.getItem(persistenceKey) === persistenceValue;
@@ -308,8 +311,11 @@
         ok: canvasOk,
         logicalWidth,
         logicalHeight,
-        backingWidth: canvas?.width || null,
-        backingHeight: canvas?.height || null,
+        backingWidth,
+        backingHeight,
+        cssWidth,
+        cssHeight,
+        pixiResolution,
       },
       persistenceOk,
       pauseAndSettings,
