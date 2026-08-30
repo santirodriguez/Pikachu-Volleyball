@@ -201,6 +201,7 @@ stop_observed_phase() {
 finish_observed_phase() {
   local phase="$1"
   local marker="PV_NEUTRALINO_SMOKE {\"phase\":\"${phase}\""
+  local success_marker="PV_NEUTRALINO_SMOKE {\"phase\":\"${phase}\",\"ok\":true"
   local report=""
 
   if ! wait_for_report "$phase"; then
@@ -214,7 +215,7 @@ finish_observed_phase() {
   fi
 
   report="$(grep -F "$marker" "$output_dir/${phase}.log" | head -n 1)"
-  if [[ "$report" != *'"ok":true'* ]]; then
+  if [[ "$report" != *"$success_marker"* ]]; then
     cleanup_active_phase
     printf '%s\n' "$report" >&2
     echo "Neutralino ${phase} probe reported failure." >&2
