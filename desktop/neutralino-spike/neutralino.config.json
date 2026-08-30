@@ -38,7 +38,7 @@
       "exitProcessOnClose": true,
       "useSavedState": false,
       "useLogicalPixels": true,
-      "injectGlobals": true,
+      "injectGlobals": false,
       "injectClientLibrary": true,
       "injectScript": "/resources/neutralino-preload.js",
       "newWindowPolicy": "custom"

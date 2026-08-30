@@ -37,7 +37,6 @@ runtime_args=(
   --res-mode=directory
   --path=.
   --url=/en/index.html?desktop=1
-  --window-inject-globals=true
   --window-inject-client-library=true
   --window-inject-script=/resources/neutralino-smoke-preload.js
 )

@@ -107,6 +107,7 @@ test('Neutralino spike preserves the Electron window contract', () => {
   assert.equal(windowConfig.fullScreen, false);
   assert.equal(windowConfig.exitProcessOnClose, true);
   assert.equal(windowConfig.useSavedState, false);
+  assert.equal(windowConfig.injectGlobals, false);
   assert.equal(windowConfig.injectClientLibrary, true);
   assert.equal(windowConfig.injectScript, '/resources/neutralino-preload.js');
   assert.equal(windowConfig.newWindowPolicy, 'custom');
