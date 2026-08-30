@@ -25,11 +25,10 @@ function readConfig() {
 }
 
 function createPreloadHarness() {
-  const openedUrls = [];
   const errors = [];
+  const registeredEvents = [];
   let initCalls = 0;
   let exitCalls = 0;
-  let newWindowHandler = null;
   let windowCloseHandler = null;
   const neutralino = {
     init() {
@@ -37,7 +36,7 @@ function createPreloadHarness() {
     },
     events: {
       on(name, handler) {
-        if (name === 'newWindowRequest') newWindowHandler = handler;
+        registeredEvents.push(name);
         if (name === 'windowClose') windowCloseHandler = handler;
         return Promise.resolve();
       },
@@ -48,17 +47,10 @@ function createPreloadHarness() {
         return Promise.resolve();
       },
     },
-    os: {
-      open(url) {
-        openedUrls.push(url);
-        return Promise.resolve();
-      },
-    },
   };
   const windowObject = { Neutralino: neutralino };
   const context = vm.createContext({
     window: windowObject,
-    URL,
     console: {
       error(...args) {
         errors.push(args);
@@ -68,11 +60,10 @@ function createPreloadHarness() {
   vm.runInContext(fs.readFileSync(PRELOAD_PATH, 'utf8'), context);
   return {
     windowObject,
-    openedUrls,
     errors,
+    registeredEvents,
     getInitCalls: () => initCalls,
     getExitCalls: () => exitCalls,
-    getNewWindowHandler: () => newWindowHandler,
     getWindowCloseHandler: () => windowCloseHandler,
   };
 }
@@ -93,7 +84,7 @@ test('Neutralino spike pins a minimal stable runtime configuration', () => {
   assert.equal(config.exportAuthInfo, false);
   assert.equal(config.enableExtensions, false);
   assert.deepEqual(config.extensions, []);
-  assert.deepEqual(config.nativeAllowList, ['app.exit', 'os.open']);
+  assert.deepEqual(config.nativeAllowList, ['app.exit']);
   assert.equal(config.documentRoot, '/resources/');
   assert.equal(config.url, '/en/index.html?desktop=1');
   assert.equal(config.singlePageServe, false);
@@ -119,7 +110,7 @@ test('Neutralino spike preserves the Electron window contract', () => {
 test('Neutralino preload exposes only the expected desktop bridge', async () => {
   const harness = createPreloadHarness();
   assert.equal(harness.getInitCalls(), 1);
-  assert.equal(typeof harness.getNewWindowHandler(), 'function');
+  assert.deepEqual(harness.registeredEvents, ['windowClose']);
   assert.equal(typeof harness.getWindowCloseHandler(), 'function');
   assert.equal(harness.windowObject.pvDesktop.isDesktop, true);
   assert.equal(harness.windowObject.pvDesktop.runtime, 'neutralino');
@@ -136,19 +127,11 @@ test('Neutralino preload exposes only the expected desktop bridge', async () => 
   assert.deepEqual(harness.errors, []);
 });
 
-test('Neutralino preload mirrors the Electron external URL allowlist', async () => {
-  const harness = createPreloadHarness();
-  const handler = harness.getNewWindowHandler();
+test('Neutralino production spike keeps external opening unavailable to renderer native API', () => {
+  const config = readConfig();
+  const preloadSource = fs.readFileSync(PRELOAD_PATH, 'utf8');
 
-  handler({ detail: 'https://github.com/santirodriguez/pikachu-volleyball' });
-  handler({ detail: { url: 'https://santiagorodriguez.com/projects/pika' } });
-  handler({ detail: 'https://github.com/santirodriguez/pikachu-volleyball/issues' });
-  handler({ detail: 'https://example.com/' });
-  handler({ detail: 'file:///etc/passwd' });
-  await flushPromises();
-
-  assert.deepEqual(harness.openedUrls, [
-    'https://github.com/santirodriguez/pikachu-volleyball',
-    'https://santiagorodriguez.com/projects/pika',
-  ]);
+  assert.equal(config.nativeAllowList.includes('os.open'), false);
+  assert.equal(preloadSource.includes('neutralino.os.open'), false);
+  assert.equal(config.modes.window.newWindowPolicy, 'custom');
 });

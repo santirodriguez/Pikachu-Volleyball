@@ -13,7 +13,7 @@
   "exportAuthInfo": false,
   "enableExtensions": false,
   "extensions": [],
-  "nativeAllowList": ["app.exit", "os.open"],
+  "nativeAllowList": ["app.exit"],
   "logging": {
     "enabled": false,
     "writeToLogFile": false
