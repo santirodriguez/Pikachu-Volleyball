@@ -54,9 +54,10 @@
   }
 
   async function writeReport(report) {
-    await neutralino.app.writeProcessOutput(
-      `PV_NEUTRALINO_SMOKE ${JSON.stringify(report)}\n`
-    );
+    const write = neutralino.app
+      .writeProcessOutput(`PV_NEUTRALINO_SMOKE ${JSON.stringify(report)}\n`)
+      .catch(() => {});
+    await Promise.race([write, delay(500)]);
   }
 
   async function finish(report, exitCode = 0) {
