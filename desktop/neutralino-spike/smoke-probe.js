@@ -78,12 +78,6 @@
     await Promise.race([write, delay(500)]);
   }
 
-  async function finish(report, exitCode = 0) {
-    await writeReport(report);
-    if (holdMs > 0) await delay(holdMs);
-    await neutralino.app.exit(exitCode);
-  }
-
   function dispatchKey(code, type) {
     window.dispatchEvent(
       new KeyboardEvent(type, {
@@ -315,7 +309,7 @@
       locales,
     };
 
-    await finish(report, report.ok ? 0 : 1);
+    await writeReport(report);
   }
 
   async function runKeyboardProbe() {
@@ -342,25 +336,37 @@
       maxSimultaneous: keyboardProbe.maxSimultaneous,
       keysReleased: keyboardProbe.down.size === 0,
     };
-    await finish(report, report.ok ? 0 : 1);
+    await writeReport(report);
   }
 
   async function runQuitProbe() {
     const bridgeAvailable = Boolean(
       window.pvDesktop?.isDesktop && typeof window.pvDesktop?.quit === 'function'
     );
-    await writeReport({ phase: 'quit', ok: bridgeAvailable, bridgeAvailable });
-    if (!bridgeAvailable) {
-      await neutralino.app.exit(1);
+    console.error(
+      `PV_NEUTRALINO_QUIT_READY bridgeAvailable=${bridgeAvailable ? 'true' : 'false'}`
+    );
+    if (!bridgeAvailable) return;
+
+    await delay(Math.max(holdMs, 250));
+    console.error('PV_NEUTRALINO_QUIT_CALL bridge=real');
+    await delay(100);
+    await window.pvDesktop.quit();
+  }
+
+  async function reportFailure(error) {
+    const detail = String(error?.stack || error);
+    if (phase === 'quit') {
+      console.error(`PV_NEUTRALINO_QUIT_ERROR ${detail}`);
       return;
     }
-    await window.pvDesktop.quit();
+    await writeReport({ phase, ok: false, error: detail });
   }
 
   async function run() {
     if (phase === 'write') {
       localStorage.setItem(persistenceKey, persistenceValue);
-      await finish({
+      await writeReport({
         phase: 'write',
         ok: localStorage.getItem(persistenceKey) === persistenceValue,
       });
@@ -371,10 +377,7 @@
       try {
         await runReadProbe();
       } catch (error) {
-        await finish(
-          { phase: 'read', ok: false, error: String(error?.stack || error) },
-          1
-        );
+        await reportFailure(error);
       }
       return;
     }
@@ -383,10 +386,7 @@
       try {
         await runKeyboardProbe();
       } catch (error) {
-        await finish(
-          { phase: 'keyboard', ok: false, error: String(error?.stack || error) },
-          1
-        );
+        await reportFailure(error);
       }
       return;
     }
@@ -395,17 +395,14 @@
       try {
         await runQuitProbe();
       } catch (error) {
-        await finish(
-          { phase: 'quit', ok: false, error: String(error?.stack || error) },
-          1
-        );
+        await reportFailure(error);
       }
     }
   }
 
   function start() {
     run().catch((error) => {
-      finish({ phase, ok: false, error: String(error?.stack || error) }, 1);
+      reportFailure(error).catch(() => {});
     });
   }
 
