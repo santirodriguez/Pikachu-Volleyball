@@ -160,7 +160,7 @@ jobs:
               runuser -u pvsmoke -- node /workspace/scripts/prepare-neutralino-production.cjs --smoke-only || return $?
             }
 
-            dnf -y install webkit2gtk4.1 gtk3 xorg-x11-server-Xvfb openbox xdotool procps-ng time gstreamer1-plugins-base gstreamer1-plugins-good dbus-x11 python3 shadow-utils
+            dnf -y install nodejs webkit2gtk4.1 gtk3 xorg-x11-server-Xvfb openbox xdotool procps-ng time gstreamer1-plugins-base gstreamer1-plugins-good dbus-x11 python3 shadow-utils
             useradd -m pvsmoke
             chmod -R a+rwX /workspace/.neutralino-production /workspace/.neutralino-artifact-extracted
             bundle=/workspace/.neutralino-artifact-extracted/pikachu-volleyball-neutralino-production-parity-linux-x64
