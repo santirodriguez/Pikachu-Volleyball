@@ -41,10 +41,16 @@ download_verified() {
 appimagetool="$tools/appimagetool-x86_64.AppImage"
 runtime_file="$tools/runtime-x86_64"
 linuxdeploy="$tools/linuxdeploy-x86_64.AppImage"
+linuxdeploy_wrapper="$tools/linuxdeploy-wrapper"
 gtk_plugin="$tools/linuxdeploy-plugin-gtk.sh"
 download_verified "$PV_APPIMAGE_TOOL_URL" "$PV_APPIMAGE_TOOL_SHA256" "$appimagetool"
 download_verified "$PV_APPIMAGE_RUNTIME_URL" "$PV_APPIMAGE_RUNTIME_SHA256" "$runtime_file"
 download_verified "$PV_LINUXDEPLOY_URL" "$PV_LINUXDEPLOY_SHA256" "$linuxdeploy"
+cat > "$linuxdeploy_wrapper" <<EOF
+#!/bin/sh
+APPIMAGE_EXTRACT_AND_RUN=1 exec "$linuxdeploy" "\$@"
+EOF
+chmod 0755 "$linuxdeploy_wrapper"
 if [[ ! -f "$gtk_plugin" ]]; then
   curl --fail --location --retry 3 --silent --show-error "$PV_LINUXDEPLOY_GTK_URL" -o "$gtk_plugin"
 fi
@@ -172,13 +178,6 @@ build_thin() {
   find "$appdir" -printf '%P\t%y\t%s\n' | sort > "$evidence_dir/thin-appdir-inventory.txt"
 }
 
-copy_preserve_path() {
-  local source="$1" appdir="$2"
-  [[ -e "$source" ]] || return 0
-  mkdir -p "$appdir$(dirname "$source")"
-  cp -a "$source" "$appdir$source"
-}
-
 build_bundled() {
   command -v dpkg-query >/dev/null
   command -v pkg-config >/dev/null
@@ -210,11 +209,10 @@ build_bundled() {
   scanner="$(dpkg-query -L libgstreamer1.0-0 | grep '/gst-plugin-scanner$' | head -n1 || true)"
   [[ -x "$scanner" ]] && deploy_args+=(--executable "$scanner")
 
-  export NO_STRIP=1 DEPLOY_GTK_VERSION=3
-  export PATH="$tools:$PATH"
-  ln -sfn "$linuxdeploy" "$tools/linuxdeploy"
-  APPIMAGE_EXTRACT_AND_RUN=1 "$linuxdeploy" "${deploy_args[@]}"
-  LINUXDEPLOY="$linuxdeploy --appimage-extract-and-run" "$gtk_plugin" --appdir "$appdir"
+  export NO_STRIP=1 DEPLOY_GTK_VERSION=3 PATH="$tools:$PATH"
+  export LINUXDEPLOY="$linuxdeploy_wrapper"
+  "$linuxdeploy_wrapper" "${deploy_args[@]}"
+  "$gtk_plugin" --appdir "$appdir"
 
   mkdir -p "$appdir/usr/lib/webkit2gtk-4.1"
   cp -a "$webkit_process_dir/." "$appdir/usr/lib/webkit2gtk-4.1/"
