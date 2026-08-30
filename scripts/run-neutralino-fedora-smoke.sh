@@ -5,7 +5,7 @@ stage="${1:-.neutralino-spike}"
 cd "$stage"
 
 binary="./bin/neutralino-linux_x64"
-config="neutralino.smoke.config.json"
+config="$(pwd)/neutralino.smoke.config.json"
 output_dir="fedora-smoke"
 mkdir -p "$output_dir"
 
@@ -38,7 +38,9 @@ run_phase() {
   local phase="$1"
   local hold_ms="$2"
   local start_ms
+  local status
   start_ms="$(date +%s%3N)"
+  set +e
   /usr/bin/time -v -o "$output_dir/${phase}-time.txt" \
     timeout 35s "$binary" \
       --res-mode=directory \
@@ -46,6 +48,13 @@ run_phase() {
       --config-file="$config" \
       --url="/en/index.html?desktop=1&neutralinoSmoke=${phase}&neutralinoSmokeHoldMs=${hold_ms}&startEpochMs=${start_ms}" \
       >"$output_dir/${phase}.log" 2>&1
+  status=$?
+  set -e
+  if (( status != 0 )); then
+    cat "$output_dir/${phase}.log" >&2
+    cat "$output_dir/${phase}-time.txt" >&2
+    return "$status"
+  fi
 }
 
 run_phase write 0
@@ -87,7 +96,12 @@ xdotool windowsize "$window_id" 600 400
 sleep 0.4
 xdotool getwindowgeometry --shell "$window_id" >"$output_dir/window-after-min-resize.txt"
 
-wait "$read_job"
+if ! wait "$read_job"; then
+  cat "$output_dir/read.log" >&2
+  cat "$output_dir/read-time.txt" >&2
+  echo "Neutralino Fedora read probe process failed." >&2
+  exit 1
+fi
 if ! grep -q 'PV_NEUTRALINO_SMOKE .*"phase":"read".*"ok":true' "$output_dir/read.log"; then
   cat "$output_dir/read.log" >&2
   echo "Neutralino Fedora runtime probe failed." >&2
