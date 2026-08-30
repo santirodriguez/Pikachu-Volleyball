@@ -33,19 +33,31 @@ cleanup() {
 trap cleanup EXIT
 sleep 1
 
-runtime_args=(--res-mode=directory --path=.)
+runtime_args=(--res-mode=directory --path=. --url=/en/index.html?desktop=1)
+
+smoke_args() {
+  local phase="$1"
+  local hold_ms="$2"
+  local start_ms="$3"
+  printf '%s\n' \
+    "--dev-pv-smoke-phase=${phase}" \
+    "--dev-pv-smoke-hold-ms=${hold_ms}" \
+    "--dev-pv-smoke-start-epoch-ms=${start_ms}"
+}
 
 run_phase() {
   local phase="$1"
   local hold_ms="$2"
   local start_ms
   local status
+  local -a phase_args
   start_ms="$(date +%s%3N)"
+  mapfile -t phase_args < <(smoke_args "$phase" "$hold_ms" "$start_ms")
   set +e
   /usr/bin/time -v -o "$output_dir/${phase}-time.txt" \
     timeout 35s "$binary" \
       "${runtime_args[@]}" \
-      --url="/en/index.html?desktop=1&neutralinoSmoke=${phase}&neutralinoSmokeHoldMs=${hold_ms}&startEpochMs=${start_ms}" \
+      "${phase_args[@]}" \
       >"$output_dir/${phase}.log" 2>&1
   status=$?
   set -e
@@ -82,11 +94,12 @@ run_phase write 0
 ensure_success_marker write
 
 start_ms="$(date +%s%3N)"
+mapfile -t read_args < <(smoke_args read 2500 "$start_ms")
 (
   /usr/bin/time -v -o "$output_dir/read-time.txt" \
     timeout 40s "$binary" \
       "${runtime_args[@]}" \
-      --url="/en/index.html?desktop=1&neutralinoSmoke=read&neutralinoSmokeHoldMs=2500&startEpochMs=${start_ms}" \
+      "${read_args[@]}" \
       >"$output_dir/read.log" 2>&1
 ) &
 read_job=$!
@@ -121,11 +134,12 @@ if (( WIDTH < 800 || HEIGHT < 600 )); then
 fi
 
 start_ms="$(date +%s%3N)"
+mapfile -t keyboard_args < <(smoke_args keyboard 0 "$start_ms")
 (
   /usr/bin/time -v -o "$output_dir/keyboard-time.txt" \
     timeout 35s "$binary" \
       "${runtime_args[@]}" \
-      --url="/en/index.html?desktop=1&neutralinoSmoke=keyboard&startEpochMs=${start_ms}" \
+      "${keyboard_args[@]}" \
       >"$output_dir/keyboard.log" 2>&1
 ) &
 keyboard_job=$!
