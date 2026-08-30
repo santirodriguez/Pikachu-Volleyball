@@ -15,35 +15,40 @@ These rules apply to all future work in this repository.
 - Keep changes small and focused. Use one task branch and one pull request per task.
 - Avoid unrelated refactors and formatting-only churn.
 
-## Version 2.1 integration
+## Version 3 integration
 
-- `v2.1` is the integration branch for Pikachu Volleyball 2.1.
-- Task branches use the `v2.1-<task>` naming pattern and target `v2.1`.
-- The final release pull request will target `main` from `v2.1`.
-- Review relevant changes made to `main` during development and selectively bring them into `v2.1`.
+- `v3` is the integration branch for Pikachu Volleyball 3 development.
+- Task branches use the `v3-<task>` naming pattern and target `v3`.
+- `main` remains the stable published line until the final v3 promotion is explicitly authorized.
+- The final v3 promotion pull request will target `main` from `v3`.
+- Review relevant changes made to `main` during development and selectively bring them into `v3` when required.
+- Do not create v3 tags, releases, or publication artifacts before the final release gate is explicitly approved.
 
 ## Preservation requirements
 
+- Treat Pikachu Volleyball 2.1 at commit `d7735b13654904a5b48a0c2d1217c8b8507a8409` as the frozen behavioral baseline for v3 migration work.
 - Preserve the original physics, AI, timing, rendering, game states, scoring, and default controls unless a task explicitly requires a change.
 - Preserve all accepted 2.1 behavior listed in `docs/v2.1-preservation-baseline.md`.
-- Keep `docs/2.0-preservation-matrix.md` as historical 2.0 documentation rather than an active 2.1 authority.
-- Do not modify physics, AI, or timing without an explicit requirement and regression evidence.
-- Do not remove a feature merely because its implementation is reorganized.
+- Keep `docs/2.0-preservation-matrix.md` as historical 2.0 documentation rather than an active authority.
+- Do not modify physics, AI, scoring rules, collision equations, or timing values without an explicit requirement and regression evidence.
+- Do not remove a feature merely because its implementation is reorganized or its desktop runtime changes.
 
 ## Web and desktop boundaries
 
 - Keep the web build and static locale outputs working.
 - Keep desktop-only code under `desktop/` and expose only narrow, secure APIs to the renderer.
-- Keep `contextIsolation`, sandboxing, and external-navigation restrictions enabled.
-- Linux packaging remains AppImage-only unless requirements explicitly change.
+- Preserve the current Electron desktop behavior until a separately approved migration phase replaces it.
+- Keep `contextIsolation`, sandboxing, and external-navigation restrictions enabled while Electron remains present.
+- Linux packaging remains AppImage-only until an approved v3 migration phase changes the desktop packaging contract.
 
 ## Validation
 
 - Run `npm run quality:check` for runtime, asset, build, or configuration changes.
-- Run additional tests introduced by the affected area.
+- Run additional characterization tests introduced by the affected area.
 - Validate every supported locale output after localization or build-template changes.
 - State clearly in the pull request when a check could not be run and why.
-- Packaging-sensitive changes require a real AppImage build and manual Linux validation before release.
+- Packaging-sensitive changes require a real desktop artifact build and Linux validation before release.
+- During runtime migration, compare behavior against the frozen 2.1 preservation and regression baseline rather than relying only on implementation-level tests.
 
 ## Pull request expectations
 
@@ -58,4 +63,4 @@ Every implementation pull request must explain:
 - screenshots for visible changes;
 - bundle or artifact size impact when relevant.
 
-Do not merge when unrelated changes are present, required validation is missing without explanation, accessibility regresses, locale coverage is incomplete, or web and Electron behavior diverge unintentionally.
+Do not merge when unrelated changes are present, required validation is missing without explanation, accessibility regresses, locale coverage is incomplete, or web and desktop behavior diverge unintentionally.
