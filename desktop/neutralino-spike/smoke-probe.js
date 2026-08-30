@@ -6,8 +6,39 @@
   const phase = params.get('neutralinoSmoke');
   const persistenceKey = 'pv-neutralino-spike-persistence';
   const persistenceValue = 'phase1-v1';
+  const keyboardProbe = {
+    down: new Set(),
+    seen: new Set(),
+    trustedEvents: 0,
+    maxSimultaneous: 0,
+  };
 
   if (!neutralino || !phase) return;
+
+  if (phase === 'keyboard') {
+    window.addEventListener(
+      'keydown',
+      (event) => {
+        keyboardProbe.down.add(event.code);
+        keyboardProbe.seen.add(event.code);
+        if (event.isTrusted) keyboardProbe.trustedEvents += 1;
+        keyboardProbe.maxSimultaneous = Math.max(
+          keyboardProbe.maxSimultaneous,
+          keyboardProbe.down.size
+        );
+      },
+      true
+    );
+    window.addEventListener(
+      'keyup',
+      (event) => {
+        keyboardProbe.seen.add(event.code);
+        if (event.isTrusted) keyboardProbe.trustedEvents += 1;
+        keyboardProbe.down.delete(event.code);
+      },
+      true
+    );
+  }
 
   function delay(ms) {
     return new Promise((resolve) => window.setTimeout(resolve, ms));
@@ -273,6 +304,33 @@
     await finish(report, report.ok ? 0 : 1);
   }
 
+  async function runKeyboardProbe() {
+    const firstFrameReady = await waitFor(
+      () => performance.getEntriesByName('pv-first-game-frame').length > 0
+    );
+    await delay(3500);
+    const expectedCodes = ['KeyD', 'KeyR', 'ArrowRight', 'ArrowUp'];
+    const seenCodes = [...keyboardProbe.seen].sort();
+    const expectedSeen = expectedCodes.every((code) =>
+      keyboardProbe.seen.has(code)
+    );
+    const report = {
+      phase: 'keyboard',
+      ok:
+        firstFrameReady &&
+        expectedSeen &&
+        keyboardProbe.maxSimultaneous >= expectedCodes.length &&
+        keyboardProbe.trustedEvents >= expectedCodes.length * 2,
+      firstFrameReady,
+      expectedCodes,
+      seenCodes,
+      trustedEvents: keyboardProbe.trustedEvents,
+      maxSimultaneous: keyboardProbe.maxSimultaneous,
+      keysReleased: keyboardProbe.down.size === 0,
+    };
+    await finish(report, report.ok ? 0 : 1);
+  }
+
   async function runQuitProbe() {
     const bridgeAvailable = Boolean(
       window.pvDesktop?.isDesktop && typeof window.pvDesktop?.quit === 'function'
@@ -301,6 +359,18 @@
       } catch (error) {
         await finish(
           { phase: 'read', ok: false, error: String(error?.stack || error) },
+          1
+        );
+      }
+      return;
+    }
+
+    if (phase === 'keyboard') {
+      try {
+        await runKeyboardProbe();
+      } catch (error) {
+        await finish(
+          { phase: 'keyboard', ok: false, error: String(error?.stack || error) },
           1
         );
       }
