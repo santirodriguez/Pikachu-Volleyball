@@ -8,6 +8,10 @@ const ROOT = path.resolve(__dirname, '..');
 const STAGE = path.join(ROOT, '.neutralino-spike');
 const BINARY_NAME = 'pikachu-volleyball-neutralino-spike-linux_x64';
 const EXTENSION_NAME = 'pv-external-link-linux_x64';
+const HOST_NAV_METADATA = path.join(
+  STAGE,
+  'neutralino-host-navigation-runtime.json'
+);
 const PHASE1_BINARY_BYTES = 6023776;
 const OUTPUT = path.resolve(
   process.argv[2] || path.join(ROOT, 'neutralino-spike-artifact', 'metrics.json')
@@ -33,7 +37,11 @@ function findFiles(directory, name, matches = []) {
 }
 
 function preferDistributionFile(files) {
-  return files.find((file) => file.includes(`${path.sep}neutralino-dist${path.sep}`)) || files[0] || null;
+  return (
+    files.find((file) => file.includes(`${path.sep}neutralino-dist${path.sep}`)) ||
+    files[0] ||
+    null
+  );
 }
 
 function main() {
@@ -45,9 +53,15 @@ function main() {
   if (!extension) {
     throw new Error(`Missing Neutralino external-link extension: ${EXTENSION_NAME}`);
   }
+  if (!fs.existsSync(HOST_NAV_METADATA)) {
+    throw new Error('Missing patched Neutralino host-navigation provenance.');
+  }
 
   const config = JSON.parse(
     fs.readFileSync(path.join(STAGE, 'neutralino.config.json'), 'utf8')
+  );
+  const hostNavigationRuntime = JSON.parse(
+    fs.readFileSync(HOST_NAV_METADATA, 'utf8')
   );
   const binaryStats = fs.statSync(binary);
   const extensionStats = fs.statSync(extension);
@@ -62,6 +76,7 @@ function main() {
     binaryMiB: Number((binaryStats.size / 1024 / 1024).toFixed(2)),
     sha256: sha256(binary),
     embeddedResources: true,
+    hostNavigationRuntime,
     externalLinkExtension: {
       name: path.basename(extension),
       bytes: extensionStats.size,
@@ -70,7 +85,9 @@ function main() {
       bundledRuntimeDependency: false,
     },
     combinedNeutralinoFootprintBytes: combinedBytes,
-    combinedNeutralinoFootprintMiB: Number((combinedBytes / 1024 / 1024).toFixed(2)),
+    combinedNeutralinoFootprintMiB: Number(
+      (combinedBytes / 1024 / 1024).toFixed(2)
+    ),
     phase1EmbeddedBinaryBaselineBytes: PHASE1_BINARY_BYTES,
     phase1CombinedDeltaBytes: combinedBytes - PHASE1_BINARY_BYTES,
     electronAppImageBaselineBytes: 97094772,
@@ -83,6 +100,10 @@ function main() {
   fs.chmodSync(path.join(outputDirectory, BINARY_NAME), 0o755);
   fs.copyFileSync(extension, path.join(outputDirectory, EXTENSION_NAME));
   fs.chmodSync(path.join(outputDirectory, EXTENSION_NAME), 0o755);
+  fs.copyFileSync(
+    HOST_NAV_METADATA,
+    path.join(outputDirectory, 'neutralino-host-navigation-runtime.json')
+  );
   fs.writeFileSync(OUTPUT, `${JSON.stringify(report, null, 2)}\n`);
   process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
 }

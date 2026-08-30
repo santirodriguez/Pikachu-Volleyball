@@ -1,0 +1,75 @@
+diff --git a/lib/webview/webview.h b/lib/webview/webview.h
+--- a/lib/webview/webview.h
++++ b/lib/webview/webview.h
+@@ -329,7 +329,21 @@ public:
+ 
+     g_signal_connect(G_OBJECT(m_webview), "decide-policy",
+-      G_CALLBACK(+[](WebKitWebView*, WebKitPolicyDecision* decision, WebKitPolicyDecisionType type, gpointer) {
++      G_CALLBACK(+[](WebKitWebView*, WebKitPolicyDecision* decision, WebKitPolicyDecisionType type, gpointer userData) {
++        if(type == WEBKIT_POLICY_DECISION_TYPE_NAVIGATION_ACTION) {
++          WebKitNavigationPolicyDecision *nav = (WebKitNavigationPolicyDecision*)decision;
++          WebKitNavigationAction *action = webkit_navigation_policy_decision_get_navigation_action(nav);
++          WebKitURIRequest *request = webkit_navigation_action_get_request(action);
++          const gchar *uri = webkit_uri_request_get_uri(request);
++          gtk_webkit_engine *engine = static_cast<gtk_webkit_engine*>(userData);
++          if(uri && engine && !engine->isTrustedNavigation(std::string(uri)) &&
++              handleNewWindow && handleNewWindow(std::string(uri))) {
++            webkit_policy_decision_ignore(decision);
++            return true;
++          }
++        }
+         if(type == WEBKIT_POLICY_DECISION_TYPE_NEW_WINDOW_ACTION) {
+           WebKitNavigationPolicyDecision *nav = (WebKitNavigationPolicyDecision*)decision;
+           WebKitNavigationAction *action = webkit_navigation_policy_decision_get_navigation_action(nav);
+@@ -343,7 +357,7 @@ public:
+         }
+         return false;
+     }),
+-    nullptr);
++    this);
+ 
+ 
+     if(emitDropEvents) {
+@@ -465,15 +479,40 @@ public:
+   }
+ 
+   void navigate(const std::string url) {
++    if(m_navigationOrigin.empty()) {
++      m_navigationOrigin = getOrigin(url);
++    }
+     webkit_web_view_load_uri((WebKitWebView*)(m_webview), url.c_str());
+   }
+ 
++  bool isTrustedNavigation(const std::string &url) const {
++    if(m_navigationOrigin.empty() ||
++        url.compare(0, m_navigationOrigin.size(), m_navigationOrigin) != 0) {
++      return false;
++    }
++    if(url.size() == m_navigationOrigin.size()) {
++      return true;
++    }
++    const char delimiter = url[m_navigationOrigin.size()];
++    return delimiter == '/' || delimiter == '?' || delimiter == '#';
++  }
++
+ protected:
+   int initCode = 0;
+ 
+ private:
++  static std::string getOrigin(const std::string &url) {
++    const std::string::size_type schemeEnd = url.find("://");
++    if(schemeEnd == std::string::npos) {
++      return "";
++    }
++    const std::string::size_type authorityStart = schemeEnd + 3;
++    const std::string::size_type originEnd =
++        url.find_first_of("/?#", authorityStart);
++    return originEnd == std::string::npos ? url : url.substr(0, originEnd);
++  }
++
+   GtkWidget *m_window;
+   GtkWidget *m_webview;
++  std::string m_navigationOrigin;
+ };
+ 
+ using browser_engine = gtk_webkit_engine;

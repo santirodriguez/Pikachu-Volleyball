@@ -13,10 +13,12 @@ on:
       - 'desktop/external-link-policy.cjs'
       - 'desktop/neutralino-spike/**'
       - 'scripts/build-neutralino-external-link-extension.sh'
+      - 'scripts/build-neutralino-host-navigation-runtime.sh'
       - 'scripts/prepare-neutralino-spike.cjs'
       - 'scripts/report-neutralino-spike.cjs'
       - 'scripts/run-neutralino-external-link-smoke.sh'
       - 'scripts/run-neutralino-fedora-smoke.sh'
+      - 'scripts/run-neutralino-host-navigation-smoke.sh'
       - 'scripts/validate-neutralino-external-link-extension.cjs'
       - 'test/desktop_platform_boundary.test.cjs'
       - 'test/neutralino_spike.test.cjs'
@@ -36,7 +38,7 @@ concurrency:
 jobs:
   spike:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
 
     steps:
       - name: Check out repository
@@ -66,9 +68,37 @@ jobs:
       - name: Validate Electron and Neutralino external-link policy equivalence
         run: node scripts/validate-neutralino-external-link-extension.cjs
 
-      - name: Fetch pinned Neutralino runtime
+      - name: Fetch pinned Neutralino runtime and client
         working-directory: .neutralino-spike
         run: npx -y @neutralinojs/neu@11.7.2 update
+
+      - name: Build patched host-navigation Neutralino runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            -v "$PWD:/workspace" \
+            -w /workspace \
+            ubuntu:20.04 \
+            bash -lc '
+              set -euo pipefail
+              export DEBIAN_FRONTEND=noninteractive
+              apt-get update
+              apt-get install -y -f \
+                ca-certificates \
+                git \
+                g++ \
+                pkg-config \
+                cmake \
+                ninja-build \
+                libgtk-3-dev \
+                libwebkit2gtk-4.0-dev
+              /workspace/scripts/build-neutralino-host-navigation-runtime.sh \
+                /workspace/.neutralino-spike/bin/neutralino-linux_x64
+            '
+          sudo chown "$(id -u):$(id -g)" \
+            .neutralino-spike/bin/neutralino-linux_x64 \
+            .neutralino-spike/neutralino-host-navigation-runtime.json
 
       - name: Build embedded Neutralino artifacts
         working-directory: .neutralino-spike
@@ -101,6 +131,7 @@ jobs:
                 gstreamer1-plugins-base \
                 gstreamer1-plugins-good \
                 dbus-x11 \
+                python3 \
                 shadow-utils
               useradd -m pvsmoke
               chmod -R a+rwX /workspace/.neutralino-spike
@@ -109,6 +140,9 @@ jobs:
                 /workspace/.neutralino-spike
               runuser -u pvsmoke -- \
                 /workspace/scripts/run-neutralino-external-link-smoke.sh \
+                /workspace/.neutralino-spike
+              runuser -u pvsmoke -- \
+                /workspace/scripts/run-neutralino-host-navigation-smoke.sh \
                 /workspace/.neutralino-spike
             '
 
@@ -123,6 +157,9 @@ jobs:
           fi
           if [[ -d .neutralino-spike/fedora-external-link-smoke ]]; then
             cp -R .neutralino-spike/fedora-external-link-smoke neutralino-spike-artifact/
+          fi
+          if [[ -d .neutralino-spike/fedora-host-navigation-smoke ]]; then
+            cp -R .neutralino-spike/fedora-host-navigation-smoke neutralino-spike-artifact/
           fi
 
       - name: Upload experimental artifact
