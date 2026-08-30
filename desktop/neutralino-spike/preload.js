@@ -44,12 +44,24 @@
     return null;
   }
 
+  let quitPromise = null;
+  function quit() {
+    if (quitPromise) return quitPromise;
+    quitPromise = neutralino.app.exit(0).then(() => true);
+    return quitPromise;
+  }
+
   neutralino.init();
   neutralino.events.on('newWindowRequest', (event) => {
     const url = getRequestedUrl(event);
     if (!url) return;
     openAllowedExternalUrl(url).catch((error) => {
       console.error('Unable to open approved external URL.', error);
+    });
+  });
+  neutralino.events.on('windowClose', () => {
+    quit().catch((error) => {
+      console.error('Unable to exit Neutralino cleanly.', error);
     });
   });
 
@@ -59,10 +71,8 @@
     writable: false,
     value: Object.freeze({
       isDesktop: true,
-      quit: async () => {
-        await neutralino.app.exit();
-        return true;
-      },
+      runtime: 'neutralino',
+      quit,
     }),
   });
 })();

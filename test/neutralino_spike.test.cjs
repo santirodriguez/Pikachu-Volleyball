@@ -30,6 +30,7 @@ function createPreloadHarness() {
   let initCalls = 0;
   let exitCalls = 0;
   let newWindowHandler = null;
+  let windowCloseHandler = null;
   const neutralino = {
     init() {
       initCalls += 1;
@@ -37,6 +38,7 @@ function createPreloadHarness() {
     events: {
       on(name, handler) {
         if (name === 'newWindowRequest') newWindowHandler = handler;
+        if (name === 'windowClose') windowCloseHandler = handler;
         return Promise.resolve();
       },
     },
@@ -71,6 +73,7 @@ function createPreloadHarness() {
     getInitCalls: () => initCalls,
     getExitCalls: () => exitCalls,
     getNewWindowHandler: () => newWindowHandler,
+    getWindowCloseHandler: () => windowCloseHandler,
   };
 }
 
@@ -105,7 +108,7 @@ test('Neutralino spike preserves the Electron window contract', () => {
   assert.equal(windowConfig.minHeight, 600);
   assert.equal(windowConfig.resizable, true);
   assert.equal(windowConfig.fullScreen, false);
-  assert.equal(windowConfig.exitProcessOnClose, true);
+  assert.equal(windowConfig.exitProcessOnClose, false);
   assert.equal(windowConfig.useSavedState, false);
   assert.equal(windowConfig.injectGlobals, false);
   assert.equal(windowConfig.injectClientLibrary, true);
@@ -117,12 +120,18 @@ test('Neutralino preload exposes only the expected desktop bridge', async () => 
   const harness = createPreloadHarness();
   assert.equal(harness.getInitCalls(), 1);
   assert.equal(typeof harness.getNewWindowHandler(), 'function');
+  assert.equal(typeof harness.getWindowCloseHandler(), 'function');
   assert.equal(harness.windowObject.pvDesktop.isDesktop, true);
+  assert.equal(harness.windowObject.pvDesktop.runtime, 'neutralino');
   assert.equal(typeof harness.windowObject.pvDesktop.quit, 'function');
   assert.equal(Object.isFrozen(harness.windowObject.pvDesktop), true);
 
-  const result = await harness.windowObject.pvDesktop.quit();
-  assert.equal(result, true);
+  const firstQuit = harness.windowObject.pvDesktop.quit();
+  const secondQuit = harness.windowObject.pvDesktop.quit();
+  assert.equal(firstQuit, secondQuit);
+  assert.equal(await firstQuit, true);
+  harness.getWindowCloseHandler()();
+  await flushPromises();
   assert.equal(harness.getExitCalls(), 1);
   assert.deepEqual(harness.errors, []);
 });

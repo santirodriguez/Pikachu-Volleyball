@@ -260,11 +260,18 @@
         : null;
 
     const canvas = document.getElementById('game-canvas');
+    const canvasRect = canvas?.getBoundingClientRect();
+    const logicalWidth = canvasRect ? Number(canvasRect.width.toFixed(2)) : null;
+    const logicalHeight = canvasRect
+      ? Number(canvasRect.height.toFixed(2))
+      : null;
     const canvasOk = Boolean(
       canvas &&
         canvas.tagName === 'CANVAS' &&
-        canvas.width === 432 &&
-        canvas.height === 304
+        canvas.width === 864 &&
+        canvas.height === 608 &&
+        logicalWidth === 432 &&
+        logicalHeight === 304
     );
     const persistenceOk =
       localStorage.getItem(persistenceKey) === persistenceValue;
@@ -299,8 +306,10 @@
       processStartToFirstFrameApproxMs,
       canvas: {
         ok: canvasOk,
-        width: canvas?.width || null,
-        height: canvas?.height || null,
+        logicalWidth,
+        logicalHeight,
+        backingWidth: canvas?.width || null,
+        backingHeight: canvas?.height || null,
       },
       persistenceOk,
       pauseAndSettings,
@@ -341,7 +350,9 @@
 
   async function runQuitProbe() {
     const bridgeAvailable = Boolean(
-      window.pvDesktop?.isDesktop && typeof window.pvDesktop?.quit === 'function'
+      window.pvDesktop?.isDesktop &&
+        window.pvDesktop?.runtime === 'neutralino' &&
+        typeof window.pvDesktop?.quit === 'function'
     );
     console.error(
       `PV_NEUTRALINO_QUIT_READY bridgeAvailable=${bridgeAvailable ? 'true' : 'false'}`
@@ -366,6 +377,7 @@
   async function run() {
     if (phase === 'write') {
       localStorage.setItem(persistenceKey, persistenceValue);
+      await delay(1000);
       await writeReport({
         phase: 'write',
         ok: localStorage.getItem(persistenceKey) === persistenceValue,
@@ -406,7 +418,7 @@
     });
   }
 
-  if (document.readyState === 'complete') {
+  if (phase === 'quit' || document.readyState === 'complete') {
     start();
   } else {
     window.addEventListener('load', start, { once: true });
