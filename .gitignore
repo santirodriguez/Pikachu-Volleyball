@@ -6,5 +6,7 @@ analytics.html
 firebase.json
 
 release/
-.neutralino-spike/
-neutralino-spike-artifact/
+.neutralino-production/
+neutralino-production-artifact/
+pikachu-volleyball-neutralino-production-parity-linux-x64.tar.gz
+pikachu-volleyball-neutralino-production-parity-linux-x64.tar.gz.sha256

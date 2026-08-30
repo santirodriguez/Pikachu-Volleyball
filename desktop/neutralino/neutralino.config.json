@@ -50,7 +50,7 @@
     }
   },
   "cli": {
-    "binaryName": "pikachu-volleyball-neutralino-spike",
+    "binaryName": "pikachu-volleyball-neutralino",
     "resourcesPath": "/resources/",
     "extensionsPath": "/extensions/",
     "clientLibrary": "/resources/neutralino.js",

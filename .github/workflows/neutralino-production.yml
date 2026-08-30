@@ -1,0 +1,109 @@
+name: Neutralino Production Parity
+
+on:
+  push:
+    branches:
+      - v3-phase3-neutralino-parity
+  pull_request:
+    branches:
+      - v3
+    paths:
+      - '.github/workflows/neutralino-production.yml'
+      - 'desktop/external-link-policy.cjs'
+      - 'desktop/neutralino/**'
+      - 'scripts/*neutralino*'
+      - 'test/neutralino/**'
+      - 'test/neutralino_production.test.cjs'
+      - 'test/desktop_platform_boundary.test.cjs'
+      - 'src/**'
+      - 'webpack*.js'
+      - 'package.json'
+      - 'package-lock.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: neutralino-production-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  parity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22.12.0
+          cache: npm
+      - run: npm ci
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=critical
+      - name: Run repository quality checks
+        run: npm run quality:check
+      - name: Build reproducible Neutralino production candidate
+        run: npm run build:desktop:neutralino
+      - name: Upload patched-runtime diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: neutralino-host-navigation-build-diagnostics
+          path: .neutralino-production/diagnostics/host-navigation-runtime-build.log
+          if-no-files-found: error
+          retention-days: 14
+      - name: Verify artifact checksum and contents
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha256sum -c pikachu-volleyball-neutralino-production-parity-linux-x64.tar.gz.sha256
+          rm -rf .neutralino-artifact-extracted
+          mkdir .neutralino-artifact-extracted
+          tar -xzf pikachu-volleyball-neutralino-production-parity-linux-x64.tar.gz -C .neutralino-artifact-extracted
+          bundle=.neutralino-artifact-extracted/pikachu-volleyball-neutralino-production-parity-linux-x64
+          test -x "$bundle/pikachu-volleyball-neutralino-linux_x64"
+          test -x "$bundle/extensions/pv-external-link-linux_x64"
+          test -f "$bundle/provenance.json"
+          test -f "$bundle/SHA256SUMS"
+          (cd "$bundle" && sha256sum -c SHA256SUMS)
+          test "$(find "$bundle" -type f | wc -l)" -eq 4
+      - name: Run Fedora 44 production and parity/security validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm --shm-size=1g -v "$PWD:/workspace" -w /workspace fedora:44 bash -lc '
+            set -euo pipefail
+            dnf -y install webkit2gtk4.1 gtk3 xorg-x11-server-Xvfb openbox xdotool procps-ng time gstreamer1-plugins-base gstreamer1-plugins-good dbus-x11 python3 shadow-utils
+            useradd -m pvsmoke
+            chmod -R a+rwX /workspace/.neutralino-production /workspace/.neutralino-artifact-extracted
+            bundle=/workspace/.neutralino-artifact-extracted/pikachu-volleyball-neutralino-production-parity-linux-x64
+            runuser -u pvsmoke -- /workspace/scripts/run-neutralino-production-smoke.sh "$bundle"
+            cp "$bundle/pikachu-volleyball-neutralino-linux_x64" /workspace/.neutralino-production/bin/neutralino-linux_x64
+            runuser -u pvsmoke -- node /workspace/scripts/prepare-neutralino-production.cjs --smoke-only
+            runuser -u pvsmoke -- /workspace/scripts/run-neutralino-fedora-smoke.sh /workspace/.neutralino-production
+            runuser -u pvsmoke -- /workspace/scripts/run-neutralino-external-link-smoke.sh /workspace/.neutralino-production
+            runuser -u pvsmoke -- /workspace/scripts/run-neutralino-host-navigation-smoke.sh /workspace/.neutralino-production
+          '
+      - name: Upload production parity evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: neutralino-production-parity-evidence
+          path: |
+            .neutralino-production/fedora-smoke/
+            .neutralino-production/fedora-external-link-smoke/
+            .neutralino-production/fedora-host-navigation-smoke/
+            .neutralino-artifact-extracted/**/production-*.log
+            .neutralino-artifact-extracted/**/production-window-*.txt
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Upload experimental production-parity artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pikachu-volleyball-neutralino-production-parity-linux-x64
+          path: |
+            pikachu-volleyball-neutralino-production-parity-linux-x64.tar.gz
+            pikachu-volleyball-neutralino-production-parity-linux-x64.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 14
