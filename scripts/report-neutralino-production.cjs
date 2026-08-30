@@ -15,6 +15,19 @@ const HOST_NAV_METADATA = path.join(
   STAGE,
   'neutralino-host-navigation-runtime.json'
 );
+const BUILD_TOOLCHAIN_METADATA = path.join(STAGE, 'build-toolchain.txt');
+const BUILD_PACKAGES = [
+  'ca-certificates',
+  'git',
+  'gcc',
+  'g++',
+  'binutils',
+  'pkg-config',
+  'cmake',
+  'ninja-build',
+  'libgtk-3-dev',
+  'libwebkit2gtk-4.0-dev',
+];
 const PHASE1_RAW_RUNTIME_BYTES = 6023776;
 const PHASE2_RAW_RUNTIME_AND_HELPER_BYTES = 6046384;
 const ELECTRON_APPIMAGE_BYTES = 97094772;
@@ -45,9 +58,27 @@ function preferDistributionFile(files) {
   );
 }
 
+function readKeyValueFile(filePath) {
+  const values = {};
+  for (const line of fs.readFileSync(filePath, 'utf8').split('\n')) {
+    if (!line) continue;
+    const separator = line.indexOf('=');
+    if (separator <= 0) {
+      throw new Error(`Invalid build-toolchain metadata line: ${line}`);
+    }
+    values[line.slice(0, separator)] = line.slice(separator + 1);
+  }
+  return values;
+}
+
 const binary = preferDistributionFile(findFiles(STAGE, BINARY_NAME));
 const extension = preferDistributionFile(findFiles(STAGE, EXTENSION_NAME));
-if (!binary || !extension || !fs.existsSync(HOST_NAV_METADATA)) {
+if (
+  !binary ||
+  !extension ||
+  !fs.existsSync(HOST_NAV_METADATA) ||
+  !fs.existsSync(BUILD_TOOLCHAIN_METADATA)
+) {
   throw new Error('Missing Neutralino production build output or provenance.');
 }
 
@@ -56,6 +87,28 @@ const config = JSON.parse(
 );
 const hostNavigationRuntime = JSON.parse(
   fs.readFileSync(HOST_NAV_METADATA, 'utf8')
+);
+const toolchainMetadata = readKeyValueFile(BUILD_TOOLCHAIN_METADATA);
+const requiredToolchainKeys = [
+  'builder_image',
+  'builder_platform',
+  'apt_snapshot',
+  'cc_path',
+  'cc_version',
+  'cxx_path',
+  'cxx_version',
+  ...BUILD_PACKAGES.map((packageName) => `package.${packageName}`),
+];
+for (const key of requiredToolchainKeys) {
+  if (!toolchainMetadata[key]) {
+    throw new Error(`Missing Neutralino build-toolchain provenance key: ${key}`);
+  }
+}
+const buildPackages = Object.fromEntries(
+  BUILD_PACKAGES.map((packageName) => [
+    packageName,
+    toolchainMetadata[`package.${packageName}`],
+  ])
 );
 const binaryStats = fs.statSync(binary);
 const extensionStats = fs.statSync(extension);
@@ -71,6 +124,20 @@ const report = {
   clientVersion: config.cli.clientVersion,
   applicationId: config.applicationId,
   rendererNativeAllowList: config.nativeAllowList,
+  buildToolchain: {
+    builderImage: toolchainMetadata.builder_image,
+    builderPlatform: toolchainMetadata.builder_platform,
+    aptSnapshot: toolchainMetadata.apt_snapshot,
+    cCompiler: {
+      path: toolchainMetadata.cc_path,
+      version: toolchainMetadata.cc_version,
+    },
+    cxxCompiler: {
+      path: toolchainMetadata.cxx_path,
+      version: toolchainMetadata.cxx_version,
+    },
+    packages: buildPackages,
+  },
   hostNavigationPatchSha256: hostNavigationRuntime.patchSha256,
   patchedRuntime: {
     name: 'neutralino-linux_x64',

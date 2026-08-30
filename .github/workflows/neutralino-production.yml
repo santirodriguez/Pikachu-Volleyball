@@ -192,6 +192,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
       - name: Upload experimental production-parity artifact
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: pikachu-volleyball-neutralino-production-parity-linux-x64
