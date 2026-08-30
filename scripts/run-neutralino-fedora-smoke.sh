@@ -116,7 +116,15 @@ if (( WIDTH < 800 || HEIGHT < 600 )); then
   exit 1
 fi
 
+run_phase quit 0
+if ! grep -q 'PV_NEUTRALINO_SMOKE .*"phase":"quit".*"ok":true.*"bridgeAvailable":true' "$output_dir/quit.log"; then
+  cat "$output_dir/quit.log" >&2
+  echo "Neutralino desktop Quit bridge probe failed." >&2
+  exit 1
+fi
+
 cat "$output_dir/read.log"
 cat "$output_dir/read-time.txt"
 cat "$output_dir/window-initial.txt"
 cat "$output_dir/window-after-min-resize.txt"
+cat "$output_dir/quit.log"
