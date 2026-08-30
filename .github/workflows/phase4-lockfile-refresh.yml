@@ -1,3 +1,4 @@
+# Temporary Phase 4 lockfile regeneration; removed before PR closeout.
 name: Phase 4 Lockfile Refresh
 
 on:
