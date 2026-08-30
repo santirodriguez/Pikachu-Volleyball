@@ -56,7 +56,7 @@ This edition is simply my way of looking after a game I remember fondly. The ori
 2. Download the latest `.AppImage` for `x86_64` and `SHA256SUMS.txt`.
 3. Verify the checksum, allow the AppImage to run as a program and open it.
 
-See the concise [2.1.0 release notes](docs/releases/v2.1.0.md). Pre-release builds may also appear in the [Build Linux AppImage workflow](https://github.com/santirodriguez/pikachu-volleyball/actions/workflows/release-appimage.yml).
+See the concise [2.1.0 release notes](docs/releases/v2.1.0.md). The published 2.1 AppImage remains the stable release while Version 3 desktop migration work continues separately.
 
 ## Controls
 
@@ -97,6 +97,7 @@ The Linux desktop edition, integrated interface, controls, localization and 2.x 
 
 - Node.js `22.12.0`
 - npm
+- Docker for the reproducible v3 Neutralino desktop build
 
 ### Common commands
 
@@ -105,11 +106,13 @@ npm ci
 npm run start
 npm run quality:check
 npm run build:desktop:linux
+npm run build:desktop:neutralino
 ```
 
 - `npm run start` launches the development web server.
 - `npm run quality:check` runs lint, unit tests and the production web build.
-- `npm run build:desktop:linux` creates the Linux AppImage under `release/`.
+- `npm run build:desktop:linux` is the generic v3 Linux desktop command and resolves to the supported Neutralino build.
+- `npm run build:desktop:neutralino` builds the reproducible Neutralino Linux x64 artifact. Final Linux distribution/AppImage packaging for v3 is intentionally deferred to the later distribution phase.
 
 ### Extension guides
 

@@ -1,24 +1,46 @@
-name: Neutralino Production Parity
+name: Neutralino Desktop Production
 
 on:
   push:
     branches:
-      - v3-phase3-neutralino-parity
+      - v3-phase4-electron-retirement
+    paths:
+      - '.github/workflows/neutralino-production.yml'
+      - 'desktop/**'
+      - 'scripts/*neutralino*'
+      - 'scripts/validate-neutralino-external-link-extension.cjs'
+      - 'test/neutralino/**'
+      - 'test/neutralino_production.test.cjs'
+      - 'test/desktop_platform_boundary.test.cjs'
+      - 'test/electron_retirement.test.cjs'
+      - 'src/**'
+      - 'webpack*.js'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'AGENTS.md'
+      - 'README.md'
+      - 'docs/v3-migration-plan.md'
+      - 'docs/neutralino-production-runtime.md'
   pull_request:
     branches:
       - v3
     paths:
       - '.github/workflows/neutralino-production.yml'
-      - 'desktop/external-link-policy.cjs'
-      - 'desktop/neutralino/**'
+      - 'desktop/**'
       - 'scripts/*neutralino*'
+      - 'scripts/validate-neutralino-external-link-extension.cjs'
       - 'test/neutralino/**'
       - 'test/neutralino_production.test.cjs'
       - 'test/desktop_platform_boundary.test.cjs'
+      - 'test/electron_retirement.test.cjs'
       - 'src/**'
       - 'webpack*.js'
       - 'package.json'
       - 'package-lock.json'
+      - 'AGENTS.md'
+      - 'README.md'
+      - 'docs/v3-migration-plan.md'
+      - 'docs/neutralino-production-runtime.md'
   workflow_dispatch:
 
 permissions:
@@ -29,20 +51,44 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  parity:
+  desktop:
     runs-on: ubuntu-latest
     timeout-minutes: 75
     env:
       PV_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      PV_PHASE4_BASE_SHA: 6a374c4661b47ef9507694682d1039003f31c217
     steps:
       - uses: actions/checkout@v5
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
       - uses: actions/setup-node@v5
         with:
           node-version: 22.12.0
           cache: npm
       - run: npm ci
+      - name: Assert Electron retirement
+        run: node --test test/electron_retirement.test.cjs
+      - name: Report dependency metadata footprint
+        shell: bash
+        run: |
+          set -euo pipefail
+          base_lock_bytes="$(git show "$PV_PHASE4_BASE_SHA:package-lock.json" | wc -c)"
+          current_lock_bytes="$(wc -c < package-lock.json)"
+          installed_bytes="$(du -sb node_modules | cut -f1)"
+          node <<'NODE'
+          const fs = require('node:fs');
+          const { execFileSync } = require('node:child_process');
+          const baseSha = process.env.PV_PHASE4_BASE_SHA;
+          const base = JSON.parse(execFileSync('git', ['show', `${baseSha}:package-lock.json`], { encoding: 'utf8' }));
+          const current = JSON.parse(fs.readFileSync('package-lock.json', 'utf8'));
+          const count = (lock) => Object.keys(lock.packages || {}).length;
+          console.log(`PV_DEPENDENCY_LOCK_PACKAGES_BASE=${count(base)}`);
+          console.log(`PV_DEPENDENCY_LOCK_PACKAGES_CURRENT=${count(current)}`);
+          NODE
+          echo "PV_DEPENDENCY_LOCK_BYTES_BASE=$base_lock_bytes"
+          echo "PV_DEPENDENCY_LOCK_BYTES_CURRENT=$current_lock_bytes"
+          echo "PV_DEPENDENCY_INSTALLED_BYTES_CURRENT=$installed_bytes"
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=critical
       - name: Run repository quality checks
@@ -70,7 +116,7 @@ jobs:
           include-hidden-files: true
           if-no-files-found: warn
           retention-days: 14
-      - name: Verify artifact checksum and contents
+      - name: Verify artifact checksum, contents, and Electron absence
         shell: bash
         run: |
           set -euo pipefail
@@ -85,7 +131,12 @@ jobs:
           test -f "$bundle/SHA256SUMS"
           (cd "$bundle" && sha256sum -c SHA256SUMS)
           test "$(find "$bundle" -type f | wc -l)" -eq 4
-      - name: Run Fedora 44 production and parity/security validation
+          if find "$bundle" -type f -printf '%P\n' | grep -Eiq '(^|/)(electron|electron-builder|chrome-sandbox|app\.asar)(/|$)'; then
+            echo 'Retired Electron runtime content found in Neutralino artifact' >&2
+            exit 1
+          fi
+          test ! -d "$bundle/node_modules"
+      - name: Run Fedora 44 production and desktop/security validation
         shell: bash
         run: |
           set -euo pipefail
@@ -139,7 +190,7 @@ jobs:
           printf 'PV_FEDORA_VALIDATION_EXIT_CODE=%s\n' "$status" | tee -a "$combined_log"
           printf '%s\n' "$status" > "$diagnostic_dir/exit-code.txt"
           exit "$status"
-      - name: Upload production parity evidence
+      - name: Upload desktop validation evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -153,7 +204,7 @@ jobs:
             .neutralino-artifact-extracted/**/production-window-*.txt
           if-no-files-found: warn
           retention-days: 14
-      - name: Upload experimental production-parity artifact
+      - name: Upload Neutralino desktop artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:

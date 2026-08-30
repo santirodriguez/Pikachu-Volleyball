@@ -1,8 +1,8 @@
 # Neutralino production runtime
 
-Phase 3 promotes the accepted Neutralino 6.9.0 candidate into a production-oriented desktop runtime while keeping Electron as the production comparison and fallback runtime.
+Phase 4 keeps the accepted Neutralino 6.9.0 production runtime unchanged while retiring Electron from the supported v3 desktop toolchain. Neutralino is now the sole supported v3 desktop runtime.
 
-This is an internal production-parity candidate. It is not the final AppImage/distribution design and is not a public release artifact.
+This remains an internal v3 desktop artifact. It is not the final Linux distribution/AppImage design and is not a public release artifact. Final distribution policy belongs to Phase 5.
 
 ## Runtime ownership
 
@@ -28,9 +28,10 @@ Validation-only probes live under `test/neutralino/` and are not copied into the
 
 The build derives `SOURCE_DATE_EPOCH` from the exact source commit unless it is explicitly supplied, propagates it to the native builder, records it in provenance, and normalizes production staging-resource mtimes to that value before resource embedding. The runner CA bundle is mounted only to bootstrap TLS verification while reaching the pinned signed Ubuntu snapshot; it is removed from the container APT override before compilation and is not packaged into the candidate.
 
-Build the experimental production-parity candidate with:
+The generic Linux desktop command and the explicit Neutralino command resolve to the same supported build path:
 
 ```text
+npm run build:desktop:linux
 npm run build:desktop:neutralino
 ```
 
@@ -38,7 +39,7 @@ The build records the source commit, source date epoch, pinned runtime inputs, p
 
 ## Reproducibility gate
 
-The Phase 3 Actions gate proves reproducibility with two independent clean builds from the exact same source commit. The harness creates two detached temporary Git worktrees at that SHA. Each worktree independently runs `npm ci` and the complete `build:desktop:neutralino` path using the pinned builder described above; build outputs and dependency trees are not shared between the two worktrees.
+The v3 Neutralino Actions gate proves reproducibility with two independent clean builds from the exact same source commit. The harness creates two detached temporary Git worktrees at that SHA. Each worktree independently runs `npm ci` and the complete `build:desktop:neutralino` path using the pinned builder described above; build outputs and dependency trees are not shared between the two worktrees.
 
 Each build captures SHA-256 and size for these layers, in order:
 
@@ -57,13 +58,13 @@ Final archive creation is deterministic: entries are name-sorted, archive owners
 
 ## Identity and persistence
 
-Phase 3 intentionally keeps the existing Neutralino application ID:
+Phase 4 preserves the Neutralino application ID accepted in the earlier migration phases:
 
 ```text
 com.santirodriguez.pikachuvolleyball.neutralino-spike
 ```
 
-The old internal suffix is retained solely to avoid changing the accepted Neutralino system-data identity during productionization. `dataLocation` remains `system`, and the port remains `48471`. A public identity/application-data migration is outside Phase 3.
+The old internal suffix remains solely to avoid changing the accepted Neutralino system-data identity during runtime retirement. `dataLocation` remains `system`, and the port remains `48471`. A public identity/application-data migration is outside Phase 4.
 
 Application settings and control bindings continue to use Web Storage and are validated across a real Neutralino restart on Fedora/WebKitGTK.
 
@@ -79,13 +80,13 @@ extensions.getStats
 
 `Neutralino.os.open`, arbitrary filesystem access, shell/process execution, generic networking, updater APIs, telemetry, and unrelated native privileges are not granted to renderer JavaScript.
 
-External destinations continue through the Phase 2 trusted path: untrusted renderer URL candidate -> extension IPC -> native final URL validation -> `xdg-open` by argv without a shell. Same-window top-level navigation remains enforced by the patched native WebKitGTK `decide-policy` handler.
+External destinations continue through the accepted trusted path: untrusted renderer URL candidate -> extension IPC -> native final URL validation -> `xdg-open` by argv without a shell. Same-window top-level navigation remains enforced by the patched native WebKitGTK `decide-policy` handler.
 
-The CI parity harness creates a temporary validation configuration that additionally grants `app.writeProcessOutput` and injects smoke probes. That configuration is test-only. The clean production artifact is built and launched before the validation overlay is created.
+The CI validation harness creates a temporary validation configuration that additionally grants `app.writeProcessOutput` and injects smoke probes. That configuration is test-only. The clean production artifact is built and launched before the validation overlay is created.
 
 ## Artifact composition
 
-The experimental Linux x64 production-parity bundle contains exactly:
+The Linux x64 Neutralino bundle contains exactly:
 
 ```text
 pikachu-volleyball-neutralino-linux_x64
@@ -94,18 +95,20 @@ provenance.json
 SHA256SUMS
 ```
 
-The Neutralino executable contains the production web resources through embedded-resource mode. Smoke probes, attack servers, diagnostic logs, source trees, compilers, build dependencies, and Node modules are not shipped in the bundle.
+The Neutralino executable contains the production web resources through embedded-resource mode. Electron, Electron Builder, `app.asar`, Chromium/Electron launcher files, smoke probes, attack servers, diagnostic logs, source trees, compilers, build dependencies, and Node modules are not shipped in the bundle.
+
+The historical `production-parity` filename used by the build scripts is retained for reproducibility continuity. It no longer denotes an Electron fallback or a dual-runtime support policy.
 
 ## Linux runtime assumptions
 
 The validated Fedora 44 environment provides GTK 3, WebKitGTK 4.1, X11 windowing support, and GStreamer base/good plugins for the exercised MP3/WAV audio path. The native external-link mediator expects `xdg-open` to be available when an approved external URL is opened.
 
-If required GTK/WebKitGTK shared libraries are absent, the executable cannot start its native WebView and fails before normal application startup. Phase 3 records that dependency instead of bundling system libraries; final dependency packaging/installers/AppImage design belong to the later Linux distribution phase.
+If required GTK/WebKitGTK shared libraries are absent, the executable cannot start its native WebView and fails before normal application startup. Phase 4 preserves that known dependency instead of choosing a final bundling strategy; final dependency packaging, installers and AppImage/distribution design belong to Phase 5.
 
 ## Validation boundary
 
-GitHub Actions runs the repository production dependency audit, full `quality:check`, production web/PWA build for all five locales, Neutralino static tests, two-build component-level reproducibility gate, checksum/exact-content verification, a clean launch of the extracted embedded artifact, and Fedora 44/WebKitGTK parity/security probes. The exact embedded binary is then reused for the validation overlay so the deeper tests do not silently exercise a different development runtime.
+GitHub Actions runs the repository production dependency audit, full `quality:check`, explicit Electron-retirement assertions, production web/PWA build for all five locales, Neutralino static tests, two-build component-level reproducibility gate, checksum/exact-content verification, a clean launch of the extracted embedded artifact, and Fedora 44/WebKitGTK desktop/security probes. The exact embedded binary is then reused for the validation overlay so the deeper tests do not silently exercise a different development runtime.
 
-The Fedora validation records named stage transitions and the real container exit code. Production-build diagnostics, reproducibility evidence, Fedora parity/security evidence, and the available production candidate are uploaded with failure-safe behavior so an ordinary validation failure remains diagnosable server-side.
+The Fedora validation records named stage transitions and the real container exit code. Production-build diagnostics, reproducibility evidence, Fedora desktop/security evidence, and the available production candidate are uploaded with failure-safe behavior so an ordinary validation failure remains diagnosable server-side.
 
-Startup and memory observations are diagnostic only. They must not be treated as Neutralino-versus-Electron performance claims unless measurement boundaries are made directly comparable.
+Startup and memory observations are diagnostic only. The frozen 2.1 Electron/AppImage metrics remain a directional historical baseline, not a directly comparable performance threshold for the Neutralino runtime.
