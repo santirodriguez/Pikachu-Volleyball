@@ -42,6 +42,7 @@ printf 'PV_NEUTRALINO_TLS_BOOTSTRAP_CA=%s\n' "$host_ca_bundle"
   cd .neutralino-production
   npx -y @neutralinojs/neu@11.7.2 update
 )
+node scripts/prepare-neutralino-production.cjs --normalize-only
 set +e
 {
   printf 'PV_HOST_NAV_BUILD_HEAD=%s\n' "$PV_SOURCE_SHA"
