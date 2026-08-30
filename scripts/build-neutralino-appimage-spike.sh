@@ -30,11 +30,26 @@ tools="${PV_APPIMAGE_TOOLS_DIR:-$root/.appimage-spike-tools}"
 mkdir -p "$tools"
 download_verified() {
   local url="$1" sha="$2" destination="$3"
+  local actual size type
   if [[ ! -f "$destination" ]] || [[ "$(sha256sum "$destination" | awk '{print $1}')" != "$sha" ]]; then
     rm -f "$destination"
-    curl --fail --location --retry 3 --silent --show-error "$url" -o "$destination"
+    if [[ "$url" == https://api.github.com/repos/*/releases/assets/* ]]; then
+      curl --fail --location --retry 3 --silent --show-error \
+        --header 'Accept: application/octet-stream' \
+        --header 'X-GitHub-Api-Version: 2022-11-28' \
+        "$url" -o "$destination"
+    else
+      curl --fail --location --retry 3 --silent --show-error "$url" -o "$destination"
+    fi
   fi
-  printf '%s  %s\n' "$sha" "$destination" | sha256sum -c -
+  actual="$(sha256sum "$destination" | awk '{print $1}')"
+  if [[ "$actual" != "$sha" ]]; then
+    size="$(stat -c%s "$destination" 2>/dev/null || echo unknown)"
+    type="$(file -b "$destination" 2>/dev/null || echo unknown)"
+    printf 'Tool asset integrity failure: url=%s expected_sha256=%s actual_sha256=%s bytes=%s type=%s\n' \
+      "$url" "$sha" "$actual" "$size" "$type" >&2
+    exit 1
+  fi
   chmod 0755 "$destination"
 }
 
