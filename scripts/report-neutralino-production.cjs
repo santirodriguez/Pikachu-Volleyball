@@ -27,6 +27,8 @@ const BUILD_PACKAGES = [
   'ninja-build',
   'libgtk-3-dev',
   'libwebkit2gtk-4.0-dev',
+  'curl',
+  'xz-utils',
 ];
 const PHASE1_RAW_RUNTIME_BYTES = 6023776;
 const PHASE2_RAW_RUNTIME_AND_HELPER_BYTES = 6046384;
@@ -94,6 +96,16 @@ const requiredToolchainKeys = [
   'builder_platform',
   'apt_snapshot',
   'source_date_epoch',
+  'node_distribution_url',
+  'node_distribution_sha256',
+  'node_path',
+  'node_version',
+  'npm_path',
+  'npm_version',
+  'project_package_lock_sha256',
+  'neu_version',
+  'neu_source_commit',
+  'neu_package_lock_sha256',
   'cc_path',
   'cc_version',
   'cxx_path',
@@ -107,6 +119,9 @@ for (const key of requiredToolchainKeys) {
 }
 if (!/^\d+$/.test(toolchainMetadata.source_date_epoch)) {
   throw new Error(`Invalid Neutralino source_date_epoch provenance: ${toolchainMetadata.source_date_epoch}`);
+}
+if (toolchainMetadata.neu_version !== '11.7.2') {
+  throw new Error(`Unexpected Neutralino CLI version: ${toolchainMetadata.neu_version}`);
 }
 const buildPackages = Object.fromEntries(
   BUILD_PACKAGES.map((packageName) => [
@@ -125,7 +140,7 @@ const report = {
   sourceDateEpoch: Number(toolchainMetadata.source_date_epoch),
   frameworkVersion: config.cli.binaryVersion,
   upstreamCommit: hostNavigationRuntime.upstreamCommit,
-  cliVersion: '11.7.2',
+  cliVersion: toolchainMetadata.neu_version,
   clientVersion: config.cli.clientVersion,
   applicationId: config.applicationId,
   rendererNativeAllowList: config.nativeAllowList,
@@ -133,6 +148,22 @@ const report = {
     builderImage: toolchainMetadata.builder_image,
     builderPlatform: toolchainMetadata.builder_platform,
     aptSnapshot: toolchainMetadata.apt_snapshot,
+    node: {
+      distributionUrl: toolchainMetadata.node_distribution_url,
+      distributionSha256: toolchainMetadata.node_distribution_sha256,
+      path: toolchainMetadata.node_path,
+      version: toolchainMetadata.node_version,
+    },
+    npm: {
+      path: toolchainMetadata.npm_path,
+      version: toolchainMetadata.npm_version,
+    },
+    projectPackageLockSha256: toolchainMetadata.project_package_lock_sha256,
+    neutralinoCli: {
+      version: toolchainMetadata.neu_version,
+      sourceCommit: toolchainMetadata.neu_source_commit,
+      packageLockSha256: toolchainMetadata.neu_package_lock_sha256,
+    },
     cCompiler: {
       path: toolchainMetadata.cc_path,
       version: toolchainMetadata.cc_version,
