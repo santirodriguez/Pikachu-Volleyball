@@ -48,6 +48,15 @@
     );
   }
 
+  async function openPauseMenu() {
+    dispatchKey('KeyP', 'keydown');
+    dispatchKey('KeyP', 'keyup');
+    return waitFor(() => {
+      const overlay = document.getElementById('pv-menu-overlay');
+      return Boolean(overlay && !overlay.hidden);
+    });
+  }
+
   async function probeMedia(relativeUrl, mimeType) {
     const audio = new Audio();
     const canPlayType = audio.canPlayType(mimeType);
@@ -85,24 +94,17 @@
     const onPause = (event) => pauseStates.push(Boolean(event.detail?.paused));
     window.addEventListener('pv-pause-changed', onPause);
 
-    dispatchKey('KeyP', 'keydown');
-    dispatchKey('KeyP', 'keyup');
-    const opened = await waitFor(() => {
-      const overlay = document.getElementById('pv-menu-overlay');
-      return Boolean(overlay && !overlay.hidden);
-    });
+    const opened = await openPauseMenu();
     if (!opened) {
       window.removeEventListener('pv-pause-changed', onPause);
       return { ok: false, reason: 'pause-menu-did-not-open', pauseStates };
     }
 
-    const audioNav = document.querySelector('[data-nav-id="audio"]');
-    audioNav?.click();
+    document.querySelector('[data-nav-id="audio"]')?.click();
     await delay(50);
 
     const originalBgm = localStorage.getItem('pv-offline-bgm') || 'on';
-    const bgmButton = document.querySelector('[data-setting="bgm"]');
-    bgmButton?.click();
+    document.querySelector('[data-setting="bgm"]')?.click();
     await delay(25);
     const changedBgm = localStorage.getItem('pv-offline-bgm') || 'on';
     document.querySelector('[data-setting="bgm"]')?.click();
@@ -118,8 +120,7 @@
     }
     const restoredSfx = localStorage.getItem('pv-offline-sfx') || 'stereo';
 
-    dispatchKey('KeyP', 'keydown');
-    dispatchKey('KeyP', 'keyup');
+    document.querySelector('[data-nav-id="continue"]')?.click();
     const closed = await waitFor(() => {
       const overlay = document.getElementById('pv-menu-overlay');
       return Boolean(overlay?.hidden);
@@ -140,6 +141,44 @@
       pauseStates,
       bgm: { original: originalBgm, changed: changedBgm, restored: restoredBgm },
       sfx: { original: originalSfx, sequence: sfxSequence, restored: restoredSfx },
+    };
+  }
+
+  async function probeRestart() {
+    const pauseStates = [];
+    const onPause = (event) => pauseStates.push(Boolean(event.detail?.paused));
+    window.addEventListener('pv-pause-changed', onPause);
+
+    const opened = await openPauseMenu();
+    if (!opened) {
+      window.removeEventListener('pv-pause-changed', onPause);
+      return { ok: false, reason: 'restart-menu-did-not-open', pauseStates };
+    }
+
+    document.querySelector('[data-nav-id="restart"]')?.click();
+    document.querySelector('[data-command="restart"]')?.click();
+    const confirmationVisible = await waitFor(() => {
+      const modal = document.getElementById('pv-menu-modal');
+      return Boolean(modal && !modal.hidden);
+    });
+    document.querySelector('[data-modal-action="accept"]')?.click();
+    const closed = await waitFor(() => {
+      const overlay = document.getElementById('pv-menu-overlay');
+      return Boolean(overlay?.hidden);
+    });
+    window.removeEventListener('pv-pause-changed', onPause);
+
+    return {
+      ok:
+        opened &&
+        confirmationVisible &&
+        closed &&
+        pauseStates.includes(true) &&
+        pauseStates.includes(false),
+      opened,
+      confirmationVisible,
+      closed,
+      pauseStates,
     };
   }
 
@@ -183,11 +222,15 @@
 
     const canvas = document.getElementById('game-canvas');
     const canvasOk = Boolean(
-      canvas && canvas.tagName === 'CANVAS' && canvas.width === 432 && canvas.height === 304
+      canvas &&
+        canvas.tagName === 'CANVAS' &&
+        canvas.width === 432 &&
+        canvas.height === 304
     );
     const persistenceOk =
       localStorage.getItem(persistenceKey) === persistenceValue;
     const pauseAndSettings = await probePauseAndAudioSettings();
+    const restart = await probeRestart();
     const bgm = await probeMedia(
       '../resources/assets/sounds/bgm.mp3',
       'audio/mpeg'
@@ -206,6 +249,7 @@
         canvasOk &&
         persistenceOk &&
         pauseAndSettings.ok &&
+        restart.ok &&
         bgm.loaded &&
         wav.loaded &&
         localesOk,
@@ -221,11 +265,24 @@
       },
       persistenceOk,
       pauseAndSettings,
+      restart,
       media: { bgm, wav },
       locales,
     };
 
     await finish(report, report.ok ? 0 : 1);
+  }
+
+  async function runQuitProbe() {
+    const bridgeAvailable = Boolean(
+      window.pvDesktop?.isDesktop && typeof window.pvDesktop?.quit === 'function'
+    );
+    await writeReport({ phase: 'quit', ok: bridgeAvailable, bridgeAvailable });
+    if (!bridgeAvailable) {
+      await neutralino.app.exit(1);
+      return;
+    }
+    await window.pvDesktop.quit();
   }
 
   async function run() {
@@ -244,6 +301,18 @@
       } catch (error) {
         await finish(
           { phase: 'read', ok: false, error: String(error?.stack || error) },
+          1
+        );
+      }
+      return;
+    }
+
+    if (phase === 'quit') {
+      try {
+        await runQuitProbe();
+      } catch (error) {
+        await finish(
+          { phase: 'quit', ok: false, error: String(error?.stack || error) },
           1
         );
       }
