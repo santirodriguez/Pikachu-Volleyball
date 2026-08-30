@@ -1,0 +1,62 @@
+name: Phase 4 Lockfile Refresh
+
+on:
+  push:
+    branches:
+      - v3-phase4-electron-retirement
+    paths:
+      - package.json
+      - package-lock.json
+      - .github/workflows/phase4-lockfile-refresh.yml
+
+permissions:
+  contents: write
+
+jobs:
+  refresh-lockfile:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+
+      - name: Regenerate lockfile
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+
+      - name: Assert retired direct dependencies are gone
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          const lock = JSON.parse(fs.readFileSync('package-lock.json', 'utf8'));
+          for (const name of ['electron', 'electron-builder']) {
+            if (pkg.devDependencies?.[name] || pkg.dependencies?.[name]) {
+              throw new Error(`${name} remains in package.json`);
+            }
+            if (lock.packages?.['']?.devDependencies?.[name] || lock.packages?.['']?.dependencies?.[name]) {
+              throw new Error(`${name} remains a direct lockfile dependency`);
+            }
+            if (lock.packages?.[`node_modules/${name}`]) {
+              throw new Error(`${name} remains installed in the regenerated lockfile graph`);
+            }
+          }
+          NODE
+
+      - name: Commit regenerated lockfile
+        run: |
+          if git diff --quiet -- package-lock.json; then
+            echo 'package-lock.json already matches package.json'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add package-lock.json
+          git commit -m 'Regenerate lockfile after Electron retirement'
+          git push origin "HEAD:${GITHUB_REF_NAME}"

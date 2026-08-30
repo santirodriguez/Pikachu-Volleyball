@@ -9,9 +9,7 @@
     "start": "webpack serve --config webpack.dev.js",
     "build": "npm run build:web",
     "build:web": "webpack --config webpack.prod.js",
-    "start:desktop": "npm run build:web && electron .",
-    "build:appimage": "npm run build:desktop:linux",
-    "build:desktop:linux": "npm run build:web && node scripts/patch-appimage-launcher.cjs && electron-builder --linux AppImage",
+    "build:desktop:linux": "npm run build:desktop:neutralino",
     "build:desktop:neutralino": "bash scripts/build-neutralino-production.sh",
     "lint": "node ./node_modules/eslint/bin/eslint.js \"src/resources/js/**/*.{js,cjs}\" \"test/**/*.cjs\" \"desktop/**/*.js\" \"webpack.*.js\"",
     "quality:check": "npm run lint && npm run test:unit && npm run build:web"
@@ -32,8 +30,6 @@
   "devDependencies": {
     "clean-webpack-plugin": "^4.0.0",
     "copy-webpack-plugin": "^11.0.0",
-    "electron": "^35.1.5",
-    "electron-builder": "26.15.7",
     "eslint": "^8.17.0",
     "eslint-plugin-prettier": "^4.0.0",
     "html-webpack-plugin": "^5.5.0",
@@ -60,41 +56,5 @@
     "@pixi/sprite-animated": "^6.4.2",
     "@pixi/spritesheet": "^6.4.2",
     "@pixi/ticker": "^6.4.2"
-  },
-  "main": "desktop/main.js",
-  "build": {
-    "appId": "com.santirodriguez.pikachu-volleyball",
-    "productName": "Pikachu Volleyball",
-    "artifactName": "Pikachu-Volleyball-${version}-${arch}.${ext}",
-    "compression": "normal",
-    "electronLanguages": [
-      "en-US"
-    ],
-    "afterPack": "./scripts/prune-packaged-node-modules.cjs",
-    "directories": {
-      "output": "release"
-    },
-    "files": [
-      "dist/**/*",
-      "!dist/**/*.map",
-      "desktop/**/*",
-      "package.json"
-    ],
-    "linux": {
-      "target": [
-        "AppImage"
-      ],
-      "category": "Game",
-      "icon": "src/resources/assets/images/IDI_PIKAICON-1_gap_filled_512.png"
-    },
-    "toolsets": {
-      "appimage": "1.0.2"
-    },
-    "appImage": {
-      "compression": "zstd",
-      "executableArgs": [
-        "--enable-sandbox"
-      ]
-    }
   }
 }
