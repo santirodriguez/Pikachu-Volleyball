@@ -90,9 +90,10 @@ function prepareSmokeStage() {
     path.join(SOURCE, 'smoke-probe.js'),
     'utf8'
   );
+  const smokeBootstrap = `'use strict';\n(() => {\n  const args = Array.isArray(window.NL_ARGS) ? window.NL_ARGS : [];\n  const prefix = '--dev-pv-smoke-phase=';\n  const phaseArg = args.find((arg) => arg.startsWith(prefix));\n  const phase = phaseArg ? phaseArg.slice(prefix.length) : 'none';\n  if (phase !== 'write' && phase !== 'none') return;\n  const title = \`Pikachu Volleyball [PV_SMOKE injector=yes phase=\${phase} neutralino=\${window.Neutralino ? 'yes' : 'no'} args=\${args.length}]\`;\n  const mark = () => {\n    document.title = title;\n  };\n  mark();\n  window.addEventListener('DOMContentLoaded', mark, { once: true });\n  window.addEventListener('load', mark, { once: true });\n})();\n`;
   fs.writeFileSync(
     path.join(RESOURCES, 'neutralino-smoke-preload.js'),
-    `${preload}\n${smokeProbe}`
+    `${smokeBootstrap}\n${preload}\n${smokeProbe}`
   );
 
   const smokeConfig = JSON.parse(JSON.stringify(productionConfig));

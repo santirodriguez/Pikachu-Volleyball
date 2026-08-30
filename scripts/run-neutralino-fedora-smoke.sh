@@ -75,6 +75,53 @@ run_phase() {
   fi
 }
 
+run_write_phase() {
+  local start_ms
+  local status
+  local write_job
+  local window_id=""
+  local -a phase_args
+  start_ms="$(date +%s%3N)"
+  mapfile -t phase_args < <(smoke_args write 0 "$start_ms")
+
+  set +e
+  (
+    /usr/bin/time -v -o "$output_dir/write-time.txt" \
+      timeout 35s "$binary" \
+        "${runtime_args[@]}" \
+        "${phase_args[@]}" \
+        >"$output_dir/write.log" 2>&1
+  ) &
+  write_job=$!
+
+  for _ in $(seq 1 80); do
+    window_id="$(xdotool search --name '^Pikachu Volleyball' 2>/dev/null | head -n 1 || true)"
+    if [[ -n "$window_id" ]]; then
+      xdotool getwindowname "$window_id" \
+        >"$output_dir/write-window-title.txt" 2>/dev/null || true
+      if grep -q 'PV_SMOKE' "$output_dir/write-window-title.txt" 2>/dev/null; then
+        break
+      fi
+    fi
+    if ! kill -0 "$write_job" 2>/dev/null; then
+      break
+    fi
+    sleep 0.1
+  done
+
+  wait "$write_job"
+  status=$?
+  set -e
+  if (( status != 0 )); then
+    if [[ -f "$output_dir/write-window-title.txt" ]]; then
+      cat "$output_dir/write-window-title.txt" >&2
+    fi
+    cat "$output_dir/write.log" >&2
+    cat "$output_dir/write-time.txt" >&2
+    return "$status"
+  fi
+}
+
 ensure_success_marker() {
   local phase="$1"
   local extra="${2:-}"
@@ -97,7 +144,7 @@ find_window() {
   return 1
 }
 
-run_phase write 0
+run_write_phase
 ensure_success_marker write
 
 start_ms="$(date +%s%3N)"
