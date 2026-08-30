@@ -33,7 +33,7 @@ wm_pid=$!
 
 cleanup_active_phase() {
   if [[ -n "$active_app_pid" ]] && kill -0 "$active_app_pid" 2>/dev/null; then
-    kill -KILL "$active_app_pid" 2>/dev/null || true
+    kill -KILL -- "-$active_app_pid" 2>/dev/null || true
   fi
   if [[ -n "$active_job" ]]; then
     set +e
@@ -118,7 +118,7 @@ start_observed_phase() {
   mapfile -t phase_args < <(smoke_args "$phase" "$hold_ms" "$start_ms")
 
   /usr/bin/time -v -o "$output_dir/${phase}-time.txt" \
-    "$binary" \
+    setsid "$binary" \
       "${runtime_args[@]}" \
       "${phase_args[@]}" \
       >"$output_dir/${phase}.log" 2>&1 &
@@ -170,13 +170,14 @@ stop_observed_phase() {
     return 1
   fi
 
-  kill -KILL "$active_app_pid"
+  kill -KILL -- "-$active_app_pid"
   set +e
   wait "$active_job"
   status=$?
   set -e
   active_job=""
   active_app_pid=""
+  sleep 0.5
 
   printf 'termination=external-sigkill status=%s\n' "$status" \
     >"$output_dir/${phase}-termination.txt"
