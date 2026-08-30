@@ -159,6 +159,10 @@ ${requires%$'\n'}
 
 %global pv_install_dir $PV_INSTALL_DIR
 %global pv_source_date_epoch $SOURCE_DATE_EPOCH
+%global debug_package %{nil}
+%global __brp_strip %{nil}
+%global __brp_strip_comment_note %{nil}
+%global __brp_strip_static_archive %{nil}
 
 %description
 Lightweight Linux desktop package using the system GTK/WebKitGTK runtime.
