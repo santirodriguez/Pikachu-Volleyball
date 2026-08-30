@@ -45,13 +45,13 @@ jobs:
         run: npm run quality:check
       - name: Build reproducible Neutralino production candidate
         run: npm run build:desktop:neutralino
-      - name: Upload patched-runtime diagnostics
+      - name: Upload production-build diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: neutralino-host-navigation-build-diagnostics
-          path: .neutralino-production/diagnostics/host-navigation-runtime-build.log
-          if-no-files-found: error
+          name: neutralino-production-build-diagnostics
+          path: .neutralino-production/diagnostics/production-build.log
+          if-no-files-found: warn
           retention-days: 14
       - name: Verify artifact checksum and contents
         shell: bash

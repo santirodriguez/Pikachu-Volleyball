@@ -5,16 +5,20 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$root"
 npm run build:web
 node scripts/prepare-neutralino-production.cjs
+
+diagnostic_dir=".neutralino-production/diagnostics"
+diagnostic_log="$diagnostic_dir/production-build.log"
+mkdir -p "$diagnostic_dir"
+: > "$diagnostic_log"
+exec > >(tee -a "$diagnostic_log") 2>&1
+printf 'PV_NEUTRALINO_PRODUCTION_BUILD_HEAD=%s\n' "${GITHUB_SHA:-unknown}"
+
 ./scripts/build-neutralino-external-link-extension.sh
 node scripts/validate-neutralino-external-link-extension.cjs
 (
   cd .neutralino-production
   npx -y @neutralinojs/neu@11.7.2 update
 )
-diagnostic_dir=".neutralino-production/diagnostics"
-diagnostic_log="$diagnostic_dir/host-navigation-runtime-build.log"
-mkdir -p "$diagnostic_dir"
-: > "$diagnostic_log"
 set +e
 {
   printf 'PV_HOST_NAV_BUILD_HEAD=%s\n' "${GITHUB_SHA:-unknown}"
@@ -28,10 +32,10 @@ set +e
   docker_status=$?
   if [[ "$docker_status" -ne 0 ]]; then exit "$docker_status"; fi
   sudo chown "$(id -u):$(id -g)" .neutralino-production/bin/neutralino-linux_x64 .neutralino-production/neutralino-host-navigation-runtime.json
-} 2>&1 | tee "$diagnostic_log"
-build_status=${PIPESTATUS[0]}
+} 2>&1
+build_status=$?
 set -e
-printf 'PV_HOST_NAV_BUILD_EXIT_CODE=%s\n' "$build_status" | tee -a "$diagnostic_log"
+printf 'PV_HOST_NAV_BUILD_EXIT_CODE=%s\n' "$build_status"
 [[ "$build_status" -eq 0 ]] || exit "$build_status"
 (
   cd .neutralino-production
