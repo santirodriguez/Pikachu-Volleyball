@@ -124,13 +124,15 @@ jobs:
           )
 
           test "$(sha256sum "$runtime_file" | awk '{print $1}')" = "$PV_APPIMAGE_RUNTIME_SHA256"
-          runtime_bytes="$(stat -c%s "$runtime_file")"
-          head -c "$runtime_bytes" "$source_file" | cmp - "$runtime_file"
+          runtime_offset="$("$source_file" --appimage-offset)"
+          [[ "$runtime_offset" =~ ^[0-9]+$ ]]
+          test "$runtime_offset" -gt 0
+          test "$runtime_offset" -lt "$(stat -c%s "$source_file")"
 
           host_uid="$(id -u)"
           host_gid="$(id -g)"
           docker run --rm --platform linux/amd64 \
-            -e PV_APPIMAGE_RUNTIME_OFFSET="$runtime_bytes" \
+            -e PV_APPIMAGE_RUNTIME_OFFSET="$runtime_offset" \
             -v "$PWD:/workspace" -w /workspace \
             --mount type=bind,src=/etc/ssl/certs/ca-certificates.crt,dst=/tmp/pv-host-ca.crt,readonly \
             "$PV_APPIMAGE_BUILDER_IMAGE" bash -lc '
@@ -162,7 +164,7 @@ jobs:
           bytes="$(stat -c%s "$source_file")"
           core_bytes="$(( $(stat -c%s "$bundle/$PV_BINARY_NAME") + $(stat -c%s "$bundle/extensions/$PV_EXTENSION_NAME") + $(stat -c%s "$bundle/provenance.json") + $(stat -c%s "$bundle/SHA256SUMS") ))"
           printf 'thin\t%s\t%s\t%s\t%s\n' \
-            "$bytes" "$(sha256sum "$source_file" | awk '{print $1}')" "$runtime_bytes" "$core_bytes" \
+            "$bytes" "$(sha256sum "$source_file" | awk '{print $1}')" "$runtime_offset" "$core_bytes" \
             > .appimage-spike-inspection/summary.tsv
           cp -a .appimage-spike-evidence/first appimage-spike-candidates/build-evidence
           cp -a .appimage-spike-inspection appimage-spike-candidates/inspection
