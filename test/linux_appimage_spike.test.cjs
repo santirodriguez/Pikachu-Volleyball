@@ -120,7 +120,7 @@ test('Neutralino settings smoke waits for rerendered persisted state', () => {
   assert.match(smokeProbeText, /async function cycleSettingAndWait/);
   assert.match(smokeProbeText, /current\.stored === current\.value/);
   const settingsProbe = smokeProbeText.match(
-    /async function probePauseAndAudioSettings\(\) \{[\s\S]*?\n  \}\n\n  async function probeRestart/,
+    /async function probePauseAndAudioSettings\(\) \{[\s\S]*?\n {2}\}\n\n {2}async function probeRestart/,
   );
   assert.ok(settingsProbe);
   assert.match(settingsProbe[0], /audioPanelReady = await waitFor/);
@@ -133,6 +133,7 @@ test('host-navigation smoke isolates rejected top-level navigations by process',
   assert.match(hostNavigationProbeText, /--dev-pv-host-navigation-case=/);
   assert.match(hostNavigationProbeText, /PV_NEUTRALINO_HOST_NAVIGATION_READY/);
   assert.doesNotMatch(hostNavigationProbeText, /attempts\.push|attemptNavigation/);
+  assert.match(runtimeSmokeText, /run_stage host-navigation bash/);
   assert.match(
     hostNavigationSmokeText,
     /navigation_cases=\(assign href replace anchor data file approved\)/,

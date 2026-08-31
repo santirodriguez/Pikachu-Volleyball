@@ -30,9 +30,19 @@ for _ in $(seq 1 120); do
   sleep 0.1
 done
 [[ -n "$window_id" ]] || { cat "$output_dir/production-runtime.log" >&2; echo "Production window did not appear." >&2; exit 1; }
-xdotool getwindowgeometry --shell "$window_id" >"$output_dir/production-window-initial.txt"
-source "$output_dir/production-window-initial.txt"
-(( WIDTH == 1024 && HEIGHT == 768 )) || { cat "$output_dir/production-window-initial.txt" >&2; echo "Unexpected initial production window size." >&2; exit 1; }
+initial_size_ready=0
+for _ in $(seq 1 50); do
+  if xdotool getwindowgeometry --shell "$window_id" >"$output_dir/production-window-initial.txt" 2>/dev/null; then
+    source "$output_dir/production-window-initial.txt"
+    if (( WIDTH == 1024 && HEIGHT == 768 )); then
+      initial_size_ready=1
+      break
+    fi
+  fi
+  kill -0 "$app_pid" 2>/dev/null || { cat "$output_dir/production-runtime.log" >&2; exit 1; }
+  sleep 0.1
+done
+(( initial_size_ready == 1 )) || { cat "$output_dir/production-window-initial.txt" >&2; echo "Unexpected initial production window size." >&2; exit 1; }
 xdotool windowsize "$window_id" 600 400
 sleep 0.4
 xdotool getwindowgeometry --shell "$window_id" >"$output_dir/production-window-minimum.txt"
