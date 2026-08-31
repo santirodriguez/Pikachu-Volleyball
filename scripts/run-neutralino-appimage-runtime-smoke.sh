@@ -54,6 +54,9 @@ EOF
     ;;
 esac
 chmod 0755 "$stage/bin/neutralino-linux_x64"
+production_launcher="$stage/pikachu-volleyball-neutralino-linux_x64"
+rm -f "$production_launcher"
+ln -s bin/neutralino-linux_x64 "$production_launcher"
 
 {
   printf 'candidate=%s\n' "$(basename "$candidate")"
@@ -78,6 +81,7 @@ run_stage() {
 
 : > "$result_dir/stages.txt"
 run_stage production-window "$root/scripts/run-neutralino-production-smoke.sh" "$stage"
+rm -f "$production_launcher"
 run_stage gameplay-input-audio-quit "$root/scripts/run-neutralino-fedora-smoke.sh" "$stage"
 run_stage external-link "$root/scripts/run-neutralino-external-link-smoke.sh" "$stage"
 run_stage host-navigation "$root/scripts/run-neutralino-host-navigation-smoke.sh" "$stage"
