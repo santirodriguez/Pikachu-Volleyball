@@ -83,13 +83,15 @@ test('bundled candidate does not intentionally ship glibc or the ELF loader', ()
   assert.match(scriptText, /GST_PLUGIN_SYSTEM_PATH_1_0=/);
 });
 
-test('thin preflight resolves WebKitGTK from the runtime dependency graph', () => {
+test('thin preflight finds WebKitGTK in standard loader paths', () => {
   const thinFunction = scriptText.match(
     /write_thin_apprun\(\) \{[\s\S]*?\n\}\n\nwrite_bundled_apprun\(\)/,
   );
   assert.ok(thinFunction);
   assert.match(thinFunction[0], /ldd_output=/);
-  assert.match(thinFunction[0], /libwebkit2gtk-4\\?\./);
+  assert.match(thinFunction[0], /\/usr\/lib\*\/\*\/libwebkit2gtk-4\.1\.so\.0/);
+  assert.match(thinFunction[0], /\/usr\/lib\*\/libwebkit2gtk-4\.0\.so\.37/);
+  assert.match(thinFunction[0], /if \[ -r "\\\$candidate" \]/);
   assert.doesNotMatch(thinFunction[0], /ldconfig\s+-p/);
 });
 

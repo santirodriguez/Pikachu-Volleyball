@@ -127,8 +127,22 @@ if [ -n "\$missing" ]; then
   echo "This thin AppImage requires host GTK 3 and its normal desktop libraries." >&2
   exit 127
 fi
-webkit="\$(printf '%s\n' "\$ldd_output" | awk '/libwebkit2gtk-4\.(1\.so\.0|0\.so\.37)/ && /=>/ {print \$3; exit}')"
-if [ -z "\$webkit" ] || [ ! -r "\$webkit" ]; then
+webkit=""
+for candidate in \
+  /usr/lib*/libwebkit2gtk-4.1.so.0 \
+  /usr/lib*/*/libwebkit2gtk-4.1.so.0 \
+  /lib*/libwebkit2gtk-4.1.so.0 \
+  /lib*/*/libwebkit2gtk-4.1.so.0 \
+  /usr/lib*/libwebkit2gtk-4.0.so.37 \
+  /usr/lib*/*/libwebkit2gtk-4.0.so.37 \
+  /lib*/libwebkit2gtk-4.0.so.37 \
+  /lib*/*/libwebkit2gtk-4.0.so.37; do
+  if [ -r "\$candidate" ]; then
+    webkit="\$candidate"
+    break
+  fi
+done
+if [ -z "\$webkit" ]; then
   echo "Pikachu Volleyball cannot start: host WebKitGTK 4.1 (preferred) or 4.0 is missing." >&2
   echo "This is a thin system-webview AppImage, not a fully self-contained desktop runtime." >&2
   exit 127
