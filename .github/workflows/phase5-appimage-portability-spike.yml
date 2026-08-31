@@ -62,7 +62,7 @@ jobs:
             "$(stat -c%s "$bundle/$PV_BINARY_NAME")" "$(sha256sum "$bundle/$PV_BINARY_NAME" | awk '{print $1}')"
           printf 'PV_APPIMAGE_PRODUCTION_HELPER bytes=%s sha256=%s\n' \
             "$(stat -c%s "$bundle/extensions/$PV_EXTENSION_NAME")" "$(sha256sum "$bundle/extensions/$PV_EXTENSION_NAME" | awk '{print $1}')"
-      - name: Build both AppImage candidates twice
+      - name: Build thin AppImage candidate twice
         shell: bash
         run: |
           set -euo pipefail
@@ -97,61 +97,73 @@ jobs:
                   libgstreamer1.0-dev gstreamer1.0-tools gstreamer1.0-plugins-base \
                   gstreamer1.0-plugins-good gstreamer1.0-pulseaudio bubblewrap xdg-dbus-proxy
                 rm -f /etc/apt/apt.conf.d/49pv-bootstrap-ca
-                bash scripts/build-neutralino-appimage-spike.sh all
+                bash scripts/build-neutralino-appimage-spike.sh thin
               '
             sudo chown -R "$host_uid:$host_gid" ".appimage-spike-repro/$name" ".appimage-spike-evidence/$name" .appimage-spike-tools
           }
           build_once first
           build_once second
-          for candidate in "$PV_APPIMAGE_THIN_NAME" "$PV_APPIMAGE_BUNDLED_NAME"; do
-            cmp ".appimage-spike-repro/first/$candidate" ".appimage-spike-repro/second/$candidate"
-          done
-      - name: Inspect exact candidates and payload identity
+          cmp ".appimage-spike-repro/first/$PV_APPIMAGE_THIN_NAME" ".appimage-spike-repro/second/$PV_APPIMAGE_THIN_NAME"
+      - name: Inspect exact thin candidate and payload identity
         shell: bash
         run: |
           set -euo pipefail
           source packaging/linux/metadata.env
           source packaging/linux/appimage-spike.env
           bundle="$PWD/.appimage-spike-production/$PV_INTERNAL_BUNDLE_NAME"
+          source_file="$PWD/.appimage-spike-repro/first/$PV_APPIMAGE_THIN_NAME"
+          runtime_file="$PWD/.appimage-spike-tools/runtime-x86_64"
           rm -rf appimage-spike-candidates .appimage-spike-inspection
-          mkdir -p appimage-spike-candidates .appimage-spike-inspection
-          : > appimage-spike-candidates/SHA256SUMS
-          : > .appimage-spike-inspection/summary.tsv
-          for kind in thin bundled; do
-            if [[ "$kind" = thin ]]; then candidate="$PV_APPIMAGE_THIN_NAME"; else candidate="$PV_APPIMAGE_BUNDLED_NAME"; fi
-            source_file="$PWD/.appimage-spike-repro/first/$candidate"
-            cp "$source_file" "appimage-spike-candidates/$candidate"
-            chmod 0755 "appimage-spike-candidates/$candidate"
-            sha256sum "appimage-spike-candidates/$candidate" >> appimage-spike-candidates/SHA256SUMS
-            work="$PWD/.appimage-spike-inspection/$kind"
-            mkdir -p "$work"
-            (
-              cd "$work"
-              "$source_file" --appimage-extract >/dev/null
-            )
-            appdir="$work/squashfs-root"
-            cmp "$bundle/$PV_BINARY_NAME" "$appdir/usr/bin/$PV_BINARY_NAME"
-            cmp "$bundle/extensions/$PV_EXTENSION_NAME" "$appdir/usr/bin/extensions/$PV_EXTENSION_NAME"
-            test "$(sha256sum "$bundle/$PV_BINARY_NAME" | awk '{print $1}')" = "$(sha256sum "$appdir/usr/bin/$PV_BINARY_NAME" | awk '{print $1}')"
-            test "$(sha256sum "$bundle/extensions/$PV_EXTENSION_NAME" | awk '{print $1}')" = "$(sha256sum "$appdir/usr/bin/extensions/$PV_EXTENSION_NAME" | awk '{print $1}')"
-            find "$appdir" -printf '%P\t%y\t%s\n' | sort > ".appimage-spike-inspection/${kind}-final-inventory.txt"
-            if find "$appdir" -type f -printf '%P\n' | grep -Eiq '(^|/)(electron|electron-builder|chrome-sandbox|app\.asar|node|nodejs|python3?|gcc|g\+\+|cmake|ninja)(/|$)|node_modules'; then
-              echo "Forbidden runtime/build payload found in $kind AppImage" >&2
-              exit 1
-            fi
-            if [[ "$kind" = bundled ]]; then
-              if find "$appdir" -type f -printf '%f\n' | grep -Eq '^(libc\.so\.6|ld-linux-x86-64\.so\.2)$'; then
-                echo 'Bundled AppImage contains glibc or the ELF dynamic loader.' >&2
-                exit 1
-              fi
-            fi
-            offset="$($source_file --appimage-offset)"
-            bytes="$(stat -c%s "$source_file")"
-            core_bytes="$(( $(stat -c%s "$bundle/$PV_BINARY_NAME") + $(stat -c%s "$bundle/extensions/$PV_EXTENSION_NAME") + $(stat -c%s "$bundle/provenance.json") + $(stat -c%s "$bundle/SHA256SUMS") ))"
-            printf '%s\t%s\t%s\t%s\t%s\n' "$kind" "$bytes" "$(sha256sum "$source_file" | awk '{print $1}')" "$offset" "$core_bytes" \
-              >> .appimage-spike-inspection/summary.tsv
-          done
-          (cd appimage-spike-candidates && sha256sum -c SHA256SUMS)
+          mkdir -p appimage-spike-candidates .appimage-spike-inspection/thin
+          cp "$source_file" "appimage-spike-candidates/$PV_APPIMAGE_THIN_NAME"
+          chmod 0755 "appimage-spike-candidates/$PV_APPIMAGE_THIN_NAME"
+          (
+            cd appimage-spike-candidates
+            sha256sum "$PV_APPIMAGE_THIN_NAME" > SHA256SUMS
+            sha256sum -c SHA256SUMS
+          )
+
+          test "$(sha256sum "$runtime_file" | awk '{print $1}')" = "$PV_APPIMAGE_RUNTIME_SHA256"
+          runtime_bytes="$(stat -c%s "$runtime_file")"
+          head -c "$runtime_bytes" "$source_file" | cmp - "$runtime_file"
+
+          host_uid="$(id -u)"
+          host_gid="$(id -g)"
+          docker run --rm --platform linux/amd64 \
+            -e PV_APPIMAGE_RUNTIME_OFFSET="$runtime_bytes" \
+            -v "$PWD:/workspace" -w /workspace \
+            --mount type=bind,src=/etc/ssl/certs/ca-certificates.crt,dst=/tmp/pv-host-ca.crt,readonly \
+            "$PV_APPIMAGE_BUILDER_IMAGE" bash -lc '
+              set -euo pipefail
+              source packaging/linux/appimage-spike.env
+              export DEBIAN_FRONTEND=noninteractive
+              sed -i "s/^deb /deb [snapshot=$PV_APPIMAGE_APT_SNAPSHOT] /" /etc/apt/sources.list
+              printf "Acquire::https::CaInfo \"/tmp/pv-host-ca.crt\";\n" > /etc/apt/apt.conf.d/49pv-bootstrap-ca
+              apt-get update 2>&1 | tee /tmp/pv-appimage-inspect-apt-update.log
+              grep -F "snapshot.ubuntu.com/ubuntu/$PV_APPIMAGE_APT_SNAPSHOT" /tmp/pv-appimage-inspect-apt-update.log >/dev/null
+              apt-get install -y --no-install-recommends ca-certificates squashfs-tools
+              rm -f /etc/apt/apt.conf.d/49pv-bootstrap-ca
+              unsquashfs -offset "$PV_APPIMAGE_RUNTIME_OFFSET" \
+                -d /workspace/.appimage-spike-inspection/thin/squashfs-root \
+                "/workspace/.appimage-spike-repro/first/$PV_APPIMAGE_THIN_NAME" >/dev/null
+            '
+          sudo chown -R "$host_uid:$host_gid" .appimage-spike-inspection
+
+          appdir="$PWD/.appimage-spike-inspection/thin/squashfs-root"
+          cmp "$bundle/$PV_BINARY_NAME" "$appdir/usr/bin/$PV_BINARY_NAME"
+          cmp "$bundle/extensions/$PV_EXTENSION_NAME" "$appdir/usr/bin/extensions/$PV_EXTENSION_NAME"
+          test "$(sha256sum "$bundle/$PV_BINARY_NAME" | awk '{print $1}')" = "$(sha256sum "$appdir/usr/bin/$PV_BINARY_NAME" | awk '{print $1}')"
+          test "$(sha256sum "$bundle/extensions/$PV_EXTENSION_NAME" | awk '{print $1}')" = "$(sha256sum "$appdir/usr/bin/extensions/$PV_EXTENSION_NAME" | awk '{print $1}')"
+          find "$appdir" -printf '%P\t%y\t%s\n' | sort > .appimage-spike-inspection/thin-final-inventory.txt
+          if find "$appdir" -type f -printf '%P\n' | grep -Eiq '(^|/)(electron|electron-builder|chrome-sandbox|app\.asar|node|nodejs|python3?|gcc|g\+\+|cmake|ninja)(/|$)|node_modules'; then
+            echo 'Forbidden runtime/build payload found in thin AppImage' >&2
+            exit 1
+          fi
+          bytes="$(stat -c%s "$source_file")"
+          core_bytes="$(( $(stat -c%s "$bundle/$PV_BINARY_NAME") + $(stat -c%s "$bundle/extensions/$PV_EXTENSION_NAME") + $(stat -c%s "$bundle/provenance.json") + $(stat -c%s "$bundle/SHA256SUMS") ))"
+          printf 'thin\t%s\t%s\t%s\t%s\n' \
+            "$bytes" "$(sha256sum "$source_file" | awk '{print $1}')" "$runtime_bytes" "$core_bytes" \
+            > .appimage-spike-inspection/summary.tsv
           cp -a .appimage-spike-evidence/first appimage-spike-candidates/build-evidence
           cp -a .appimage-spike-inspection appimage-spike-candidates/inspection
       - name: Prepare deep validation overlay
@@ -161,7 +173,7 @@ jobs:
           node scripts/prepare-neutralino-production.cjs --smoke-only
           tar --sort=name --mtime='UTC 1970-01-01' --owner=0 --group=0 --numeric-owner \
             -czf appimage-spike-candidates/neutralino-validation-overlay.tar.gz .neutralino-production
-      - name: Report AppImage candidate sizes
+      - name: Report thin AppImage size
         shell: bash
         run: |
           set -euo pipefail
@@ -169,12 +181,54 @@ jobs:
             printf 'PV_APPIMAGE_CANDIDATE kind=%s bytes=%s mib=%s sha256=%s runtime_offset=%s core_payload_bytes=%s\n' \
               "$kind" "$bytes" "$(awk -v b="$bytes" 'BEGIN { printf "%.2f", b/1048576 }')" "$hash" "$offset" "$core"
           done < appimage-spike-candidates/inspection/summary.tsv
-      - name: Upload AppImage spike candidates
+      - name: Upload thin AppImage checkpoint candidate
         uses: actions/upload-artifact@v4
         with:
           name: phase5-appimage-portability-spike-candidates
           path: appimage-spike-candidates/
           if-no-files-found: error
+          retention-days: 14
+
+  thin-missing-dependencies:
+    needs: build-candidates
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/download-artifact@v5
+        with:
+          name: phase5-appimage-portability-spike-candidates
+          path: .appimage-spike-download
+      - name: Require clear failure without host desktop dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          source packaging/linux/appimage-spike.env
+          rm -rf .appimage-missing-deps-results
+          mkdir .appimage-missing-deps-results
+          docker run --rm --platform linux/amd64 \
+            -v "$PWD:/workspace" -w /workspace "$PV_APPIMAGE_DEBIAN12_IMAGE" bash -lc '
+              set -euo pipefail
+              candidate="/workspace/.appimage-spike-download/$PV_APPIMAGE_THIN_NAME"
+              chmod 0755 "$candidate"
+              set +e
+              "$candidate" --appimage-extract-and-run > /workspace/.appimage-missing-deps-results/output.log 2>&1
+              status=$?
+              set -e
+              printf "exit_code=%s\n" "$status" > /workspace/.appimage-missing-deps-results/status.txt
+              test "$status" -ne 0
+              grep -Eq "Pikachu Volleyball cannot start: (missing host libraries|host WebKitGTK)|validated audio path" \
+                /workspace/.appimage-missing-deps-results/output.log
+            '
+      - name: Upload missing-dependency evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: appimage-thin-missing-dependencies
+          path: .appimage-missing-deps-results/
+          if-no-files-found: warn
           retention-days: 14
 
   runtime-matrix:
@@ -188,43 +242,18 @@ jobs:
           - label: debian-12
             family: debian
             image: debian:bookworm-20260824-slim@sha256:88200866dfff7ea7f5cbcb6ec7c8a701889efe6fe859fe64d6990e4b07ea4171
-            candidate: thin
-          - label: debian-12
-            family: debian
-            image: debian:bookworm-20260824-slim@sha256:88200866dfff7ea7f5cbcb6ec7c8a701889efe6fe859fe64d6990e4b07ea4171
-            candidate: bundled
           - label: ubuntu-22.04
             family: debian
             image: ubuntu:jammy-20260810@sha256:79676deb51ebb02885b0b9d33788e78a37cf1045ad79d1bb04c6a222c3556b3d
-            candidate: thin
-          - label: ubuntu-22.04
-            family: debian
-            image: ubuntu:jammy-20260810@sha256:79676deb51ebb02885b0b9d33788e78a37cf1045ad79d1bb04c6a222c3556b3d
-            candidate: bundled
           - label: ubuntu-24.04
             family: debian
             image: ubuntu:noble-20260810@sha256:1e0a86e57d247923571b75e0aaf48a1449cf8c543d51fb3e07a4a7d7bfa79316
-            candidate: thin
-          - label: ubuntu-24.04
-            family: debian
-            image: ubuntu:noble-20260810@sha256:1e0a86e57d247923571b75e0aaf48a1449cf8c543d51fb3e07a4a7d7bfa79316
-            candidate: bundled
           - label: fedora-44
             family: fedora
             image: fedora:44@sha256:be9d65e2344d805cc11114319c685ecaa96b6d9b4350a0a6460cdb931babbd19
-            candidate: thin
-          - label: fedora-44
-            family: fedora
-            image: fedora:44@sha256:be9d65e2344d805cc11114319c685ecaa96b6d9b4350a0a6460cdb931babbd19
-            candidate: bundled
           - label: opensuse-leap-16.0
             family: opensuse
             image: opensuse/leap:16.0@sha256:77732aa024f765ecdb4067affdea9e386d68056d0d281608ce4665d8fb0b4edd
-            candidate: thin
-          - label: opensuse-leap-16.0
-            family: opensuse
-            image: opensuse/leap:16.0@sha256:77732aa024f765ecdb4067affdea9e386d68056d0d281608ce4665d8fb0b4edd
-            candidate: bundled
     steps:
       - uses: actions/checkout@v5
         with:
@@ -233,24 +262,22 @@ jobs:
         with:
           name: phase5-appimage-portability-spike-candidates
           path: .appimage-spike-download
-      - name: Validate candidate on clean distro image
+      - name: Validate thin candidate on clean distro image
         shell: bash
         env:
           PV_MATRIX_IMAGE: ${{ matrix.image }}
           PV_MATRIX_FAMILY: ${{ matrix.family }}
           PV_MATRIX_LABEL: ${{ matrix.label }}
-          PV_MATRIX_CANDIDATE: ${{ matrix.candidate }}
         run: |
           set -euo pipefail
           source packaging/linux/appimage-spike.env
-          if [[ "$PV_MATRIX_CANDIDATE" = thin ]]; then candidate_name="$PV_APPIMAGE_THIN_NAME"; else candidate_name="$PV_APPIMAGE_BUNDLED_NAME"; fi
+          candidate_name="$PV_APPIMAGE_THIN_NAME"
           chmod 0755 ".appimage-spike-download/$candidate_name"
           rm -rf .appimage-runtime-results .neutralino-production
           mkdir .appimage-runtime-results
           tar -xzf .appimage-spike-download/neutralino-validation-overlay.tar.gz
           docker run --rm --platform linux/amd64 --shm-size=1g \
             -e PV_MATRIX_FAMILY="$PV_MATRIX_FAMILY" \
-            -e PV_MATRIX_CANDIDATE="$PV_MATRIX_CANDIDATE" \
             -e PV_MATRIX_LABEL="$PV_MATRIX_LABEL" \
             -e PV_CANDIDATE_NAME="$candidate_name" \
             -v "$PWD:/workspace" -w /workspace "$PV_MATRIX_IMAGE" bash -lc '
@@ -259,30 +286,26 @@ jobs:
                 debian)
                   export DEBIAN_FRONTEND=noninteractive
                   apt-get update
-                  apt-get install -y --no-install-recommends xvfb openbox xdotool procps dbus-x11 python3 passwd time ca-certificates
-                  if [[ "$PV_MATRIX_CANDIDATE" = thin ]]; then
-                    apt-get install -y --no-install-recommends libwebkit2gtk-4.1-0 gstreamer1.0-tools gstreamer1.0-plugins-base gstreamer1.0-plugins-good xdg-utils
-                  fi
+                  webkit_pkg=libwebkit2gtk-4.1-0
+                  apt-cache show "$webkit_pkg" >/dev/null 2>&1 || webkit_pkg=libwebkit2gtk-4.0-37
+                  apt-get install -y --no-install-recommends xvfb openbox xdotool procps dbus-x11 python3 passwd time ca-certificates \
+                    "$webkit_pkg" gstreamer1.0-tools gstreamer1.0-plugins-base gstreamer1.0-plugins-good xdg-utils
                   ;;
                 fedora)
-                  dnf -y install xorg-x11-server-Xvfb openbox xdotool procps-ng dbus-x11 python3 shadow-utils time ca-certificates
-                  if [[ "$PV_MATRIX_CANDIDATE" = thin ]]; then
-                    dnf -y install webkit2gtk4.1 gtk3 gstreamer1-plugins-base gstreamer1-plugins-good xdg-utils
-                  fi
+                  dnf -y install xorg-x11-server-Xvfb openbox xdotool procps-ng dbus-x11 python3 shadow-utils time ca-certificates \
+                    webkit2gtk4.1 gtk3 gstreamer1-plugins-base gstreamer1-plugins-good xdg-utils
                   ;;
                 opensuse)
                   zypper --non-interactive refresh
-                  zypper --non-interactive install --no-recommends xorg-x11-server-Xvfb openbox xdotool procps python3 shadow time ca-certificates
-                  if [[ "$PV_MATRIX_CANDIDATE" = thin ]]; then
-                    zypper --non-interactive install --no-recommends libwebkit2gtk-4_1-0 gtk3 gstreamer gstreamer-plugins-base gstreamer-plugins-good xdg-utils
-                  fi
+                  zypper --non-interactive install --no-recommends xorg-x11-server-Xvfb openbox xdotool procps python3 shadow time ca-certificates \
+                    libwebkit2gtk-4_1-0 gtk3 gstreamer gstreamer-plugins-base gstreamer-plugins-good xdg-utils
                   ;;
                 *) echo "Unknown matrix family: $PV_MATRIX_FAMILY" >&2; exit 2 ;;
               esac
               chmod -R a+rwX /workspace/.neutralino-production /workspace/.appimage-runtime-results
               chmod 0755 "/workspace/.appimage-spike-download/$PV_CANDIDATE_NAME"
               useradd -m pvsmoke 2>/dev/null || true
-              result="/workspace/.appimage-runtime-results/${PV_MATRIX_LABEL}-${PV_MATRIX_CANDIDATE}"
+              result="/workspace/.appimage-runtime-results/${PV_MATRIX_LABEL}-thin"
               mkdir -p "$result"
               chmod -R a+rwX "$result"
               set +e
@@ -290,18 +313,19 @@ jobs:
                 /workspace/.neutralino-production "/workspace/.appimage-spike-download/$PV_CANDIDATE_NAME" "$result"
               status=$?
               set -e
-              printf "matrix_label=%s\ncandidate=%s\nexit_code=%s\n" "$PV_MATRIX_LABEL" "$PV_MATRIX_CANDIDATE" "$status" > "$result/matrix-status.txt"
+              printf "matrix_label=%s\ncandidate=thin\nexit_code=%s\n" "$PV_MATRIX_LABEL" "$status" > "$result/matrix-status.txt"
               if [[ "$status" -eq 0 ]]; then
-                printf "PV_APPIMAGE_MATRIX_RESULT label=%s candidate=%s result=PASS\n" "$PV_MATRIX_LABEL" "$PV_MATRIX_CANDIDATE"
+                printf "PV_APPIMAGE_MATRIX_RESULT label=%s candidate=thin result=PASS\n" "$PV_MATRIX_LABEL"
               else
-                printf "PV_APPIMAGE_MATRIX_RESULT label=%s candidate=%s result=FAIL exit_code=%s\n" "$PV_MATRIX_LABEL" "$PV_MATRIX_CANDIDATE" "$status"
+                printf "PV_APPIMAGE_MATRIX_RESULT label=%s candidate=thin result=FAIL exit_code=%s\n" "$PV_MATRIX_LABEL" "$status"
+                exit "$status"
               fi
             '
       - name: Upload runtime matrix evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: appimage-runtime-${{ matrix.label }}-${{ matrix.candidate }}
+          name: appimage-runtime-${{ matrix.label }}-thin
           path: .appimage-runtime-results/
           if-no-files-found: warn
           retention-days: 14
@@ -318,7 +342,7 @@ jobs:
         with:
           name: phase5-appimage-portability-spike-candidates
           path: .appimage-spike-download
-      - name: Exercise direct FUSE and extract-and-run fallback
+      - name: Exercise thin direct FUSE and extract-and-run fallback
         shell: bash
         run: |
           set -euo pipefail
@@ -327,38 +351,39 @@ jobs:
           sudo apt-get install -y --no-install-recommends xvfb openbox xdotool procps dbus-x11 \
             libwebkit2gtk-4.1-0 gstreamer1.0-tools gstreamer1.0-plugins-base gstreamer1.0-plugins-good xdg-utils
           rm -rf .appimage-fuse-results .neutralino-production
-          mkdir .appimage-fuse-results
+          mkdir -p .appimage-fuse-results/thin
           tar -xzf .appimage-spike-download/neutralino-validation-overlay.tar.gz
-          chmod 0755 ".appimage-spike-download/$PV_APPIMAGE_THIN_NAME" ".appimage-spike-download/$PV_APPIMAGE_BUNDLED_NAME"
-          for kind in thin bundled; do
-            if [[ "$kind" = thin ]]; then candidate="$PWD/.appimage-spike-download/$PV_APPIMAGE_THIN_NAME"; else candidate="$PWD/.appimage-spike-download/$PV_APPIMAGE_BUNDLED_NAME"; fi
-            result="$PWD/.appimage-fuse-results/$kind"
-            mkdir -p "$result"
-            cat > "$result/extract-wrapper" <<EOF
+          candidate="$PWD/.appimage-spike-download/$PV_APPIMAGE_THIN_NAME"
+          result="$PWD/.appimage-fuse-results/thin"
+          chmod 0755 "$candidate"
+          cat > "$result/extract-wrapper" <<EOF
           #!/bin/sh
           exec "$candidate" --appimage-extract-and-run "\$@"
           EOF
-            chmod 0755 "$result/extract-wrapper"
-            if scripts/run-neutralino-production-smoke.sh .neutralino-production "$result/extract-wrapper" >"$result/extract-and-run.log" 2>&1; then
-              echo PASS > "$result/extract-and-run.txt"
-            else
-              echo FAIL > "$result/extract-and-run.txt"
-            fi
-            if [[ -c /dev/fuse ]]; then
-              cat > "$result/direct-wrapper" <<EOF
+          chmod 0755 "$result/extract-wrapper"
+          if scripts/run-neutralino-production-smoke.sh .neutralino-production "$result/extract-wrapper" >"$result/extract-and-run.log" 2>&1; then
+            echo PASS > "$result/extract-and-run.txt"
+          else
+            status=$?
+            printf 'FAIL exit_code=%s\n' "$status" > "$result/extract-and-run.txt"
+            exit "$status"
+          fi
+          if [[ -c /dev/fuse ]]; then
+            cat > "$result/direct-wrapper" <<EOF
           #!/bin/sh
           exec "$candidate" "\$@"
           EOF
-              chmod 0755 "$result/direct-wrapper"
-              set +e
-              scripts/run-neutralino-production-smoke.sh .neutralino-production "$result/direct-wrapper" >"$result/direct-fuse.log" 2>&1
-              status=$?
-              set -e
-              if [[ "$status" -eq 0 ]]; then echo PASS > "$result/direct-fuse.txt"; else printf 'FAIL exit_code=%s\n' "$status" > "$result/direct-fuse.txt"; fi
+            chmod 0755 "$result/direct-wrapper"
+            if scripts/run-neutralino-production-smoke.sh .neutralino-production "$result/direct-wrapper" >"$result/direct-fuse.log" 2>&1; then
+              echo PASS > "$result/direct-fuse.txt"
             else
-              echo UNAVAILABLE_NO_DEV_FUSE > "$result/direct-fuse.txt"
+              status=$?
+              printf 'FAIL exit_code=%s\n' "$status" > "$result/direct-fuse.txt"
+              exit "$status"
             fi
-          done
+          else
+            echo SKIP_NO_DEV_FUSE > "$result/direct-fuse.txt"
+          fi
       - name: Upload hosted FUSE evidence
         if: always()
         uses: actions/upload-artifact@v4
