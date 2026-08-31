@@ -68,11 +68,12 @@ run_stage() {
   if "$@" >"$result_dir/$name.log" 2>&1; then
     printf 'PV_APPIMAGE_RUNTIME_STAGE_PASS stage=%s\n' "$name" | tee -a "$result_dir/stages.txt"
     return 0
+  else
+    local status=$?
+    printf 'PV_APPIMAGE_RUNTIME_STAGE_FAIL stage=%s exit_code=%s\n' "$name" "$status" | tee -a "$result_dir/stages.txt" >&2
+    cat "$result_dir/$name.log" >&2
+    return "$status"
   fi
-  local status=$?
-  printf 'PV_APPIMAGE_RUNTIME_STAGE_FAIL stage=%s exit_code=%s\n' "$name" "$status" | tee -a "$result_dir/stages.txt" >&2
-  cat "$result_dir/$name.log" >&2
-  return "$status"
 }
 
 : > "$result_dir/stages.txt"
