@@ -8,6 +8,7 @@ binary="./bin/neutralino-linux_x64"
 extension="./extensions/pv-external-link-linux_x64"
 output_dir="fedora-host-navigation-smoke"
 attack_port=48572
+navigation_delay_ms=4000
 mkdir -p "$output_dir/fake-bin" "$output_dir/attacker-root"
 
 if [[ ! -x "$binary" ]]; then
@@ -98,6 +99,7 @@ for navigation_case in "${navigation_cases[@]}"; do
     --window-inject-script=/resources/neutralino-smoke-preload.js \
     --dev-pv-smoke-phase=host-navigation \
     --dev-pv-host-navigation-case="$navigation_case" \
+    --dev-pv-host-navigation-delay-ms="$navigation_delay_ms" \
     --dev-pv-untrusted-origin="http://127.0.0.1:$attack_port" \
     --dev-pv-smoke-hold-ms=0 \
     --dev-pv-smoke-start-epoch-ms="$start_ms" \
@@ -125,7 +127,7 @@ for navigation_case in "${navigation_cases[@]}"; do
   fi
 
   window_id=""
-  for _ in $(seq 1 100); do
+  for _ in $(seq 1 60); do
     window_id="$(xdotool search --name "^${expected_title}$" 2>/dev/null | head -n 1 || true)"
     [[ -n "$window_id" ]] && break
     if ! kill -0 "$app_pid" 2>/dev/null; then break; fi
@@ -133,11 +135,30 @@ for navigation_case in "${navigation_cases[@]}"; do
   done
   if [[ -z "$window_id" ]]; then
     cat "$case_log" >&2
-    echo "Unable to locate trusted host-navigation window for case $navigation_case." >&2
+    echo "Unable to locate trusted host-navigation window before case $navigation_case executes." >&2
     exit 1
   fi
 
-  sleep 1
+  native_marker='PV_EXTERNAL_LINK rejected'
+  if [[ "$navigation_case" = approved ]]; then
+    native_marker='PV_EXTERNAL_LINK opened https://santiagorodriguez.com/'
+  fi
+  native_result_observed=0
+  for _ in $(seq 1 150); do
+    if grep -Fq "$native_marker" "$case_log" 2>/dev/null; then
+      native_result_observed=1
+      break
+    fi
+    if ! kill -0 "$app_pid" 2>/dev/null; then break; fi
+    sleep 0.1
+  done
+  if (( native_result_observed != 1 )); then
+    cat "$case_log" >&2
+    printf 'Host-navigation case %s did not reach expected native result: %s\n' \
+      "$navigation_case" "$native_marker" >&2
+    exit 1
+  fi
+
   if ! kill -0 "$app_pid" 2>/dev/null; then
     cat "$case_log" >&2
     echo "Neutralino host-navigation case $navigation_case exited after the navigation attempt." >&2
@@ -165,10 +186,6 @@ for navigation_case in "${navigation_cases[@]}"; do
   fi
 
   if [[ "$navigation_case" = approved ]]; then
-    for _ in $(seq 1 50); do
-      [[ -s "$xdg_log" ]] && break
-      sleep 0.1
-    done
     if [[ ! -s "$xdg_log" ]]; then
       cat "$case_log" >&2
       echo "Approved same-window external navigation was not mediated externally." >&2

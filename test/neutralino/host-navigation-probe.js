@@ -19,6 +19,12 @@
   const navigationCase = caseArg
     ? caseArg.slice('--dev-pv-host-navigation-case='.length)
     : null;
+  const delayArg = args.find((arg) =>
+    arg.startsWith('--dev-pv-host-navigation-delay-ms=')
+  );
+  const navigationDelayMs = delayArg
+    ? Number(delayArg.slice('--dev-pv-host-navigation-delay-ms='.length))
+    : 150;
   const approvedExternalUrl = 'https://santiagorodriguez.com';
 
   function delay(ms) {
@@ -87,6 +93,15 @@
     if (!navigationCase) {
       throw new Error('Missing --dev-pv-host-navigation-case smoke argument.');
     }
+    if (
+      !Number.isFinite(navigationDelayMs) ||
+      navigationDelayMs < 0 ||
+      navigationDelayMs > 15000
+    ) {
+      throw new Error(
+        `Invalid --dev-pv-host-navigation-delay-ms smoke argument: ${navigationDelayMs}`
+      );
+    }
 
     const firstFrameReady = await waitFor(
       () => performance.getEntriesByName('pv-first-game-frame').length > 0
@@ -106,11 +121,12 @@
       trustedOrigin,
       href: window.location.href,
       title,
+      navigationDelayMs,
       desktopRuntime: window.pvDesktop?.runtime || null,
     });
 
     if (!firstFrameReady) return;
-    await delay(150);
+    await delay(navigationDelayMs);
     navigate(navigationCase);
   }
 

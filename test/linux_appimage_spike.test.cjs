@@ -20,10 +20,11 @@ const hostNavigationProbeText = fs.readFileSync(
   path.join(root, 'test/neutralino/host-navigation-probe.js'),
   'utf8',
 );
-const hostNavigationSmokeText = fs.readFileSync(
-  path.join(root, 'scripts/run-neutralino-host-navigation-smoke.sh'),
-  'utf8',
+const hostNavigationSmokePath = path.join(
+  root,
+  'scripts/run-neutralino-host-navigation-smoke.sh',
 );
+const hostNavigationSmokeText = fs.readFileSync(hostNavigationSmokePath, 'utf8');
 
 function envValue(name) {
   const match = envText.match(new RegExp(`^${name}=(.+)$`, 'm'));
@@ -131,14 +132,25 @@ test('Neutralino settings smoke waits for rerendered persisted state', () => {
 
 test('host-navigation smoke isolates rejected top-level navigations by process', () => {
   assert.match(hostNavigationProbeText, /--dev-pv-host-navigation-case=/);
+  assert.match(hostNavigationProbeText, /--dev-pv-host-navigation-delay-ms=/);
   assert.match(hostNavigationProbeText, /PV_NEUTRALINO_HOST_NAVIGATION_READY/);
+  assert.match(hostNavigationProbeText, /await delay\(navigationDelayMs\);\s+navigate\(navigationCase\);/);
   assert.doesNotMatch(hostNavigationProbeText, /attempts\.push|attemptNavigation/);
   assert.match(runtimeSmokeText, /run_stage host-navigation bash/);
+  assert.notEqual(fs.statSync(hostNavigationSmokePath).mode & 0o111, 0);
   assert.match(
     hostNavigationSmokeText,
     /navigation_cases=\(assign href replace anchor data file approved\)/,
   );
-  assert.match(hostNavigationSmokeText, /xdotool getwindowname/);
+  assert.match(hostNavigationSmokeText, /navigation_delay_ms=4000/);
+  assert.match(
+    hostNavigationSmokeText,
+    /--dev-pv-host-navigation-delay-ms="\$navigation_delay_ms"/,
+  );
+  assert.match(
+    hostNavigationSmokeText,
+    /window_id=""[\s\S]*?native_marker='PV_EXTERNAL_LINK rejected'[\s\S]*?xdotool getwindowname "\$window_id"/,
+  );
   assert.match(hostNavigationSmokeText, /PV_EXTERNAL_LINK rejected/);
   assert.match(
     hostNavigationSmokeText,
