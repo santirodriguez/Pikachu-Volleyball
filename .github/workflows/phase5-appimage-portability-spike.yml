@@ -307,14 +307,13 @@ jobs:
                 *) echo "Unknown matrix family: $PV_MATRIX_FAMILY" >&2; exit 2 ;;
               esac
               chmod -R a+rwX /workspace/.neutralino-production /workspace/.appimage-runtime-results
-              chmod 0755 "/workspace/.appimage-spike-download/$PV_CANDIDATE_NAME"
               useradd -m pvsmoke 2>/dev/null || true
               result="/workspace/.appimage-runtime-results/${PV_MATRIX_LABEL}-thin"
               mkdir -p "$result"
               chmod -R a+rwX "$result"
               set +e
               runuser -u pvsmoke -- bash /workspace/scripts/run-neutralino-appimage-runtime-smoke.sh \
-                /workspace/.neutralino-production "/workspace/.appimage-spike-download/$PV_CANDIDATE_NAME" "$result"
+                /workspace/.neutralino-production "/workspace/.appimage-spike-download/$PV_CANDIDATE_NAME" "$result" extract
               status=$?
               set -e
               printf "matrix_label=%s\ncandidate=thin\nexit_code=%s\n" "$PV_MATRIX_LABEL" "$status" > "$result/matrix-status.txt"
@@ -353,20 +352,21 @@ jobs:
           set -euo pipefail
           source packaging/linux/appimage-spike.env
           sudo apt-get update
+          fuse_pkg=libfuse2t64
+          apt-cache show "$fuse_pkg" >/dev/null 2>&1 || fuse_pkg=libfuse2
           sudo apt-get install -y --no-install-recommends xvfb openbox xdotool procps dbus-x11 \
-            libwebkit2gtk-4.1-0 gstreamer1.0-tools gstreamer1.0-plugins-base gstreamer1.0-plugins-good xdg-utils
-          rm -rf .appimage-fuse-results .neutralino-production
+            libwebkit2gtk-4.1-0 gstreamer1.0-tools gstreamer1.0-plugins-base gstreamer1.0-plugins-good xdg-utils "$fuse_pkg"
+          rm -rf .appimage-fuse-results .neutralino-production .appimage-fuse-stage-extract .appimage-fuse-stage-direct
           mkdir -p .appimage-fuse-results/thin
-          tar -xzf .appimage-spike-download/neutralino-validation-overlay.tar.gz
           candidate="$PWD/.appimage-spike-download/$PV_APPIMAGE_THIN_NAME"
           result="$PWD/.appimage-fuse-results/thin"
           chmod 0755 "$candidate"
-          cat > "$result/extract-wrapper" <<EOF
-          #!/bin/sh
-          exec "$candidate" --appimage-extract-and-run "\$@"
-          EOF
-          chmod 0755 "$result/extract-wrapper"
-          if scripts/run-neutralino-production-smoke.sh .neutralino-production "$result/extract-wrapper" >"$result/extract-and-run.log" 2>&1; then
+
+          tar -xzf .appimage-spike-download/neutralino-validation-overlay.tar.gz
+          mv .neutralino-production .appimage-fuse-stage-extract
+          if scripts/run-neutralino-appimage-runtime-smoke.sh \
+            .appimage-fuse-stage-extract "$candidate" "$result/extract-and-run-evidence" extract \
+            >"$result/extract-and-run.log" 2>&1; then
             echo PASS > "$result/extract-and-run.txt"
           else
             status=$?
@@ -374,13 +374,13 @@ jobs:
             cat "$result/extract-and-run.log" >&2
             exit "$status"
           fi
+
           if [[ -c /dev/fuse ]]; then
-            cat > "$result/direct-wrapper" <<EOF
-          #!/bin/sh
-          exec "$candidate" "\$@"
-          EOF
-            chmod 0755 "$result/direct-wrapper"
-            if scripts/run-neutralino-production-smoke.sh .neutralino-production "$result/direct-wrapper" >"$result/direct-fuse.log" 2>&1; then
+            tar -xzf .appimage-spike-download/neutralino-validation-overlay.tar.gz
+            mv .neutralino-production .appimage-fuse-stage-direct
+            if scripts/run-neutralino-appimage-runtime-smoke.sh \
+              .appimage-fuse-stage-direct "$candidate" "$result/direct-fuse-evidence" direct \
+              >"$result/direct-fuse.log" 2>&1; then
               echo PASS > "$result/direct-fuse.txt"
             else
               status=$?
