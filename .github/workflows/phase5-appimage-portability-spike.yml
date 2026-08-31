@@ -213,6 +213,7 @@ jobs:
           docker run --rm --platform linux/amd64 \
             -v "$PWD:/workspace" -w /workspace "$PV_APPIMAGE_DEBIAN12_IMAGE" bash -lc '
               set -euo pipefail
+              source /workspace/packaging/linux/appimage-spike.env
               candidate="/workspace/.appimage-spike-download/$PV_APPIMAGE_THIN_NAME"
               chmod 0755 "$candidate"
               set +e
@@ -231,6 +232,7 @@ jobs:
           name: appimage-thin-missing-dependencies
           path: .appimage-missing-deps-results/
           if-no-files-found: warn
+          include-hidden-files: true
           retention-days: 14
 
   runtime-matrix:
@@ -311,7 +313,7 @@ jobs:
               mkdir -p "$result"
               chmod -R a+rwX "$result"
               set +e
-              runuser -u pvsmoke -- /workspace/scripts/run-neutralino-appimage-runtime-smoke.sh \
+              runuser -u pvsmoke -- bash /workspace/scripts/run-neutralino-appimage-runtime-smoke.sh \
                 /workspace/.neutralino-production "/workspace/.appimage-spike-download/$PV_CANDIDATE_NAME" "$result"
               status=$?
               set -e
@@ -330,6 +332,7 @@ jobs:
           name: appimage-runtime-${{ matrix.label }}-thin
           path: .appimage-runtime-results/
           if-no-files-found: warn
+          include-hidden-files: true
           retention-days: 14
 
   hosted-fuse:
@@ -368,6 +371,7 @@ jobs:
           else
             status=$?
             printf 'FAIL exit_code=%s\n' "$status" > "$result/extract-and-run.txt"
+            cat "$result/extract-and-run.log" >&2
             exit "$status"
           fi
           if [[ -c /dev/fuse ]]; then
@@ -381,6 +385,7 @@ jobs:
             else
               status=$?
               printf 'FAIL exit_code=%s\n' "$status" > "$result/direct-fuse.txt"
+              cat "$result/direct-fuse.log" >&2
               exit "$status"
             fi
           else
@@ -393,4 +398,5 @@ jobs:
           name: appimage-hosted-fuse-evidence
           path: .appimage-fuse-results/
           if-no-files-found: warn
+          include-hidden-files: true
           retention-days: 14
