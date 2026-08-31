@@ -8,6 +8,10 @@ const test = require('node:test');
 const root = path.resolve(__dirname, '..');
 const envText = fs.readFileSync(path.join(root, 'packaging/linux/appimage-spike.env'), 'utf8');
 const scriptText = fs.readFileSync(path.join(root, 'scripts/build-neutralino-appimage-spike.sh'), 'utf8');
+const runtimeSmokeText = fs.readFileSync(
+  path.join(root, 'scripts/run-neutralino-appimage-runtime-smoke.sh'),
+  'utf8',
+);
 
 function envValue(name) {
   const match = envText.match(new RegExp(`^${name}=(.+)$`, 'm'));
@@ -65,6 +69,26 @@ test('bundled candidate does not intentionally ship glibc or the ELF loader', ()
   assert.match(scriptText, /ld-linux/);
   assert.match(scriptText, /rm -f .*libc\.so/s);
   assert.match(scriptText, /GST_PLUGIN_SYSTEM_PATH_1_0=/);
+});
+
+test('AppImage runtime smoke propagates stage failures', () => {
+  assert.match(
+    runtimeSmokeText,
+    /if "\$@" >"\$result_dir\/\$name\.log" 2>&1; then[\s\S]*?else\s+local status=\$\?[\s\S]*?return "\$status"[\s\S]*?fi/,
+  );
+  assert.doesNotMatch(runtimeSmokeText, /fi\s+local status=\$\?/);
+});
+
+test('AppImage runtime smoke adapts the validation stage to the production bundle contract', () => {
+  assert.match(
+    runtimeSmokeText,
+    /production_launcher="\$stage\/pikachu-volleyball-neutralino-linux_x64"/,
+  );
+  assert.match(runtimeSmokeText, /ln -s bin\/neutralino-linux_x64 "\$production_launcher"/);
+  assert.match(
+    runtimeSmokeText,
+    /run_stage production-window[\s\S]*?"\$stage"\s+rm -f "\$production_launcher"[\s\S]*?run_stage gameplay-input-audio-quit/,
+  );
 });
 
 test('spike does not reintroduce retired Electron packaging', () => {
