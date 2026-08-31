@@ -306,16 +306,21 @@ jobs:
                   ;;
                 *) echo "Unknown matrix family: $PV_MATRIX_FAMILY" >&2; exit 2 ;;
               esac
-              chmod -R a+rwX /workspace/.neutralino-production /workspace/.appimage-runtime-results
               useradd -m pvsmoke 2>/dev/null || true
+              stage=/tmp/pv-appimage-validation-stage
+              tmp_result=/tmp/pv-appimage-runtime-result
+              rm -rf "$stage" "$tmp_result"
+              cp -a /workspace/.neutralino-production "$stage"
+              mkdir -p "$tmp_result"
+              chown -R pvsmoke:pvsmoke "$stage" "$tmp_result"
               result="/workspace/.appimage-runtime-results/${PV_MATRIX_LABEL}-thin"
               mkdir -p "$result"
-              chmod -R a+rwX "$result"
               set +e
               runuser -u pvsmoke -- bash /workspace/scripts/run-neutralino-appimage-runtime-smoke.sh \
-                /workspace/.neutralino-production "/workspace/.appimage-spike-download/$PV_CANDIDATE_NAME" "$result" extract
+                "$stage" "/workspace/.appimage-spike-download/$PV_CANDIDATE_NAME" "$tmp_result" extract
               status=$?
               set -e
+              cp -a "$tmp_result/." "$result/"
               printf "matrix_label=%s\ncandidate=thin\nexit_code=%s\n" "$PV_MATRIX_LABEL" "$status" > "$result/matrix-status.txt"
               if [[ "$status" -eq 0 ]]; then
                 printf "PV_APPIMAGE_MATRIX_RESULT label=%s candidate=thin result=PASS\n" "$PV_MATRIX_LABEL"
@@ -364,7 +369,7 @@ jobs:
 
           tar -xzf .appimage-spike-download/neutralino-validation-overlay.tar.gz
           mv .neutralino-production .appimage-fuse-stage-extract
-          if scripts/run-neutralino-appimage-runtime-smoke.sh \
+          if bash scripts/run-neutralino-appimage-runtime-smoke.sh \
             .appimage-fuse-stage-extract "$candidate" "$result/extract-and-run-evidence" extract \
             >"$result/extract-and-run.log" 2>&1; then
             echo PASS > "$result/extract-and-run.txt"
@@ -378,7 +383,7 @@ jobs:
           if [[ -c /dev/fuse ]]; then
             tar -xzf .appimage-spike-download/neutralino-validation-overlay.tar.gz
             mv .neutralino-production .appimage-fuse-stage-direct
-            if scripts/run-neutralino-appimage-runtime-smoke.sh \
+            if bash scripts/run-neutralino-appimage-runtime-smoke.sh \
               .appimage-fuse-stage-direct "$candidate" "$result/direct-fuse-evidence" direct \
               >"$result/direct-fuse.log" 2>&1; then
               echo PASS > "$result/direct-fuse.txt"
