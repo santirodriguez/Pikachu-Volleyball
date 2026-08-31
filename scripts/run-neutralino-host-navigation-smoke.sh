@@ -144,7 +144,7 @@ for navigation_case in "${navigation_cases[@]}"; do
     exit 1
   fi
 
-  current_title="$(xdotool windowname "$window_id" 2>/dev/null || true)"
+  current_title="$(xdotool getwindowname "$window_id" 2>/dev/null || true)"
   if [[ "$current_title" != "$expected_title" ]]; then
     cat "$case_log" >&2
     printf 'Expected trusted title %s after case %s, observed %s.\n' \

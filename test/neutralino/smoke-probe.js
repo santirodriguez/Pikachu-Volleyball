@@ -271,86 +271,209 @@
   }
 
   async function probeLocales() {
-    const locales = ['en', 'es-ar', 'ca', 'ko', 'z'WNÂˆ™]\›ˆ›ÛZ\ÙK˜[
-ˆØØ[\Ë›X\
-\Þ[˜È
-ØØ[JHOˆÂˆžHÂˆÛÛœÝ™\ÜÛœÙHH]ØZ]™]Ú
-ÉÛØØ[_KÚ[™^š[Ù\ÚÝÜLXÂˆØXÚNˆ	Û›Ë\ÝÜ™IËˆJNÂˆÛÛœÝ^H]ØZ]™\ÜÛœÙK^
+    const locales = ['en', 'es-ar', 'ca', 'ko', 'zh'];
+    return Promise.all(
+      locales.map(async (locale) => {
+        try {
+          const response = await fetch(`/${locale}/index.html?desktop=1`, {
+            cache: 'no-store',
+          });
+          const text = await response.text();
+          return {
+            locale,
+            ok: response.ok && text.length > 1000,
+            status: response.status,
+          };
+        } catch (error) {
+          return { locale, ok: false, error: String(error) };
+        }
+      })
+    );
+  }
 
-NÂˆ™]\›ˆÂˆØØ[KˆÚÎˆ™\ÜÛœÙK›ÚÈ	‰ˆ^›[™ÝˆLˆÝ]\Îˆ™\ÜÛœÙKœÝ]\ËˆNÂˆHØ]Ú
-\œ›ÜŠHÂˆ™]\›ˆÈØØ[KÚÎˆ˜[ÙK\œ›ÜŽˆÝš[™Ê\œ›ÜŠHNÂˆBˆJBˆ
-NÂˆB‚ˆ\Þ[˜È[˜Ý[Ûˆ[”™XY›Ø™J
-HÂˆÛÛœÝš\œÝœ˜[YT™XYHH]ØZ]ØZ]›ÜŠˆ
+  async function runReadProbe() {
+    const firstFrameReady = await waitFor(
+      () => performance.getEntriesByName('pv-first-game-frame').length > 0
+    );
+    const firstFrame = performance.getEntriesByName('pv-first-game-frame')[0];
+    const processStartToFirstFrameApproxMs =
+      firstFrame && Number.isFinite(startEpochMs)
+        ? Number(
+            (
+              performance.timeOrigin +
+              firstFrame.startTime -
+              startEpochMs
+            ).toFixed(2)
+          )
+        : null;
 
-HOˆ\™›Ü›X[˜ÙK™Ù][šY\ÐžS˜[YJ	Ü‹Yš\œÝYØ[YKYœ˜[YIÊK›[™Ýˆˆ
-NÂˆÛÛœÝš\œÝœ˜[YHH\™›Ü›X[˜ÙK™Ù][šY\ÐžS˜[YJ	Ü‹Yš\œÝYØ[YKYœ˜[YIÊVÌNÂˆÛÛœÝ›ØÙ\ÜÔÝ\Ñš\œÝœ˜[YP\›Þ\ÈBˆš\œÝœ˜[YH	‰ˆ[X™\‹š\Ñš[š]JÝ\\ØÚ\ÊBˆÈ[X™\Šˆ
-ˆ\™›Ü›X[˜ÙK[YSÜšYÚ[ˆ
-Âˆš\œÝœ˜[YKœÝ\[YHBˆÝ\\ØÚ\Âˆ
-KÑš^Y
-ŠBˆ
-Bˆˆ[Â‚ˆÛÛœÝØ[˜\ÈHØÝ[Y[™Ù][[Y[žRY
-	ÙØ[YKXØ[˜\ÉÊNÂˆÛÛœÝØ[˜\Ô™XÝHØ[˜\ÏË™Ù]›Ý[™[™ÐÛY[™XÝ
+    const canvas = document.getElementById('game-canvas');
+    const canvasRect = canvas?.getBoundingClientRect();
+    const backingWidth = canvas?.width || null;
+    const backingHeight = canvas?.height || null;
+    const logicalWidth = backingWidth ? backingWidth / pixiResolution : null;
+    const logicalHeight = backingHeight ? backingHeight / pixiResolution : null;
+    const cssWidth = canvasRect ? Number(canvasRect.width.toFixed(2)) : null;
+    const cssHeight = canvasRect ? Number(canvasRect.height.toFixed(2)) : null;
+    const canvasOk = Boolean(
+      canvas &&
+        canvas.tagName === 'CANVAS' &&
+        logicalWidth === 432 &&
+        logicalHeight === 304 &&
+        backingWidth === 864 &&
+        backingHeight === 608
+    );
+    const persistenceOk =
+      localStorage.getItem(persistenceKey) === persistenceValue;
+    const pauseAndSettings = await probePauseAndAudioSettings();
+    const restart = await probeRestart();
+    const bgm = await probeMedia(
+      '../resources/assets/sounds/bgm.mp3',
+      'audio/mpeg'
+    );
+    const wav = await probeMedia(
+      '../resources/assets/sounds/WAVE145_1.wav',
+      'audio/wav'
+    );
+    const locales = await probeLocales();
+    const localesOk = locales.every((entry) => entry.ok);
 
-NÂˆÛÛœÝ˜XÚÚ[™ÕÚYHØ[˜\ÏËÚY[ÂˆÛÛœÝ˜XÚÚ[™ÒZYÚHØ[˜\ÏËšZYÚ[ÂˆÛÛœÝÙÚXØ[ÚYH˜XÚÚ[™ÕÚYÈ˜XÚÚ[™ÕÚYÈ^T™\ÛÛ][Ûˆˆ[ÂˆÛÛœÝÙÚXØ[ZYÚH˜XÚÚ[™ÒZYÚÈ˜XÚÚ[™ÒZYÚÈ^T™\ÛÛ][Ûˆˆ[ÂˆÛÛœÝÜÜÕÚYHØ[˜\Ô™XÝÈ[X™\ŠØ[˜\Ô™XÝÚYÑš^Y
-ŠJHˆ[ÂˆÛÛœÝÜÜÒZYÚHØ[˜\Ô™XÝÈ[X™\ŠØ[˜\Ô™XÝšZYÚÑš^Y
-ŠJHˆ[ÂˆÛÛœÝØ[˜\ÓÚÈH›ÛÛX[ŠˆØ[˜\È	‰‚ˆØ[˜\ËYÓ˜[YHOOH	ÐÐS•TÉÈ	‰‚ˆÙÚXØ[ÚYOOHÌˆ	‰‚ˆÙÚXØ[ZYÚOOHÌ	‰‚ˆ˜XÚÚ[™ÕÚYOOH	‰‚ˆ˜XÚÚ[™ÒZYÚOOHŒˆ
-NÂˆÛÛœÝ\œÚ\Ý[˜ÙSÚÈBˆØØ[ÝÜ˜YÙK™Ù]][J\œÚ\Ý[˜ÙRÙ^JHOOH\œÚ\Ý[˜ÙU˜[YNÂˆÛÛœÝ]\ÙP[™Ù][™ÜÈH]ØZ]›Ø™T]\ÙP[™]Y[ÔÙ][™ÜÊ
-NÂˆÛÛœÝ™\Ý\H]ØZ]›Ø™T™\Ý\
+    const report = {
+      phase: 'read',
+      ok:
+        firstFrameReady &&
+        canvasOk &&
+        persistenceOk &&
+        pauseAndSettings.ok &&
+        restart.ok &&
+        bgm.loaded &&
+        wav.loaded &&
+        localesOk,
+      firstFrameReady,
+      firstFrameRendererMs: firstFrame
+        ? Number(firstFrame.startTime.toFixed(2))
+        : null,
+      processStartToFirstFrameApproxMs,
+      canvas: {
+        ok: canvasOk,
+        logicalWidth,
+        logicalHeight,
+        backingWidth,
+        backingHeight,
+        cssWidth,
+        cssHeight,
+        pixiResolution,
+      },
+      persistenceOk,
+      pauseAndSettings,
+      restart,
+      media: { bgm, wav },
+      locales,
+    };
 
-NÂˆÛÛœÝ™ÛHH]ØZ]›Ø™SYYXJˆ	Ë‹‹Ü™\ÛÝ\˜Ù\ËØ\ÜÙ]ËÜÛÝ[™ËØ™ÛK›\ÉËˆ	Ø]Y[ËÛ\YÉÂˆ
-NÂˆÛÛœÝØ]ˆH]ØZ]›Ø™SYYXJˆ	Ë‹‹Ü™\ÛÝ\˜Ù\ËØ\ÜÙ]ËÜÛÝ[™ËÕÐU‘LMWÌKØ]‰Ëˆ	Ø]Y[ËÝØ]‰Âˆ
-NÂˆÛÛœÝØØ[\ÈH]ØZ]›Ø™SØØ[\Ê
-NÂˆÛÛœÝØØ[\ÓÚÈHØØ[\Ë™]™\žJ
-[žJHOˆ[žK›ÚÊNÂ‚ˆÛÛœÝ™\ÜHÂˆ\ÙNˆ	Ü™XY	ËˆÚÎ‚ˆš\œÝœ˜[YT™XYH	‰‚ˆØ[˜\ÓÚÈ	‰‚ˆ\œÚ\Ý[˜ÙSÚÈ	‰‚ˆ]\ÙP[™Ù][™ÜË›ÚÈ	‰‚ˆ™\Ý\›ÚÈ	‰‚ˆ™ÛK›ØYY	‰‚ˆØ]‹›ØYY	‰‚ˆØØ[\ÓÚËˆš\œÝœ˜[YT™XYKˆš\œÝœ˜[YT™[™\™\“\Îˆš\œÝœ˜[YBˆÈ[X™\Šš\œÝœ˜[YKœÝ\[YKÑš^Y
-ŠJBˆˆ[ˆ›ØÙ\ÜÔÝ\Ñš\œÝœ˜[YP\›Þ\ËˆØ[˜\ÎˆÂˆÚÎˆØ[˜\ÓÚËˆÙÚXØ[ÚYˆÙÚXØ[ZYÚˆ˜XÚÚ[™ÕÚYˆ˜XÚÚ[™ÒZYÚˆÜÜÕÚYˆÜÜÒZYÚˆ^T™\ÛÛ][Û‹ˆKˆ\œÚ\Ý[˜ÙSÚËˆ]\ÙP[™Ù][™ÜËˆ™\Ý\ˆYYXNˆÈ™ÛKØ]ˆKˆØØ[\ËˆNÂ‚ˆ]ØZ]Üš]T™\Ü
-™\Ü
-NÂˆB‚ˆ\Þ[˜È[˜Ý[Ûˆ[’Ù^X›Ø\™›Ø™J
-HÂˆÛÛœÝš\œÝœ˜[YT™XYHH]ØZ]ØZ]›ÜŠˆ
+    await writeReport(report);
+  }
 
-HOˆ\™›Ü›X[˜ÙK™Ù][šY\ÐžS˜[YJ	Ü‹Yš\œÝYØ[YKYœ˜[YIÊK›[™Ýˆˆ
-NÂˆ]ØZ][^JÍL
-NÂˆÛÛœÝ^XÝYÛÙ\ÈHÉÒÙ^Q	Ë	ÒÙ^T‰Ë	Ð\œ›ÝÔšYÚ	Ë	Ð\œ›ÝÕ\	×NÂˆÛÛœÝÙY[ÛÙ\ÈHË‹‹šÙ^X›Ø\™›Ø™KœÙY[—KœÛÜ
+  async function runKeyboardProbe() {
+    const firstFrameReady = await waitFor(
+      () => performance.getEntriesByName('pv-first-game-frame').length > 0
+    );
+    await delay(3500);
+    const expectedCodes = ['KeyD', 'KeyR', 'ArrowRight', 'ArrowUp'];
+    const seenCodes = [...keyboardProbe.seen].sort();
+    const expectedSeen = expectedCodes.every((code) =>
+      keyboardProbe.seen.has(code)
+    );
+    const report = {
+      phase: 'keyboard',
+      ok:
+        firstFrameReady &&
+        expectedSeen &&
+        keyboardProbe.maxSimultaneous >= expectedCodes.length &&
+        keyboardProbe.trustedEvents >= expectedCodes.length * 2,
+      firstFrameReady,
+      expectedCodes,
+      seenCodes,
+      trustedEvents: keyboardProbe.trustedEvents,
+      maxSimultaneous: keyboardProbe.maxSimultaneous,
+      keysReleased: keyboardProbe.down.size === 0,
+    };
+    await writeReport(report);
+  }
 
-NÂˆÛÛœÝ^XÝYÙY[ˆH^XÝYÛÙ\Ë™]™\žJ
-ÛÙJHO‚ˆÙ^X›Ø\™›Ø™KœÙY[‹š\ÊÛÙJBˆ
-NÂˆÛÛœÝ™\ÜHÂˆ\ÙNˆ	ÚÙ^X›Ø\™	ËˆÚÎ‚ˆš\œÝœ˜[YT™XYH	‰‚ˆ^XÝYÙY[ˆ	‰‚ˆÙ^X›Ø\™›Ø™K›X^Ú[][[™[Ý\ÈH^XÝYÛÙ\Ë›[™Ý	‰‚ˆÙ^X›Ø\™›Ø™K\ÝY]™[ÈH^XÝYÛÙ\Ë›[™Ý
-ˆ‹ˆš\œÝœ˜[YT™XYKˆ^XÝYÛÙ\ËˆÙY[ÛÙ\Ëˆ\ÝY]™[ÎˆÙ^X›Ø\™›Ø™K\ÝY]™[ËˆX^Ú[][[™[Ý\ÎˆÙ^X›Ø\™›Ø™K›X^Ú[][[™[Ý\ËˆÙ^\Ô™[X\ÙYˆÙ^X›Ø\™›Ø™K™ÝÛ‹œÚ^™HOOHˆNÂˆ]ØZ]Üš]T™\Ü
-™\Ü
-NÂˆB‚ˆ\Þ[˜È[˜Ý[Ûˆ[”]Z]›Ø™J
-HÂˆÛÛœÝœšYÙP]˜Z[X›HH›ÛÛX[ŠˆÚ[™ÝËœ‘\ÚÝÜËš\Ñ\ÚÝÜ	‰‚ˆÚ[™ÝËœ‘\ÚÝÜËœ[[YHOOH	Û™]]˜[[›ÉÈ	‰‚ˆ\[ÙˆÚ[™ÝËœ‘\ÚÝÜËœ]Z]OOH	Ù[˜Ý[Û‰Âˆ
-NÂˆÛÛœÛÛK™\œ›ÜŠˆ—Ó‘UUSS“×ÔURUÔ‘PQHœšYÙP]˜Z[X›OIØœšYÙP]˜Z[X›HÈ	ÝYIÈˆ	Ù˜[ÙIßXˆ
-NÂˆYˆ
-XœšYÙP]˜Z[X›JH™]\›ŽÂ‚ˆ]ØZ][^JX]›X^
-Û\ËL
-JNÂˆÛÛœÛÛK™\œ›ÜŠ	Ô—Ó‘UUSS“×ÔURUÐÐSœšYÙO\™X[	ÊNÂˆ]ØZ][^JL
-NÂˆ]ØZ]Ú[™ÝËœ‘\ÚÝÜœ]Z]
+  async function runQuitProbe() {
+    const bridgeAvailable = Boolean(
+      window.pvDesktop?.isDesktop &&
+        window.pvDesktop?.runtime === 'neutralino' &&
+        typeof window.pvDesktop?.quit === 'function'
+    );
+    console.error(
+      `PV_NEUTRALINO_QUIT_READY bridgeAvailable=${bridgeAvailable ? 'true' : 'false'}`
+    );
+    if (!bridgeAvailable) return;
 
-NÂˆB‚ˆ\Þ[˜È[˜Ý[Ûˆ™\Ü˜Z[\™J\œ›ÜŠHÂˆÛÛœÝ]Z[HÝš[™Ê\œ›ÜËœÝXÚÈ\œ›ÜŠNÂˆYˆ
-\ÙHOOH	Ü]Z]	ÊHÂˆÛÛœÛÛK™\œ›ÜŠ—Ó‘UUSS“×ÔURUÑT”“Ôˆ	Ù]Z[X
-NÂˆ™]\›ŽÂˆBˆ]ØZ]Üš]T™\Ü
-È\ÙKÚÎˆ˜[ÙK\œ›ÜŽˆ]Z[JNÂˆB‚ˆ\Þ[˜È[˜Ý[Ûˆ[Š
-HÂˆYˆ
-\ÙHOOH	ÝÜš]IÊHÂˆØØ[ÝÜ˜YÙKœÙ]][J\œÚ\Ý[˜ÙRÙ^K\œÚ\Ý[˜ÙU˜[YJNÂˆ]ØZ][^JL
-NÂˆ]ØZ]Üš]T™\Ü
-Âˆ\ÙNˆ	ÝÜš]IËˆÚÎˆØØ[ÝÜ˜YÙK™Ù]][J\œÚ\Ý[˜ÙRÙ^JHOOH\œÚ\Ý[˜ÙU˜[YKˆJNÂˆ™]\›ŽÂˆB‚ˆYˆ
-\ÙHOOH	Ü™XY	ÊHÂˆžHÂˆ]ØZ][”™XY›Ø™J
-NÂˆHØ]Ú
-\œ›ÜŠHÂˆ]ØZ]™\Ü˜Z[\™J\œ›ÜŠNÂˆBˆ™]\›ŽÂˆB‚ˆYˆ
-\ÙHOOH	ÚÙ^X›Ø\™	ÊHÂˆžHÂˆ]ØZ][’Ù^X›Ø\™›Ø™J
-NÂˆHØ]Ú
-\œ›ÜŠHÂˆ]ØZ]™\Ü˜Z[\™J\œ›ÜŠNÂˆBˆ™]\›ŽÂˆB‚ˆYˆ
-\ÙHOOH	Ü]Z]	ÊHÂˆžHÂˆ]ØZ][”]Z]›Ø™J
-NÂˆHØ]Ú
-\œ›ÜŠHÂˆ]ØZ]™\Ü˜Z[\™J\œ›ÜŠNÂˆBˆBˆB‚ˆ[˜Ý[ÛˆÝ\
+    await delay(Math.max(holdMs, 250));
+    console.error('PV_NEUTRALINO_QUIT_CALL bridge=real');
+    await delay(100);
+    await window.pvDesktop.quit();
+  }
 
-HÂˆ[Š
-K˜Ø]Ú
+  async function reportFailure(error) {
+    const detail = String(error?.stack || error);
+    if (phase === 'quit') {
+      console.error(`PV_NEUTRALINO_QUIT_ERROR ${detail}`);
+      return;
+    }
+    await writeReport({ phase, ok: false, error: detail });
+  }
 
-\œ›ÜŠHOˆÂˆ™\Ü˜Z[\™J\œ›ÜŠK˜Ø]Ú
+  async function run() {
+    if (phase === 'write') {
+      localStorage.setItem(persistenceKey, persistenceValue);
+      await delay(1000);
+      await writeReport({
+        phase: 'write',
+        ok: localStorage.getItem(persistenceKey) === persistenceValue,
+      });
+      return;
+    }
 
+    if (phase === 'read') {
+      try {
+        await runReadProbe();
+      } catch (error) {
+        await reportFailure(error);
+      }
+      return;
+    }
 
-HOˆßJNÂˆJNÂˆB‚ˆYˆ
-\ÙHOOH	Ü]Z]	ÈØÝ[Y[œ™XYTÝ]HOOH	ØÛÛ\]IÊHÂˆÝ\
+    if (phase === 'keyboard') {
+      try {
+        await runKeyboardProbe();
+      } catch (error) {
+        await reportFailure(error);
+      }
+      return;
+    }
 
-NÂˆH[ÙHÂˆÚ[™ÝË˜Y]™[\Ý[™\Š	ÛØY	ËÝ\ÈÛ˜ÙNˆYHJNÂˆBŸJJ
-NÂ
+    if (phase === 'quit') {
+      try {
+        await runQuitProbe();
+      } catch (error) {
+        await reportFailure(error);
+      }
+    }
+  }
+
+  function start() {
+    run().catch((error) => {
+      reportFailure(error).catch(() => {});
+    });
+  }
+
+  if (phase === 'quit' || document.readyState === 'complete') {
+    start();
+  } else {
+    window.addEventListener('load', start, { once: true });
+  }
+})();
