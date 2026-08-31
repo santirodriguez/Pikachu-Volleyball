@@ -12,6 +12,18 @@ const runtimeSmokeText = fs.readFileSync(
   path.join(root, 'scripts/run-neutralino-appimage-runtime-smoke.sh'),
   'utf8',
 );
+const smokeProbeText = fs.readFileSync(
+  path.join(root, 'test/neutralino/smoke-probe.js'),
+  'utf8',
+);
+const hostNavigationProbeText = fs.readFileSync(
+  path.join(root, 'test/neutralino/host-navigation-probe.js'),
+  'utf8',
+);
+const hostNavigationSmokeText = fs.readFileSync(
+  path.join(root, 'scripts/run-neutralino-host-navigation-smoke.sh'),
+  'utf8',
+);
 
 function envValue(name) {
   const match = envText.match(new RegExp(`^${name}=(.+)$`, 'm'));
@@ -71,6 +83,16 @@ test('bundled candidate does not intentionally ship glibc or the ELF loader', ()
   assert.match(scriptText, /GST_PLUGIN_SYSTEM_PATH_1_0=/);
 });
 
+test('thin preflight resolves WebKitGTK from the runtime dependency graph', () => {
+  const thinFunction = scriptText.match(
+    /write_thin_apprun\(\) \{[\s\S]*?\n\}\n\nwrite_bundled_apprun\(\)/,
+  );
+  assert.ok(thinFunction);
+  assert.match(thinFunction[0], /ldd_output=/);
+  assert.match(thinFunction[0], /libwebkit2gtk-4\\?\./);
+  assert.doesNotMatch(thinFunction[0], /ldconfig\s+-p/);
+});
+
 test('AppImage runtime smoke propagates stage failures', () => {
   assert.match(
     runtimeSmokeText,
@@ -89,6 +111,37 @@ test('AppImage runtime smoke adapts the validation stage to the production bundl
     runtimeSmokeText,
     /run_stage production-window[\s\S]*?"\$stage"\s+rm -f "\$production_launcher"[\s\S]*?run_stage gameplay-input-audio-quit/,
   );
+});
+
+test('Neutralino settings smoke waits for rerendered persisted state', () => {
+  assert.match(smokeProbeText, /function readSettingState/);
+  assert.match(smokeProbeText, /async function cycleSettingAndWait/);
+  assert.match(smokeProbeText, /current\.stored === current\.value/);
+  const settingsProbe = smokeProbeText.match(
+    /async function probePauseAndAudioSettings\(\) \{[\s\S]*?\n  \}\n\n  async function probeRestart/,
+  );
+  assert.ok(settingsProbe);
+  assert.match(settingsProbe[0], /audioPanelReady = await waitFor/);
+  assert.match(settingsProbe[0], /cycleSettingAndWait\('bgm'/);
+  assert.match(settingsProbe[0], /cycleSettingAndWait\('sfx'/);
+  assert.doesNotMatch(settingsProbe[0], /await delay\((25|50)\)/);
+});
+
+test('host-navigation smoke isolates rejected top-level navigations by process', () => {
+  assert.match(hostNavigationProbeText, /--dev-pv-host-navigation-case=/);
+  assert.match(hostNavigationProbeText, /PV_NEUTRALINO_HOST_NAVIGATION_READY/);
+  assert.doesNotMatch(hostNavigationProbeText, /attempts\.push|attemptNavigation/);
+  assert.match(
+    hostNavigationSmokeText,
+    /navigation_cases=\(assign href replace anchor data file approved\)/,
+  );
+  assert.match(hostNavigationSmokeText, /xdotool getwindowname/);
+  assert.match(hostNavigationSmokeText, /PV_EXTERNAL_LINK rejected/);
+  assert.match(
+    hostNavigationSmokeText,
+    /PV_EXTERNAL_LINK opened https:\/\/santiagorodriguez\.com\//,
+  );
+  assert.match(hostNavigationSmokeText, /Untrusted same-window navigation reached the attacker origin/);
 });
 
 test('spike does not reintroduce retired Electron packaging', () => {

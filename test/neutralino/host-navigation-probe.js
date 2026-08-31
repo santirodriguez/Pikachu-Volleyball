@@ -13,8 +13,13 @@
   const untrustedOrigin = untrustedArg
     ? untrustedArg.slice('--dev-pv-untrusted-origin='.length)
     : null;
+  const caseArg = args.find((arg) =>
+    arg.startsWith('--dev-pv-host-navigation-case=')
+  );
+  const navigationCase = caseArg
+    ? caseArg.slice('--dev-pv-host-navigation-case='.length)
+    : null;
   const approvedExternalUrl = 'https://santiagorodriguez.com';
-  const observedNewWindowRequests = [];
 
   function delay(ms) {
     return new Promise((resolve) => window.setTimeout(resolve, ms));
@@ -29,142 +34,91 @@
     return false;
   }
 
-  function requestedUrl(event) {
-    if (typeof event?.detail === 'string') return event.detail;
-    if (typeof event?.detail?.url === 'string') return event.detail.url;
-    if (typeof event?.url === 'string') return event.url;
-    return null;
-  }
-
-  async function writeReport(report) {
+  async function writeReport(marker, report) {
     const write = neutralino.app
-      .writeProcessOutput(
-        `PV_NEUTRALINO_HOST_NAVIGATION ${JSON.stringify(report)}\n`
-      )
+      .writeProcessOutput(`${marker} ${JSON.stringify(report)}\n`)
       .catch(() => {});
     await Promise.race([write, delay(500)]);
   }
 
-  async function attemptNavigation(name, action, trustedOrigin) {
-    let error = null;
-    try {
-      action();
-    } catch (caught) {
-      error = String(caught?.message || caught);
+  function navigate(selectedCase) {
+    if (selectedCase === 'assign') {
+      window.location.assign(`${untrustedOrigin}/assign`);
+      return;
     }
-    await delay(350);
-    return {
-      name,
-      error,
-      href: window.location.href,
-      stayedOnTrustedOrigin:
-        window.location.origin === trustedOrigin &&
-        Boolean(document.documentElement?.isConnected),
-    };
+    if (selectedCase === 'href') {
+      window.location.href = `${untrustedOrigin}/href`;
+      return;
+    }
+    if (selectedCase === 'replace') {
+      window.location.replace(`${untrustedOrigin}/replace`);
+      return;
+    }
+    if (selectedCase === 'anchor') {
+      const anchor = document.createElement('a');
+      anchor.href = `${untrustedOrigin}/anchor`;
+      anchor.textContent = 'host-navigation-smoke';
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      return;
+    }
+    if (selectedCase === 'data') {
+      window.location.assign(
+        'data:text/html,<title>PV_UNTRUSTED_DATA_NAVIGATION</title>'
+      );
+      return;
+    }
+    if (selectedCase === 'file') {
+      window.location.assign('file:///tmp/pv-untrusted-navigation');
+      return;
+    }
+    if (selectedCase === 'approved') {
+      window.location.assign(approvedExternalUrl);
+      return;
+    }
+    throw new Error(`Unknown host-navigation case: ${selectedCase}`);
   }
 
   async function run() {
     if (!untrustedOrigin) {
       throw new Error('Missing --dev-pv-untrusted-origin smoke argument.');
     }
-
-    neutralino.events.on('newWindowRequest', (event) => {
-      const url = requestedUrl(event);
-      if (url) observedNewWindowRequests.push(url);
-    });
+    if (!navigationCase) {
+      throw new Error('Missing --dev-pv-host-navigation-case smoke argument.');
+    }
 
     const firstFrameReady = await waitFor(
       () => performance.getEntriesByName('pv-first-game-frame').length > 0
     );
     const trustedOrigin = window.location.origin;
-    const attempts = [];
+    const title = `PV_HOST_NAVIGATION_${navigationCase}`;
+    document.title = title;
 
-    attempts.push(
-      await attemptNavigation(
-        'location.assign',
-        () => window.location.assign(`${untrustedOrigin}/assign`),
-        trustedOrigin
-      )
-    );
-    attempts.push(
-      await attemptNavigation(
-        'window.location.href',
-        () => {
-          window.location.href = `${untrustedOrigin}/href`;
-        },
-        trustedOrigin
-      )
-    );
-    attempts.push(
-      await attemptNavigation(
-        'location.replace',
-        () => window.location.replace(`${untrustedOrigin}/replace`),
-        trustedOrigin
-      )
-    );
-    attempts.push(
-      await attemptNavigation(
-        'same-window-anchor',
-        () => {
-          const anchor = document.createElement('a');
-          anchor.href = `${untrustedOrigin}/anchor`;
-          anchor.textContent = 'host-navigation-smoke';
-          document.body.appendChild(anchor);
-          anchor.click();
-          anchor.remove();
-        },
-        trustedOrigin
-      )
-    );
-    attempts.push(
-      await attemptNavigation(
-        'data-url',
-        () =>
-          window.location.assign(
-            'data:text/html,<title>PV_UNTRUSTED_DATA_NAVIGATION</title>'
-          ),
-        trustedOrigin
-      )
-    );
-    attempts.push(
-      await attemptNavigation(
-        'file-url',
-        () => window.location.assign('file:///tmp/pv-untrusted-navigation'),
-        trustedOrigin
-      )
-    );
-    attempts.push(
-      await attemptNavigation(
-        'approved-external-same-window',
-        () => window.location.assign(approvedExternalUrl),
-        trustedOrigin
-      )
-    );
-
-    const stayedOnTrustedOrigin = attempts.every(
-      (attempt) => attempt.stayedOnTrustedOrigin
-    );
-
-    await writeReport({
+    await writeReport('PV_NEUTRALINO_HOST_NAVIGATION_READY', {
       phase: 'host-navigation',
+      case: navigationCase,
       ok:
         firstFrameReady &&
-        stayedOnTrustedOrigin &&
         window.pvDesktop?.isDesktop === true &&
         window.pvDesktop?.runtime === 'neutralino',
       firstFrameReady,
       trustedOrigin,
-      stayedOnTrustedOrigin,
-      attempts,
-      observedNewWindowRequests,
+      href: window.location.href,
+      title,
       desktopRuntime: window.pvDesktop?.runtime || null,
     });
+
+    if (!firstFrameReady) return;
+    await delay(150);
+    navigate(navigationCase);
   }
 
   function start() {
     run().catch((error) => {
-      writeReport({
+      writeReport('PV_NEUTRALINO_HOST_NAVIGATION_READY', {
         phase: 'host-navigation',
+        case: navigationCase,
         ok: false,
         error: String(error?.stack || error),
       }).catch(() => {});

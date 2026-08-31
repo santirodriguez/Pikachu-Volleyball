@@ -120,13 +120,15 @@ write_thin_apprun() {
 set -eu
 APPDIR="\${APPDIR:-\$(CDPATH= cd -- "\$(dirname -- "\$0")" && pwd)}"
 binary="\$APPDIR/usr/bin/$PV_BINARY_NAME"
-missing="\$(ldd "\$binary" 2>/dev/null | awk '/not found/ {print \$1}' | tr '\n' ' ')"
+ldd_output="\$(ldd "\$binary" 2>/dev/null || true)"
+missing="\$(printf '%s\n' "\$ldd_output" | awk '/not found/ {print \$1}' | tr '\n' ' ')"
 if [ -n "\$missing" ]; then
   echo "Pikachu Volleyball cannot start: missing host libraries: \$missing" >&2
   echo "This thin AppImage requires host GTK 3 and its normal desktop libraries." >&2
   exit 127
 fi
-if ! ldconfig -p 2>/dev/null | grep -Eq 'libwebkit2gtk-4\\.(1\\.so\\.0|0\\.so\\.37)'; then
+webkit="\$(printf '%s\n' "\$ldd_output" | awk '/libwebkit2gtk-4\.(1\.so\.0|0\.so\.37)/ && /=>/ {print \$3; exit}')"
+if [ -z "\$webkit" ] || [ ! -r "\$webkit" ]; then
   echo "Pikachu Volleyball cannot start: host WebKitGTK 4.1 (preferred) or 4.0 is missing." >&2
   echo "This is a thin system-webview AppImage, not a fully self-contained desktop runtime." >&2
   exit 127

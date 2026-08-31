@@ -130,6 +130,40 @@
     return result;
   }
 
+  function readSettingState(name, storageKey) {
+    const control = document.querySelector(`[data-setting="${name}"]`);
+    return {
+      control,
+      value: control?.dataset.value || null,
+      stored: localStorage.getItem(storageKey),
+    };
+  }
+
+  async function cycleSettingAndWait(name, storageKey) {
+    const before = readSettingState(name, storageKey);
+    if (!before.control || !before.value) {
+      return { ok: false, before: before.value, value: before.value };
+    }
+
+    before.control.click();
+    const changed = await waitFor(() => {
+      const current = readSettingState(name, storageKey);
+      return Boolean(
+        current.control &&
+          current.value &&
+          current.value !== before.value &&
+          current.stored === current.value
+      );
+    }, 2000);
+    const after = readSettingState(name, storageKey);
+    return {
+      ok: changed,
+      before: before.value,
+      value: after.value,
+      stored: after.stored,
+    };
+  }
+
   async function probePauseAndAudioSettings() {
     const pauseStates = [];
     const onPause = (event) => pauseStates.push(Boolean(event.detail?.paused));
@@ -141,25 +175,33 @@
       return { ok: false, reason: 'pause-menu-did-not-open', pauseStates };
     }
 
-    document.querySelector('[data-nav-id="audio"]')?.click();
-    await delay(50);
-
-    const originalBgm = localStorage.getItem('pv-offline-bgm') || 'on';
-    document.querySelector('[data-setting="bgm"]')?.click();
-    await delay(25);
-    const changedBgm = localStorage.getItem('pv-offline-bgm') || 'on';
-    document.querySelector('[data-setting="bgm"]')?.click();
-    await delay(25);
-    const restoredBgm = localStorage.getItem('pv-offline-bgm') || 'on';
-
-    const originalSfx = localStorage.getItem('pv-offline-sfx') || 'stereo';
-    const sfxSequence = [];
-    for (let index = 0; index < 3; index += 1) {
-      document.querySelector('[data-setting="sfx"]')?.click();
-      await delay(25);
-      sfxSequence.push(localStorage.getItem('pv-offline-sfx') || 'stereo');
+    const audioNav = document.querySelector('[data-nav-id="audio"]');
+    audioNav?.click();
+    const audioPanelReady = await waitFor(
+      () =>
+        Boolean(document.querySelector('[data-setting="bgm"]')) &&
+        Boolean(document.querySelector('[data-setting="sfx"]'))
+    );
+    if (!audioPanelReady) {
+      window.removeEventListener('pv-pause-changed', onPause);
+      return { ok: false, reason: 'audio-panel-did-not-render', pauseStates };
     }
-    const restoredSfx = localStorage.getItem('pv-offline-sfx') || 'stereo';
+
+    const originalBgm = readSettingState('bgm', 'pv-offline-bgm').value;
+    const changedBgmResult = await cycleSettingAndWait('bgm', 'pv-offline-bgm');
+    const restoredBgmResult = await cycleSettingAndWait('bgm', 'pv-offline-bgm');
+    const changedBgm = changedBgmResult.value;
+    const restoredBgm = restoredBgmResult.value;
+
+    const originalSfx = readSettingState('sfx', 'pv-offline-sfx').value;
+    const sfxSequence = [];
+    let sfxCyclesOk = true;
+    for (let index = 0; index < 3; index += 1) {
+      const result = await cycleSettingAndWait('sfx', 'pv-offline-sfx');
+      sfxCyclesOk = sfxCyclesOk && result.ok;
+      sfxSequence.push(result.value);
+    }
+    const restoredSfx = readSettingState('sfx', 'pv-offline-sfx').value;
 
     document.querySelector('[data-nav-id="continue"]')?.click();
     const closed = await waitFor(() => {
@@ -171,13 +213,18 @@
     return {
       ok:
         opened &&
+        audioPanelReady &&
         closed &&
         pauseStates.includes(true) &&
         pauseStates.includes(false) &&
+        changedBgmResult.ok &&
+        restoredBgmResult.ok &&
         changedBgm !== originalBgm &&
         restoredBgm === originalBgm &&
+        sfxCyclesOk &&
         restoredSfx === originalSfx,
       opened,
+      audioPanelReady,
       closed,
       pauseStates,
       bgm: { original: originalBgm, changed: changedBgm, restored: restoredBgm },
@@ -224,209 +271,86 @@
   }
 
   async function probeLocales() {
-    const locales = ['en', 'es-ar', 'ca', 'ko', 'zh'];
-    return Promise.all(
-      locales.map(async (locale) => {
-        try {
-          const response = await fetch(`/${locale}/index.html?desktop=1`, {
-            cache: 'no-store',
-          });
-          const text = await response.text();
-          return {
-            locale,
-            ok: response.ok && text.length > 1000,
-            status: response.status,
-          };
-        } catch (error) {
-          return { locale, ok: false, error: String(error) };
-        }
-      })
-    );
-  }
+    const locales = ['en', 'es-ar', 'ca', 'ko', 'z'WN¬àô]\õàõ€Z\ŸKò[
+àÿÿ[\ÀõX\
+\ﬁ[ò»
+ÿÿ[JHOà¬àûH¬à€€ú›ô\‹€úŸHH]ÿZ]ô]⁄
+…€ÿÿ[_K⁄[ô^ö[Ÿ\⁄›‹LX¬àÿX⁄Nà	€õÀ\›‹ôIÀàJN¬à€€ú›^H]ÿZ]ô\‹€úŸKù^
 
-  async function runReadProbe() {
-    const firstFrameReady = await waitFor(
-      () => performance.getEntriesByName('pv-first-game-frame').length > 0
-    );
-    const firstFrame = performance.getEntriesByName('pv-first-game-frame')[0];
-    const processStartToFirstFrameApproxMs =
-      firstFrame && Number.isFinite(startEpochMs)
-        ? Number(
-            (
-              performance.timeOrigin +
-              firstFrame.startTime -
-              startEpochMs
-            ).toFixed(2)
-          )
-        : null;
+N¬àô]\õà¬àÿÿ[Kà⁄Œàô\‹€úŸKõ⁄»	âà^õ[ô›àLà›]\Œàô\‹€úŸKú›]\ÀàN¬àHÿ]⁄
+\úõ‹äH¬àô]\õà»ÿÿ[K⁄Œàò[ŸK\úõ‹éà›ö[ô \úõ‹äHN¬àBàJBà
+N¬àBÇà\ﬁ[ò»ù[ò›[€àù[îôXYõÿôJ
+H¬à€€ú›ö\ú›úò[YTôXYHH]ÿZ]ÿZ]õ‹äà
 
-    const canvas = document.getElementById('game-canvas');
-    const canvasRect = canvas?.getBoundingClientRect();
-    const backingWidth = canvas?.width || null;
-    const backingHeight = canvas?.height || null;
-    const logicalWidth = backingWidth ? backingWidth / pixiResolution : null;
-    const logicalHeight = backingHeight ? backingHeight / pixiResolution : null;
-    const cssWidth = canvasRect ? Number(canvasRect.width.toFixed(2)) : null;
-    const cssHeight = canvasRect ? Number(canvasRect.height.toFixed(2)) : null;
-    const canvasOk = Boolean(
-      canvas &&
-        canvas.tagName === 'CANVAS' &&
-        logicalWidth === 432 &&
-        logicalHeight === 304 &&
-        backingWidth === 864 &&
-        backingHeight === 608
-    );
-    const persistenceOk =
-      localStorage.getItem(persistenceKey) === persistenceValue;
-    const pauseAndSettings = await probePauseAndAudioSettings();
-    const restart = await probeRestart();
-    const bgm = await probeMedia(
-      '../resources/assets/sounds/bgm.mp3',
-      'audio/mpeg'
-    );
-    const wav = await probeMedia(
-      '../resources/assets/sounds/WAVE145_1.wav',
-      'audio/wav'
-    );
-    const locales = await probeLocales();
-    const localesOk = locales.every((entry) => entry.ok);
+HOà\ôõ‹õX[òŸKôŸ][ùöY\–ûSò[YJ	‹ãYö\ú›Yÿ[YKYúò[YI Kõ[ô›àà
+N¬à€€ú›ö\ú›úò[YHH\ôõ‹õX[òŸKôŸ][ùöY\–ûSò[YJ	‹ãYö\ú›Yÿ[YKYúò[YI VÃN¬à€€ú›õÿŸ\‹‘›\ù—ö\ú›úò[YP\õﬁ\»Bàö\ú›úò[YH	âàù[Xô\ãö\—ö[ö]J›\ù\ÿ⁄\ Bà»ù[Xô\äà
+à\ôõ‹õX[òŸKù[YS‹öY⁄[à
+¬àö\ú›úò[YKú›\ù[YHBà›\ù\ÿ⁄\¬à
+Kù—ö^Y
+äBà
+Bààù[¬Çà€€ú›ÿ[ùò\»Hÿ›[Y[ùôŸ][[Y[ùûRY
+	Ÿÿ[YKXÿ[ùò\… N¬à€€ú›ÿ[ùò\‘ôX›Hÿ[ùò\œÀôŸ]õ›[ô[ô–€Y[ùôX›
 
-    const report = {
-      phase: 'read',
-      ok:
-        firstFrameReady &&
-        canvasOk &&
-        persistenceOk &&
-        pauseAndSettings.ok &&
-        restart.ok &&
-        bgm.loaded &&
-        wav.loaded &&
-        localesOk,
-      firstFrameReady,
-      firstFrameRendererMs: firstFrame
-        ? Number(firstFrame.startTime.toFixed(2))
-        : null,
-      processStartToFirstFrameApproxMs,
-      canvas: {
-        ok: canvasOk,
-        logicalWidth,
-        logicalHeight,
-        backingWidth,
-        backingHeight,
-        cssWidth,
-        cssHeight,
-        pixiResolution,
-      },
-      persistenceOk,
-      pauseAndSettings,
-      restart,
-      media: { bgm, wav },
-      locales,
-    };
+N¬à€€ú›òX⁄⁄[ô’⁄YHÿ[ùò\œÀù⁄Yù[¬à€€ú›òX⁄⁄[ô“ZY⁄Hÿ[ùò\œÀöZY⁄ù[¬à€€ú›Ÿ⁄Xÿ[⁄YHòX⁄⁄[ô’⁄Y»òX⁄⁄[ô’⁄Y»^Tô\€€][€ààù[¬à€€ú›Ÿ⁄Xÿ[ZY⁄HòX⁄⁄[ô“ZY⁄»òX⁄⁄[ô“ZY⁄»^Tô\€€][€ààù[¬à€€ú›‹‹’⁄YHÿ[ùò\‘ôX›»ù[Xô\äÿ[ùò\‘ôX›ù⁄Yù—ö^Y
+äJHàù[¬à€€ú›‹‹“ZY⁄Hÿ[ùò\‘ôX›»ù[Xô\äÿ[ùò\‘ôX›öZY⁄ù—ö^Y
+äJHàù[¬à€€ú›ÿ[ùò\”⁄»Hõ€€X[äàÿ[ùò\»	âÇàÿ[ùò\ÀùY”ò[YHOOH	––SïêT…»	âÇàŸ⁄Xÿ[⁄YOOHÃà	âÇàŸ⁄Xÿ[ZY⁄OOHÃ	âÇàòX⁄⁄[ô’⁄YOOHç	âÇàòX⁄⁄[ô“ZY⁄OOHåà
+N¬à€€ú›\ú⁄\›[òŸS⁄»Bàÿÿ[›‹òYŸKôŸ]][J\ú⁄\›[òŸRŸ^JHOOH\ú⁄\›[òŸUò[YN¬à€€ú›]\ŸP[ôŸ][ô‹»H]ÿZ]õÿôT]\ŸP[ô]Y[‘Ÿ][ô‹ 
+N¬à€€ú›ô\›\ùH]ÿZ]õÿôTô\›\ù
 
-    await writeReport(report);
-  }
+N¬à€€ú›ô€HH]ÿZ]õÿôSYYXJà	Àãã‹ô\€›\òŸ\Àÿ\‹Ÿ]À‹€›[ôÀÿô€Kõ\…Àà	ÿ]Y[À€\Y…¬à
+N¬à€€ú›ÿ]àH]ÿZ]õÿôSYYXJà	Àãã‹ô\€›\òŸ\Àÿ\‹Ÿ]À‹€›[ôÀ’–UëLMWÃKùÿ]âÀà	ÿ]Y[À›ÿ]â¬à
+N¬à€€ú›ÿÿ[\»H]ÿZ]õÿôSÿÿ[\ 
+N¬à€€ú›ÿÿ[\”⁄»Hÿÿ[\Àô]ô\ûJ
+[ùûJHOà[ùûKõ⁄ N¬Çà€€ú›ô\‹ùH¬à\ŸNà	‹ôXY	Àà⁄ŒÇàö\ú›úò[YTôXYH	âÇàÿ[ùò\”⁄»	âÇà\ú⁄\›[òŸS⁄»	âÇà]\ŸP[ôŸ][ô‹Àõ⁄»	âÇàô\›\ùõ⁄»	âÇàô€KõÿYY	âÇàÿ]ãõÿYY	âÇàÿÿ[\”⁄Ààö\ú›úò[YTôXYKàö\ú›úò[YTô[ô\ô\ì\Œàö\ú›úò[YBà»ù[Xô\äö\ú›úò[YKú›\ù[YKù—ö^Y
+äJBààù[àõÿŸ\‹‘›\ù—ö\ú›úò[YP\õﬁ\Ààÿ[ùò\Œà¬à⁄Œàÿ[ùò\”⁄ÀàŸ⁄Xÿ[⁄YàŸ⁄Xÿ[ZY⁄àòX⁄⁄[ô’⁄YàòX⁄⁄[ô“ZY⁄à‹‹’⁄Yà‹‹“ZY⁄à^Tô\€€][€ãàKà\ú⁄\›[òŸS⁄Àà]\ŸP[ôŸ][ô‹Ààô\›\ùàYYXNà»ô€Kÿ]àKàÿÿ[\ÀàN¬Çà]ÿZ]‹ö]Tô\‹ù
+ô\‹ù
+N¬àBÇà\ﬁ[ò»ù[ò›[€àù[íŸ^Xõÿ\ôõÿôJ
+H¬à€€ú›ö\ú›úò[YTôXYHH]ÿZ]ÿZ]õ‹äà
 
-  async function runKeyboardProbe() {
-    const firstFrameReady = await waitFor(
-      () => performance.getEntriesByName('pv-first-game-frame').length > 0
-    );
-    await delay(3500);
-    const expectedCodes = ['KeyD', 'KeyR', 'ArrowRight', 'ArrowUp'];
-    const seenCodes = [...keyboardProbe.seen].sort();
-    const expectedSeen = expectedCodes.every((code) =>
-      keyboardProbe.seen.has(code)
-    );
-    const report = {
-      phase: 'keyboard',
-      ok:
-        firstFrameReady &&
-        expectedSeen &&
-        keyboardProbe.maxSimultaneous >= expectedCodes.length &&
-        keyboardProbe.trustedEvents >= expectedCodes.length * 2,
-      firstFrameReady,
-      expectedCodes,
-      seenCodes,
-      trustedEvents: keyboardProbe.trustedEvents,
-      maxSimultaneous: keyboardProbe.maxSimultaneous,
-      keysReleased: keyboardProbe.down.size === 0,
-    };
-    await writeReport(report);
-  }
+HOà\ôõ‹õX[òŸKôŸ][ùöY\–ûSò[YJ	‹ãYö\ú›Yÿ[YKYúò[YI Kõ[ô›àà
+N¬à]ÿZ][^JÕL
+N¬à€€ú›^X›Y€Ÿ\»H…“Ÿ^Q	À	“Ÿ^TâÀ	–\úõ›‘öY⁄	À	–\úõ›’\	◊N¬à€€ú›ŸY[ê€Ÿ\»HÀããöŸ^Xõÿ\ôõÿôKúŸY[óKú€‹ù
 
-  async function runQuitProbe() {
-    const bridgeAvailable = Boolean(
-      window.pvDesktop?.isDesktop &&
-        window.pvDesktop?.runtime === 'neutralino' &&
-        typeof window.pvDesktop?.quit === 'function'
-    );
-    console.error(
-      `PV_NEUTRALINO_QUIT_READY bridgeAvailable=${bridgeAvailable ? 'true' : 'false'}`
-    );
-    if (!bridgeAvailable) return;
+N¬à€€ú›^X›YŸY[àH^X›Y€Ÿ\Àô]ô\ûJ
+€ŸJHOÇàŸ^Xõÿ\ôõÿôKúŸY[ãö\ €ŸJBà
+N¬à€€ú›ô\‹ùH¬à\ŸNà	⁄Ÿ^Xõÿ\ô	Àà⁄ŒÇàö\ú›úò[YTôXYH	âÇà^X›YŸY[à	âÇàŸ^Xõÿ\ôõÿôKõX^⁄[][[ô[›\»èH^X›Y€Ÿ\Àõ[ô›	âÇàŸ^Xõÿ\ôõÿôKùù\›Y]ô[ù»èH^X›Y€Ÿ\Àõ[ô›
+àãàö\ú›úò[YTôXYKà^X›Y€Ÿ\ÀàŸY[ê€Ÿ\Ààù\›Y]ô[ùŒàŸ^Xõÿ\ôõÿôKùù\›Y]ô[ùÀàX^⁄[][[ô[›\ŒàŸ^Xõÿ\ôõÿôKõX^⁄[][[ô[›\ÀàŸ^\‘ô[X\ŸYàŸ^Xõÿ\ôõÿôKô›€ãú⁄^ôHOOHàN¬à]ÿZ]‹ö]Tô\‹ù
+ô\‹ù
+N¬àBÇà\ﬁ[ò»ù[ò›[€àù[î]Z]õÿôJ
+H¬à€€ú›úöYŸP]òZ[XõHHõ€€X[äà⁄[ô›Àúë\⁄›‹Àö\—\⁄›‹	âÇà⁄[ô›Àúë\⁄›‹Àúù[ù[YHOOH	€ô]]ò[[õ…»	âÇà\[Ÿà⁄[ô›Àúë\⁄›‹Àú]Z]OOH	Ÿù[ò›[€â¬à
+N¬à€€ú€€Kô\úõ‹äàó”ëUUêSSì◊‘URU‘ëPQHúöYŸP]òZ[XõOIÿúöYŸP]òZ[XõH»	›ùYI»à	Ÿò[ŸIﬂXà
+N¬àYà
+XúöYŸP]òZ[XõJHô]\õé¬Çà]ÿZ][^JX]õX^
+€\ÀçL
+JN¬à€€ú€€Kô\úõ‹ä	‘ó”ëUUêSSì◊‘URU––SúöYŸO\ôX[	 N¬à]ÿZ][^JL
+N¬à]ÿZ]⁄[ô›Àúë\⁄›‹ú]Z]
 
-    await delay(Math.max(holdMs, 250));
-    console.error('PV_NEUTRALINO_QUIT_CALL bridge=real');
-    await delay(100);
-    await window.pvDesktop.quit();
-  }
+N¬àBÇà\ﬁ[ò»ù[ò›[€àô\‹ùòZ[\ôJ\úõ‹äH¬à€€ú›]Z[H›ö[ô \úõ‹èÀú›X⁄»\úõ‹äN¬àYà
+\ŸHOOH	‹]Z]	 H¬à€€ú€€Kô\úõ‹äó”ëUUêSSì◊‘URU—Tîì‘à	Ÿ]Z[X
+N¬àô]\õé¬àBà]ÿZ]‹ö]Tô\‹ù
+»\ŸK⁄Œàò[ŸK\úõ‹éà]Z[JN¬àBÇà\ﬁ[ò»ù[ò›[€àù[ä
+H¬àYà
+\ŸHOOH	›‹ö]I H¬àÿÿ[›‹òYŸKúŸ]][J\ú⁄\›[òŸRŸ^K\ú⁄\›[òŸUò[YJN¬à]ÿZ][^JL
+N¬à]ÿZ]‹ö]Tô\‹ù
+¬à\ŸNà	›‹ö]IÀà⁄Œàÿÿ[›‹òYŸKôŸ]][J\ú⁄\›[òŸRŸ^JHOOH\ú⁄\›[òŸUò[YKàJN¬àô]\õé¬àBÇàYà
+\ŸHOOH	‹ôXY	 H¬àûH¬à]ÿZ]ù[îôXYõÿôJ
+N¬àHÿ]⁄
+\úõ‹äH¬à]ÿZ]ô\‹ùòZ[\ôJ\úõ‹äN¬àBàô]\õé¬àBÇàYà
+\ŸHOOH	⁄Ÿ^Xõÿ\ô	 H¬àûH¬à]ÿZ]ù[íŸ^Xõÿ\ôõÿôJ
+N¬àHÿ]⁄
+\úõ‹äH¬à]ÿZ]ô\‹ùòZ[\ôJ\úõ‹äN¬àBàô]\õé¬àBÇàYà
+\ŸHOOH	‹]Z]	 H¬àûH¬à]ÿZ]ù[î]Z]õÿôJ
+N¬àHÿ]⁄
+\úõ‹äH¬à]ÿZ]ô\‹ùòZ[\ôJ\úõ‹äN¬àBàBàBÇàù[ò›[€à›\ù
 
-  async function reportFailure(error) {
-    const detail = String(error?.stack || error);
-    if (phase === 'quit') {
-      console.error(`PV_NEUTRALINO_QUIT_ERROR ${detail}`);
-      return;
-    }
-    await writeReport({ phase, ok: false, error: detail });
-  }
+H¬àù[ä
+Kòÿ]⁄
 
-  async function run() {
-    if (phase === 'write') {
-      localStorage.setItem(persistenceKey, persistenceValue);
-      await delay(1000);
-      await writeReport({
-        phase: 'write',
-        ok: localStorage.getItem(persistenceKey) === persistenceValue,
-      });
-      return;
-    }
+\úõ‹äHOà¬àô\‹ùòZ[\ôJ\úõ‹äKòÿ]⁄
 
-    if (phase === 'read') {
-      try {
-        await runReadProbe();
-      } catch (error) {
-        await reportFailure(error);
-      }
-      return;
-    }
 
-    if (phase === 'keyboard') {
-      try {
-        await runKeyboardProbe();
-      } catch (error) {
-        await reportFailure(error);
-      }
-      return;
-    }
+HOàﬂJN¬àJN¬àBÇàYà
+\ŸHOOH	‹]Z]	»ÿ›[Y[ùúôXYT›]HOOH	ÿ€€\]I H¬à›\ù
 
-    if (phase === 'quit') {
-      try {
-        await runQuitProbe();
-      } catch (error) {
-        await reportFailure(error);
-      }
-    }
-  }
-
-  function start() {
-    run().catch((error) => {
-      reportFailure(error).catch(() => {});
-    });
-  }
-
-  if (phase === 'quit' || document.readyState === 'complete') {
-    start();
-  } else {
-    window.addEventListener('load', start, { once: true });
-  }
-})();
+N¬àH[ŸH¬à⁄[ô›ÀòY]ô[ù\›[ô\ä	€ÿY	À›\ù»€òŸNàùYHJN¬àBüJJ
+N¬
