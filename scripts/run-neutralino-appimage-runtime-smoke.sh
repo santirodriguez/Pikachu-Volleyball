@@ -64,6 +64,16 @@ ln -s bin/neutralino-linux_x64 "$production_launcher"
   printf 'mode=%s\n' "$identity_mode"
 } > "$result_dir/identity.txt"
 
+{
+  for sandbox_tool in /usr/bin/bwrap /usr/bin/xdg-dbus-proxy; do
+    if [[ -x "$sandbox_tool" ]]; then
+      printf '%s=PRESENT\n' "$sandbox_tool"
+    else
+      printf '%s=ABSENT\n' "$sandbox_tool"
+    fi
+  done
+} > "$result_dir/host-sandbox-tools.txt"
+
 run_stage() {
   local name="$1"
   shift
@@ -80,7 +90,10 @@ run_stage() {
 }
 
 : > "$result_dir/stages.txt"
-run_stage production-window "$root/scripts/run-neutralino-production-smoke.sh" "$stage"
+production_output_dir="$result_dir/production-window-details"
+mkdir -p "$production_output_dir"
+run_stage production-window env PV_NEUTRALINO_SMOKE_OUTPUT_DIR="$production_output_dir" \
+  "$root/scripts/run-neutralino-production-smoke.sh" "$stage"
 rm -f "$production_launcher"
 run_stage gameplay-input-audio-quit "$root/scripts/run-neutralino-fedora-smoke.sh" "$stage"
 run_stage external-link "$root/scripts/run-neutralino-external-link-smoke.sh" "$stage"
