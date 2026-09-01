@@ -79,7 +79,6 @@ for navigation_case in "${navigation_cases[@]}"; do
   case_log="$output_dir/host-navigation-$navigation_case.log"
   attacker_log="$output_dir/attacker-server-$navigation_case.log"
   xdg_log="$PWD/$output_dir/xdg-open-$navigation_case.log"
-  expected_title="PV_HOST_NAVIGATION_$navigation_case"
   rm -f "$case_log" "$attacker_log" "$xdg_log"
   export PV_XDG_OPEN_LOG="$xdg_log"
 
@@ -126,19 +125,6 @@ for navigation_case in "${navigation_cases[@]}"; do
     exit 1
   fi
 
-  window_id=""
-  for _ in $(seq 1 60); do
-    window_id="$(xdotool search --name "^${expected_title}$" 2>/dev/null | head -n 1 || true)"
-    [[ -n "$window_id" ]] && break
-    if ! kill -0 "$app_pid" 2>/dev/null; then break; fi
-    sleep 0.05
-  done
-  if [[ -z "$window_id" ]]; then
-    cat "$case_log" >&2
-    echo "Unable to locate trusted host-navigation window before case $navigation_case executes." >&2
-    exit 1
-  fi
-
   native_marker='PV_EXTERNAL_LINK rejected'
   if [[ "$navigation_case" = approved ]]; then
     native_marker='PV_EXTERNAL_LINK opened https://santiagorodriguez.com/'
@@ -159,17 +145,25 @@ for navigation_case in "${navigation_cases[@]}"; do
     exit 1
   fi
 
-  if ! kill -0 "$app_pid" 2>/dev/null; then
+  survival_marker="PV_NEUTRALINO_HOST_NAVIGATION_SURVIVED {\"phase\":\"host-navigation\",\"case\":\"$navigation_case\",\"ok\":true"
+  survival_observed=0
+  for _ in $(seq 1 150); do
+    if grep -Fq "$survival_marker" "$case_log" 2>/dev/null; then
+      survival_observed=1
+      break
+    fi
+    if ! kill -0 "$app_pid" 2>/dev/null; then break; fi
+    sleep 0.1
+  done
+  if (( survival_observed != 1 )); then
     cat "$case_log" >&2
-    echo "Neutralino host-navigation case $navigation_case exited after the navigation attempt." >&2
+    echo "Trusted document did not report survival after host-navigation case $navigation_case." >&2
     exit 1
   fi
 
-  current_title="$(xdotool getwindowname "$window_id" 2>/dev/null || true)"
-  if [[ "$current_title" != "$expected_title" ]]; then
+  if ! kill -0 "$app_pid" 2>/dev/null; then
     cat "$case_log" >&2
-    printf 'Expected trusted title %s after case %s, observed %s.\n' \
-      "$expected_title" "$navigation_case" "$current_title" >&2
+    echo "Neutralino host-navigation case $navigation_case exited after the navigation attempt." >&2
     exit 1
   fi
 
@@ -215,7 +209,7 @@ for navigation_case in "${navigation_cases[@]}"; do
     fi
   fi
 
-  printf 'case=%s result=PASS trusted_title=%s\n' "$navigation_case" "$current_title" >> "$summary"
+  printf 'case=%s result=PASS trusted_document=survived\n' "$navigation_case" >> "$summary"
   cleanup_app
   cleanup_attacker
   sleep 0.3

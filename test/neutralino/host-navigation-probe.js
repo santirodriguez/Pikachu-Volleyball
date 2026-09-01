@@ -107,6 +107,9 @@
       () => performance.getEntriesByName('pv-first-game-frame').length > 0
     );
     const trustedOrigin = window.location.origin;
+    const trustedHref = window.location.href;
+    const trustedDocument = document;
+    const trustedDocumentElement = document.documentElement;
     const title = `PV_HOST_NAVIGATION_${navigationCase}`;
     document.title = title;
 
@@ -119,7 +122,7 @@
         window.pvDesktop?.runtime === 'neutralino',
       firstFrameReady,
       trustedOrigin,
-      href: window.location.href,
+      href: trustedHref,
       title,
       navigationDelayMs,
       desktopRuntime: window.pvDesktop?.runtime || null,
@@ -128,6 +131,26 @@
     if (!firstFrameReady) return;
     await delay(navigationDelayMs);
     navigate(navigationCase);
+    await delay(750);
+
+    const survived =
+      document === trustedDocument &&
+      document.documentElement === trustedDocumentElement &&
+      window.location.origin === trustedOrigin &&
+      window.location.href === trustedHref &&
+      document.title === title &&
+      window.pvDesktop?.isDesktop === true &&
+      window.pvDesktop?.runtime === 'neutralino';
+
+    await writeReport('PV_NEUTRALINO_HOST_NAVIGATION_SURVIVED', {
+      phase: 'host-navigation',
+      case: navigationCase,
+      ok: survived,
+      trustedOrigin,
+      href: window.location.href,
+      title: document.title,
+      desktopRuntime: window.pvDesktop?.runtime || null,
+    });
   }
 
   function start() {
