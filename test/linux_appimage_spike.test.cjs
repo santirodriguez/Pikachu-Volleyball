@@ -101,6 +101,35 @@ test('bundled candidate explicitly carries the Wayland client runtime closure', 
   );
 });
 
+test('bundled candidate relocates WebKit release helper paths into the AppDir', () => {
+  const relocationFunction = scriptText.match(
+    /relocate_bundled_webkit_paths\(\) \{[\s\S]*?\n\}\n\nwrite_bundled_apprun\(\)/,
+  );
+  assert.ok(relocationFunction);
+  assert.match(
+    relocationFunction[0],
+    /old_prefix='\/usr\/lib\/x86_64-linux-gnu\/webkit2gtk-4\.1'/,
+  );
+  assert.match(
+    relocationFunction[0],
+    /new_prefix='\/proc\/self\/cwd\/\/\/\/usr\/lib\/webkit2gtk-4\.1'/,
+  );
+  assert.match(relocationFunction[0], /len\(old_prefix\) != len\(new_prefix\)/);
+  assert.match(relocationFunction[0], /old_count != 2 or new_count != 0/);
+  assert.match(relocationFunction[0], /len\(patched\) != len\(data\)/);
+  assert.match(relocationFunction[0], /bundled-webkit-path-relocation\.txt/);
+  assert.match(
+    scriptText,
+    /relocate_bundled_webkit_paths "\$appdir\/usr\/lib\/libwebkit2gtk-4\.1\.so\.0"/,
+  );
+  const bundledAppRun = scriptText.match(
+    /write_bundled_apprun\(\) \{[\s\S]*?\n\}\n\nnormalize_appdir\(\)/,
+  );
+  assert.ok(bundledAppRun);
+  assert.match(bundledAppRun[0], /APPDIR=.*\ncd "\\\$APPDIR"/);
+  assert.doesNotMatch(scriptText, /WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS/);
+});
+
 test('bundled workflow is gated on exact-head Candidate 1 success', () => {
   assert.match(bundledWorkflowText, /workflow='phase5-appimage-portability-spike\.yml'/);
   assert.match(bundledWorkflowText, /select\(\.head_sha == \$sha\)/);
@@ -130,7 +159,7 @@ test('bundled workflow proves reproducibility, core identity, clean inventory, a
 
 test('thin preflight finds WebKitGTK in standard loader paths', () => {
   const thinFunction = scriptText.match(
-    /write_thin_apprun\(\) \{[\s\S]*?\n\}\n\nwrite_bundled_apprun\(\)/,
+    /write_thin_apprun\(\) \{[\s\S]*?\n\}\n\nrelocate_bundled_webkit_paths\(\)/,
   );
   assert.ok(thinFunction);
   assert.match(thinFunction[0], /ldd_output=/);
