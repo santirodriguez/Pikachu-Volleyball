@@ -6,6 +6,7 @@ const path = require('node:path');
 const test = require('node:test');
 
 const root = path.resolve(__dirname, '..');
+const gitignoreText = fs.readFileSync(path.join(root, '.gitignore'), 'utf8');
 const envText = fs.readFileSync(path.join(root, 'packaging/linux/appimage-spike.env'), 'utf8');
 const scriptText = fs.readFileSync(path.join(root, 'scripts/build-neutralino-appimage-spike.sh'), 'utf8');
 const runtimeSmokeText = fs.readFileSync(
@@ -94,6 +95,11 @@ test('bundled workflow is gated on exact-head Candidate 1 success', () => {
   assert.match(bundledWorkflowText, /PV_APPIMAGE_CANDIDATE1_GATE=PASS/);
   assert.match(bundledWorkflowText, /if \[\[ "\$conclusion" != success \]\]/);
   assert.match(bundledWorkflowText, /needs: candidate1-gate/);
+});
+
+test('bundled Candidate 1 evidence staging preserves the production clean-tree guard', () => {
+  assert.match(bundledWorkflowText, /path: \.candidate1/);
+  assert.match(gitignoreText, /^\.candidate1\/$/m);
 });
 
 test('bundled workflow proves reproducibility, core identity, clean inventory, and clean-host runtime', () => {
