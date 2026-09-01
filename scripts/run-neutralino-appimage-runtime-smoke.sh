@@ -90,15 +90,13 @@ run_stage() {
 }
 
 : > "$result_dir/stages.txt"
+production_output_dir="$result_dir/production-window-details"
+mkdir -p "$production_output_dir"
 set +e
-run_stage production-window "$root/scripts/run-neutralino-production-smoke.sh" "$stage"
+run_stage production-window env PV_NEUTRALINO_SMOKE_OUTPUT_DIR="$production_output_dir" \
+  "$root/scripts/run-neutralino-production-smoke.sh" "$stage"
 production_status=$?
 set -e
-production_output_dir="$stage/.neutralino-production-smoke"
-if [[ -d "$production_output_dir" ]]; then
-  rm -rf "$result_dir/production-window-details"
-  cp -a "$production_output_dir" "$result_dir/production-window-details"
-fi
 if [[ "$production_status" -ne 0 ]]; then
   exit "$production_status"
 fi

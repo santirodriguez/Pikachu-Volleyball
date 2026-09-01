@@ -185,7 +185,11 @@ test('AppImage runtime smoke adapts the validation stage to the production bundl
   assert.match(runtimeSmokeText, /ln -s bin\/neutralino-linux_x64 "\$production_launcher"/);
   assert.match(
     runtimeSmokeText,
-    /run_stage production-window[\s\S]*?"\$stage"[\s\S]*?production_output_dir="\$stage\/\.neutralino-production-smoke"[\s\S]*?cp -a "\$production_output_dir" "\$result_dir\/production-window-details"[\s\S]*?rm -f "\$production_launcher"[\s\S]*?run_stage gameplay-input-audio-quit/,
+    /production_output_dir="\$result_dir\/production-window-details"[\s\S]*?mkdir -p "\$production_output_dir"[\s\S]*?run_stage production-window env PV_NEUTRALINO_SMOKE_OUTPUT_DIR="\$production_output_dir"[\s\S]*?"\$root\/scripts\/run-neutralino-production-smoke\.sh" "\$stage"/,
+  );
+  assert.match(
+    runtimeSmokeText,
+    /production_status=\$\?[\s\S]*?if \[\[ "\$production_status" -ne 0 \]\]; then[\s\S]*?exit "\$production_status"[\s\S]*?rm -f "\$production_launcher"[\s\S]*?run_stage gameplay-input-audio-quit/,
   );
 });
 
