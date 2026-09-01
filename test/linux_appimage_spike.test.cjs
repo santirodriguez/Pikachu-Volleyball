@@ -94,6 +94,11 @@ test('bundled candidate explicitly carries the Wayland client runtime closure', 
   assert.match(scriptText, /--library "\$wayland_client_lib"/);
   assert.match(scriptText, /Bundled candidate is missing libwayland-client\.so\.0/);
   assert.match(scriptText, /libwayland-client0/);
+  assert.doesNotMatch(
+    scriptText,
+    /ldconfig -p \| awk '[^'\n]*\bexit\b[^'\n]*'/,
+    'ldconfig lookups must consume the full stream under pipefail',
+  );
 });
 
 test('bundled workflow is gated on exact-head Candidate 1 success', () => {
