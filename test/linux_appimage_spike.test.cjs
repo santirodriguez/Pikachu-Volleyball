@@ -108,6 +108,13 @@ test('bundled candidate explicitly carries the confirmed GBM runtime closure', (
   assert.match(scriptText, /libgbm1/);
 });
 
+test('bundled candidate explicitly carries the confirmed EGL runtime closure', () => {
+  assert.match(scriptText, /libEGL\.so\.1/);
+  assert.match(scriptText, /--library "\$egl_lib"/);
+  assert.match(scriptText, /Bundled candidate is missing libEGL\.so\.1/);
+  assert.match(scriptText, /libegl1/);
+});
+
 test('bundled candidate relocates WebKit release helper paths into the AppDir', () => {
   const relocationFunction = scriptText.match(
     /relocate_bundled_webkit_paths\(\) \{[\s\S]*?\n\}\n\nwrite_bundled_apprun\(\)/,
