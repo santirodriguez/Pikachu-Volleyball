@@ -190,5 +190,5 @@ test('host-navigation smoke isolates rejected top-level navigations by process',
 test('spike does not reintroduce retired Electron packaging', () => {
   assert.doesNotMatch(envText, /electron/i);
   assert.doesNotMatch(scriptText, /electron-builder|app\.asar|chrome-sandbox/i);
-  assert.doesNotMatch(bundledWorkflowText, /electron-builder|app\.asar|chrome-sandbox/i);
+  assert.match(bundledWorkflowText, /Forbidden runtime\/build payload found in bundled AppImage/);
 });
