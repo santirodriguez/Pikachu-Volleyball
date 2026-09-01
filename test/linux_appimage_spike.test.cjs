@@ -134,6 +134,7 @@ test('host-navigation smoke isolates rejected top-level navigations by process',
   assert.match(hostNavigationProbeText, /--dev-pv-host-navigation-case=/);
   assert.match(hostNavigationProbeText, /--dev-pv-host-navigation-delay-ms=/);
   assert.match(hostNavigationProbeText, /PV_NEUTRALINO_HOST_NAVIGATION_READY/);
+  assert.match(hostNavigationProbeText, /PV_NEUTRALINO_HOST_NAVIGATION_SURVIVED/);
   assert.match(hostNavigationProbeText, /await delay\(navigationDelayMs\);\s+navigate\(navigationCase\);/);
   assert.doesNotMatch(hostNavigationProbeText, /attempts\.push|attemptNavigation/);
   assert.match(runtimeSmokeText, /run_stage host-navigation bash/);
@@ -149,8 +150,9 @@ test('host-navigation smoke isolates rejected top-level navigations by process',
   );
   assert.match(
     hostNavigationSmokeText,
-    /window_id=""[\s\S]*?native_marker='PV_EXTERNAL_LINK rejected'[\s\S]*?xdotool getwindowname "\$window_id"/,
+    /native_marker='PV_EXTERNAL_LINK rejected'[\s\S]*?survival_marker="PV_NEUTRALINO_HOST_NAVIGATION_SURVIVED/,
   );
+  assert.doesNotMatch(hostNavigationSmokeText, /xdotool/);
   assert.match(hostNavigationSmokeText, /PV_EXTERNAL_LINK rejected/);
   assert.match(
     hostNavigationSmokeText,
