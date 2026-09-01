@@ -97,7 +97,20 @@ docker run --rm --platform "$builder_platform" \
       echo "Pinned Ubuntu snapshot indexes did not download completely." >&2
       exit 1
     fi
-    apt-get install -y -f ca-certificates git gcc g++ binutils pkg-config cmake ninja-build libgtk-3-dev libwebkit2gtk-4.0-dev curl xz-utils
+
+    apt_install_ready=0
+    for attempt in 1 2 3 4; do
+      if apt-get install -y -f ca-certificates git gcc g++ binutils pkg-config cmake ninja-build libgtk-3-dev libwebkit2gtk-4.0-dev curl xz-utils; then
+        apt_install_ready=1
+        break
+      fi
+      printf "PV_NEUTRALINO_APT_INSTALL_RETRY attempt=%s snapshot=%s\n" "$attempt" "$PV_NEUTRALINO_APT_SNAPSHOT" >&2
+      sleep "$((attempt * 5))"
+    done
+    if (( apt_install_ready != 1 )); then
+      echo "Pinned Ubuntu snapshot packages did not download completely." >&2
+      exit 1
+    fi
     rm -f /etc/apt/apt.conf.d/49pv-bootstrap-ca
 
     curl --fail --location --silent --show-error "$PV_NODE_URL" -o "/tmp/$PV_NODE_ARCHIVE"
