@@ -129,18 +129,24 @@ for navigation_case in "${navigation_cases[@]}"; do
   if [[ "$navigation_case" = approved ]]; then
     native_marker='PV_EXTERNAL_LINK opened https://santiagorodriguez.com/'
   fi
+  webkit_local_resource_marker='Not allowed to load local resource: file:///tmp/pv-untrusted-navigation'
   native_result_observed=0
+  webkit_local_resource_block_observed=0
   for _ in $(seq 1 150); do
     if grep -Fq "$native_marker" "$case_log" 2>/dev/null; then
       native_result_observed=1
       break
     fi
+    if [[ "$navigation_case" = file ]] && grep -Fq "$webkit_local_resource_marker" "$case_log" 2>/dev/null; then
+      webkit_local_resource_block_observed=1
+      break
+    fi
     if ! kill -0 "$app_pid" 2>/dev/null; then break; fi
     sleep 0.1
   done
-  if (( native_result_observed != 1 )); then
+  if (( native_result_observed != 1 && webkit_local_resource_block_observed != 1 )); then
     cat "$case_log" >&2
-    printf 'Host-navigation case %s did not reach expected native result: %s\n' \
+    printf 'Host-navigation case %s did not reach expected security result: %s\n' \
       "$navigation_case" "$native_marker" >&2
     exit 1
   fi
@@ -179,6 +185,7 @@ for navigation_case in "${navigation_cases[@]}"; do
     exit 1
   fi
 
+  security_result='native-validator'
   if [[ "$navigation_case" = approved ]]; then
     if [[ ! -s "$xdg_log" ]]; then
       cat "$case_log" >&2
@@ -202,14 +209,22 @@ for navigation_case in "${navigation_cases[@]}"; do
       echo "Rejected host-navigation case $navigation_case unexpectedly reached xdg-open." >&2
       exit 1
     fi
-    if ! grep -Fq 'PV_EXTERNAL_LINK rejected' "$case_log"; then
+    if (( webkit_local_resource_block_observed == 1 )); then
+      security_result='webkit-local-resource-policy'
+      if [[ "$navigation_case" != file ]]; then
+        cat "$case_log" >&2
+        echo "Only the file navigation case may be blocked before the native validator." >&2
+        exit 1
+      fi
+    elif ! grep -Fq 'PV_EXTERNAL_LINK rejected' "$case_log"; then
       cat "$case_log" >&2
       echo "Rejected host-navigation case $navigation_case was not observed at the native validator." >&2
       exit 1
     fi
   fi
 
-  printf 'case=%s result=PASS trusted_document=survived\n' "$navigation_case" >> "$summary"
+  printf 'case=%s result=PASS trusted_document=survived security_result=%s\n' \
+    "$navigation_case" "$security_result" >> "$summary"
   cleanup_app
   cleanup_attacker
   sleep 0.3
