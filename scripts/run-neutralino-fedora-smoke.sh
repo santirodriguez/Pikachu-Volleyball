@@ -17,7 +17,6 @@ if [[ ! -f neutralino.config.json ]]; then
   exit 1
 fi
 
-export DISPLAY=:99
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp/pv-neutralino-runtime}"
 export LIBGL_ALWAYS_SOFTWARE=1
 mkdir -p "$XDG_RUNTIME_DIR"
@@ -25,9 +24,32 @@ chmod 700 "$XDG_RUNTIME_DIR"
 
 active_job=""
 active_app_pid=""
+display_file="$(mktemp)"
+xvfb_pid=""
+wm_pid=""
 
-Xvfb "$DISPLAY" -screen 0 1280x1024x24 >"$output_dir/xvfb.log" 2>&1 &
+Xvfb -displayfd 3 -screen 0 1280x1024x24 3>"$display_file" >"$output_dir/xvfb.log" 2>&1 &
 xvfb_pid=$!
+for _ in $(seq 1 50); do
+  if [[ -s "$display_file" ]]; then
+    export DISPLAY=":$(cat "$display_file")"
+    break
+  fi
+  if ! kill -0 "$xvfb_pid" 2>/dev/null; then
+    cat "$output_dir/xvfb.log" >&2
+    rm -f "$display_file"
+    echo "Unable to start Xvfb for the Neutralino Fedora smoke." >&2
+    exit 1
+  fi
+  sleep 0.1
+done
+rm -f "$display_file"
+if [[ -z "${DISPLAY:-}" ]]; then
+  cat "$output_dir/xvfb.log" >&2
+  echo "Xvfb did not publish a free display for the Neutralino Fedora smoke." >&2
+  exit 1
+fi
+
 openbox --sm-disable >"$output_dir/openbox.log" 2>&1 &
 wm_pid=$!
 
@@ -46,7 +68,8 @@ cleanup_active_phase() {
 
 cleanup() {
   cleanup_active_phase
-  kill "$wm_pid" "$xvfb_pid" 2>/dev/null || true
+  [[ -n "$wm_pid" ]] && kill "$wm_pid" 2>/dev/null || true
+  [[ -n "$xvfb_pid" ]] && kill "$xvfb_pid" 2>/dev/null || true
 }
 trap cleanup EXIT
 sleep 1
