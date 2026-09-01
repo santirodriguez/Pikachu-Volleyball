@@ -101,6 +101,13 @@ test('bundled candidate explicitly carries the Wayland client runtime closure', 
   );
 });
 
+test('bundled candidate explicitly carries the confirmed GBM runtime closure', () => {
+  assert.match(scriptText, /libgbm\.so\.1/);
+  assert.match(scriptText, /--library "\$gbm_lib"/);
+  assert.match(scriptText, /Bundled candidate is missing libgbm\.so\.1/);
+  assert.match(scriptText, /libgbm1/);
+});
+
 test('bundled candidate relocates WebKit release helper paths into the AppDir', () => {
   const relocationFunction = scriptText.match(
     /relocate_bundled_webkit_paths\(\) \{[\s\S]*?\n\}\n\nwrite_bundled_apprun\(\)/,
