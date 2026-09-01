@@ -214,9 +214,9 @@ build_bundled() {
   command -v pkg-config >/dev/null
   local appdir="$work/bundled.AppDir" webkit_lib wayland_client_lib webkit_process_dir scanner plugin
   mkdir -p "$appdir/usr/bin" "$appdir/usr/lib/gstreamer-1.0" "$appdir/usr/libexec/gstreamer-1.0"
-  webkit_lib="$(ldconfig -p | awk '/libwebkit2gtk-4.1.so.0/ {print $NF; exit}')"
+  webkit_lib="$(ldconfig -p | awk '/libwebkit2gtk-4.1.so.0/ && !found {value=$NF; found=1} END {if (found) print value}')"
   [[ -f "$webkit_lib" ]] || { echo "Bundled candidate builder is missing WebKitGTK 4.1" >&2; exit 1; }
-  wayland_client_lib="$(ldconfig -p | awk '/libwayland-client.so.0/ {print $NF; exit}')"
+  wayland_client_lib="$(ldconfig -p | awk '/libwayland-client.so.0/ && !found {value=$NF; found=1} END {if (found) print value}')"
   [[ -f "$wayland_client_lib" ]] || { echo "Bundled candidate builder is missing Wayland client runtime" >&2; exit 1; }
   webkit_process_dir="$(dirname "$(dpkg-query -L libwebkit2gtk-4.1-0 | grep '/WebKitWebProcess$' | head -n1)")"
   [[ -d "$webkit_process_dir" ]] || { echo "Unable to locate WebKitGTK helper processes" >&2; exit 1; }
