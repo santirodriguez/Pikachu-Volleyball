@@ -12,6 +12,10 @@ const runtimeSmokeText = fs.readFileSync(
   path.join(root, 'scripts/run-neutralino-appimage-runtime-smoke.sh'),
   'utf8',
 );
+const bundledWorkflowText = fs.readFileSync(
+  path.join(root, '.github/workflows/phase5-appimage-bundled-runtime.yml'),
+  'utf8',
+);
 const smokeProbeText = fs.readFileSync(
   path.join(root, 'test/neutralino/smoke-probe.js'),
   'utf8',
@@ -82,6 +86,28 @@ test('bundled candidate does not intentionally ship glibc or the ELF loader', ()
   assert.match(scriptText, /ld-linux/);
   assert.match(scriptText, /rm -f .*libc\.so/s);
   assert.match(scriptText, /GST_PLUGIN_SYSTEM_PATH_1_0=/);
+});
+
+test('bundled workflow is gated on exact-head Candidate 1 success', () => {
+  assert.match(bundledWorkflowText, /workflow='phase5-appimage-portability-spike\.yml'/);
+  assert.match(bundledWorkflowText, /select\(\.head_sha == \$sha\)/);
+  assert.match(bundledWorkflowText, /PV_APPIMAGE_CANDIDATE1_GATE=PASS/);
+  assert.match(bundledWorkflowText, /if \[\[ "\$conclusion" != success \]\]/);
+  assert.match(bundledWorkflowText, /needs: candidate1-gate/);
+});
+
+test('bundled workflow proves reproducibility, core identity, clean inventory, and clean-host runtime', () => {
+  assert.match(bundledWorkflowText, /Build bundled AppImage candidate twice/);
+  assert.match(
+    bundledWorkflowText,
+    /cmp "\.appimage-bundled-repro\/first\/\$PV_APPIMAGE_BUNDLED_NAME" "\.appimage-bundled-repro\/second\/\$PV_APPIMAGE_BUNDLED_NAME"/,
+  );
+  assert.match(bundledWorkflowText, /PV_APPIMAGE_BUNDLED_CORE_IDENTITY/);
+  assert.match(bundledWorkflowText, /Bundled AppImage unexpectedly contains glibc\/ELF loader payload/);
+  assert.match(bundledWorkflowText, /test ! -e "\$appdir\/usr\/bin\/xdg-open"/);
+  assert.match(bundledWorkflowText, /PV_APPIMAGE_HOST_APP_PACKAGES=ABSENT/);
+  assert.match(bundledWorkflowText, /candidate=bundled result=PASS/);
+  assert.match(bundledWorkflowText, /Exercise bundled direct FUSE and extract-and-run fallback/);
 });
 
 test('thin preflight finds WebKitGTK in standard loader paths', () => {
@@ -164,4 +190,5 @@ test('host-navigation smoke isolates rejected top-level navigations by process',
 test('spike does not reintroduce retired Electron packaging', () => {
   assert.doesNotMatch(envText, /electron/i);
   assert.doesNotMatch(scriptText, /electron-builder|app\.asar|chrome-sandbox/i);
+  assert.doesNotMatch(bundledWorkflowText, /electron-builder|app\.asar|chrome-sandbox/i);
 });
