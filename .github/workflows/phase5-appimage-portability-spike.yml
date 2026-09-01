@@ -302,7 +302,7 @@ jobs:
                 opensuse)
                   zypper --non-interactive refresh
                   zypper --non-interactive install --no-recommends xorg-x11-server-Xvfb openbox xdotool procps python3 shadow time ca-certificates \
-                    libwebkit2gtk-4_1-0 gtk3 gstreamer gstreamer-plugins-base gstreamer-plugins-good xdg-utils
+                    libwebkit2gtk-4_1-0 gtk3 gstreamer gstreamer-utils gstreamer-plugins-base gstreamer-plugins-good xdg-utils
                   ;;
                 *) echo "Unknown matrix family: $PV_MATRIX_FAMILY" >&2; exit 2 ;;
               esac
