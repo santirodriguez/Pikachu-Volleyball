@@ -159,12 +159,47 @@ EOF
   chmod 0755 "$appdir/AppRun"
 }
 
+relocate_bundled_webkit_paths() {
+  local webkit_path="$1"
+  local old_prefix='/usr/lib/x86_64-linux-gnu/webkit2gtk-4.1'
+  local new_prefix='/proc/self/cwd////usr/lib/webkit2gtk-4.1'
+  [[ -f "$webkit_path" ]] || { echo "Bundled candidate is missing the WebKitGTK library to relocate" >&2; exit 1; }
+  python3 - "$webkit_path" "$old_prefix" "$new_prefix" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+old_prefix = sys.argv[2].encode()
+new_prefix = sys.argv[3].encode()
+
+if len(old_prefix) != len(new_prefix):
+    raise SystemExit("Bundled WebKit path relocation prefixes must have equal length")
+
+data = path.read_bytes()
+old_count = data.count(old_prefix)
+new_count = data.count(new_prefix)
+if old_count != 2 or new_count != 0:
+    raise SystemExit(
+        f"Bundled WebKit path relocation precondition failed: old={old_count} new={new_count}"
+    )
+
+patched = data.replace(old_prefix, new_prefix)
+if len(patched) != len(data) or patched.count(old_prefix) != 0 or patched.count(new_prefix) != 2:
+    raise SystemExit("Bundled WebKit path relocation verification failed")
+
+path.write_bytes(patched)
+PY
+  printf 'old_prefix=%s\nnew_prefix=%s\noccurrences=2\n' "$old_prefix" "$new_prefix" \
+    > "$evidence_dir/bundled-webkit-path-relocation.txt"
+}
+
 write_bundled_apprun() {
   local appdir="$1"
   cat > "$appdir/AppRun" <<EOF
 #!/bin/bash
 set -euo pipefail
 APPDIR="\${APPDIR:-\$(cd "\$(dirname "\$0")" && pwd)}"
+cd "\$APPDIR"
 export PATH="\$APPDIR/usr/bin:\$PATH"
 export LD_LIBRARY_PATH="\$APPDIR/usr/lib\${LD_LIBRARY_PATH:+:\$LD_LIBRARY_PATH}"
 export XDG_DATA_DIRS="\$APPDIR/usr/share:/usr/share\${XDG_DATA_DIRS:+:\$XDG_DATA_DIRS}"
@@ -212,6 +247,7 @@ build_thin() {
 build_bundled() {
   command -v dpkg-query >/dev/null
   command -v pkg-config >/dev/null
+  command -v python3 >/dev/null
   local appdir="$work/bundled.AppDir" webkit_lib wayland_client_lib webkit_process_dir scanner plugin
   mkdir -p "$appdir/usr/bin" "$appdir/usr/lib/gstreamer-1.0" "$appdir/usr/libexec/gstreamer-1.0"
   webkit_lib="$(ldconfig -p | awk '/libwebkit2gtk-4.1.so.0/ && !found {value=$NF; found=1} END {if (found) print value}')"
@@ -246,6 +282,7 @@ build_bundled() {
   export LINUXDEPLOY="$linuxdeploy_wrapper"
   "$linuxdeploy_wrapper" "${deploy_args[@]}"
   "$gtk_plugin" --appdir "$appdir"
+  relocate_bundled_webkit_paths "$appdir/usr/lib/libwebkit2gtk-4.1.so.0"
 
   mkdir -p "$appdir/usr/lib/webkit2gtk-4.1"
   cp -a "$webkit_process_dir/." "$appdir/usr/lib/webkit2gtk-4.1/"
