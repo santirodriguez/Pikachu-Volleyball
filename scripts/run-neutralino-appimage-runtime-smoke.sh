@@ -92,9 +92,16 @@ run_stage() {
 : > "$result_dir/stages.txt"
 production_output_dir="$result_dir/production-window-details"
 mkdir -p "$production_output_dir"
+production_runtime_env=()
+if [[ "$(basename "$candidate")" == *bundled-runtime* ]]; then
+  production_runtime_env=(
+    LD_DEBUG=libs
+    LD_DEBUG_OUTPUT="$production_output_dir/loader"
+  )
+fi
 set +e
 run_stage production-window env PV_NEUTRALINO_SMOKE_OUTPUT_DIR="$production_output_dir" \
-  "$root/scripts/run-neutralino-production-smoke.sh" "$stage"
+  "${production_runtime_env[@]}" "$root/scripts/run-neutralino-production-smoke.sh" "$stage"
 production_status=$?
 set -e
 if [[ "$production_status" -ne 0 ]]; then
