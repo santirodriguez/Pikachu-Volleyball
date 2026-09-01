@@ -89,6 +89,13 @@ test('bundled candidate does not intentionally ship glibc or the ELF loader', ()
   assert.match(scriptText, /GST_PLUGIN_SYSTEM_PATH_1_0=/);
 });
 
+test('bundled candidate explicitly carries the Wayland client runtime closure', () => {
+  assert.match(scriptText, /libwayland-client\.so\.0/);
+  assert.match(scriptText, /--library "\$wayland_client_lib"/);
+  assert.match(scriptText, /Bundled candidate is missing libwayland-client\.so\.0/);
+  assert.match(scriptText, /libwayland-client0/);
+});
+
 test('bundled workflow is gated on exact-head Candidate 1 success', () => {
   assert.match(bundledWorkflowText, /workflow='phase5-appimage-portability-spike\.yml'/);
   assert.match(bundledWorkflowText, /select\(\.head_sha == \$sha\)/);
