@@ -80,8 +80,23 @@ docker run --rm --platform "$builder_platform" \
 
     sed -i "s/^deb /deb [snapshot=$PV_NEUTRALINO_APT_SNAPSHOT] /" /etc/apt/sources.list
     printf "Acquire::https::CaInfo \"/tmp/pv-host-ca.crt\";\n" > /etc/apt/apt.conf.d/49pv-bootstrap-ca
-    apt-get update 2>&1 | tee /tmp/pv-apt-update.log
-    grep -F "snapshot.ubuntu.com/ubuntu/$PV_NEUTRALINO_APT_SNAPSHOT" /tmp/pv-apt-update.log >/dev/null
+    apt_snapshot_ready=0
+    for attempt in 1 2 3 4; do
+      rm -rf /var/lib/apt/lists/*
+      if apt-get update 2>&1 | tee /tmp/pv-apt-update.log &&
+        grep -F "snapshot.ubuntu.com/ubuntu/$PV_NEUTRALINO_APT_SNAPSHOT" /tmp/pv-apt-update.log >/dev/null &&
+        ! grep -Eq "^(W: Failed to fetch|W: Some index files failed to download)" /tmp/pv-apt-update.log; then
+        apt_snapshot_ready=1
+        break
+      fi
+      printf "PV_NEUTRALINO_APT_RETRY attempt=%s snapshot=%s\n" "$attempt" "$PV_NEUTRALINO_APT_SNAPSHOT" >&2
+      sleep "$((attempt * 5))"
+    done
+    if (( apt_snapshot_ready != 1 )); then
+      cat /tmp/pv-apt-update.log >&2
+      echo "Pinned Ubuntu snapshot indexes did not download completely." >&2
+      exit 1
+    fi
     apt-get install -y -f ca-certificates git gcc g++ binutils pkg-config cmake ninja-build libgtk-3-dev libwebkit2gtk-4.0-dev curl xz-utils
     rm -f /etc/apt/apt.conf.d/49pv-bootstrap-ca
 
