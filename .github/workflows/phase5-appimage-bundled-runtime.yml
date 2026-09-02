@@ -221,6 +221,11 @@ jobs:
             echo 'Bundled AppImage unexpectedly contains glibc/ELF loader payload' >&2
             exit 1
           fi
+          if find "$appdir/usr/lib" \( -type f -o -type l \) -printf '%P\n' | \
+            grep -Eq '(^|/)(libEGL(\.so\.|_mesa\.so\.)|libgbm\.so\.|libGL\.so\.|libGLX[^/]*\.so\.|libGLdispatch\.so\.|libOpenGL\.so\.|libGLES[^/]*\.so\.|libdrm\.so\.|[^/]*_dri\.so)|(^|/)dri/|(^|/)egl_vendor\.d/'; then
+            echo 'Bundled AppImage unexpectedly contains host graphics driver payload' >&2
+            exit 1
+          fi
           find "$appdir/usr/lib" -name 'libwebkit2gtk-4.1.so*' -print -quit | grep -q .
           find "$appdir/usr/lib" -name 'libgtk-3.so*' -print -quit | grep -q .
           find "$appdir/usr/lib" -name 'libgstreamer-1.0.so*' -print -quit | grep -q .
@@ -304,6 +309,7 @@ jobs:
             -e PV_CANDIDATE_NAME="$candidate_name" \
             -v "$PWD:/workspace" -w /workspace "$PV_MATRIX_IMAGE" bash -lc '
               set -euo pipefail
+              graphics_packages=""
               assert_debian_absent() {
                 local package
                 for package in \
@@ -328,23 +334,31 @@ jobs:
                 debian)
                   export DEBIAN_FRONTEND=noninteractive
                   apt-get update
+                  graphics_packages="libegl1 libegl-mesa0 libgbm1 libgl1-mesa-dri"
                   apt-get install -y --no-install-recommends \
-                    xvfb openbox xdotool procps dbus-x11 python3 passwd time ca-certificates xdg-utils
+                    xvfb openbox xdotool procps dbus-x11 python3 passwd time ca-certificates xdg-utils \
+                    $graphics_packages
                   assert_debian_absent
                   ;;
                 fedora)
-                  dnf -y install xorg-x11-server-Xvfb openbox xdotool procps-ng dbus-x11 python3 shadow-utils time ca-certificates xdg-utils
+                  graphics_packages="libglvnd-egl mesa-libEGL mesa-libgbm mesa-dri-drivers"
+                  dnf -y install xorg-x11-server-Xvfb openbox xdotool procps-ng dbus-x11 python3 shadow-utils time ca-certificates xdg-utils \
+                    $graphics_packages
                   assert_rpm_absent webkit2gtk4.1 gtk3 gstreamer1 gstreamer1-plugins-base gstreamer1-plugins-good
                   ;;
                 opensuse)
                   zypper --non-interactive refresh
+                  graphics_packages="libglvnd Mesa-libEGL1 libgbm1 Mesa-dri"
                   zypper --non-interactive install --no-recommends \
-                    xorg-x11-server-Xvfb openbox xdotool procps python3 shadow time ca-certificates xdg-utils
+                    xorg-x11-server-Xvfb openbox xdotool procps python3 shadow time ca-certificates xdg-utils \
+                    $graphics_packages
                   assert_rpm_absent libwebkit2gtk-4_1-0 gtk3 libgtk-3-0 gstreamer libgstreamer-1_0-0 gstreamer-plugins-base gstreamer-plugins-good
                   ;;
                 *) echo "Unknown matrix family: $PV_MATRIX_FAMILY" >&2; exit 2 ;;
               esac
               printf "PV_APPIMAGE_HOST_APP_PACKAGES=ABSENT label=%s\n" "$PV_MATRIX_LABEL"
+              printf "PV_APPIMAGE_HOST_GRAPHICS_BASELINE=READY label=%s family=%s packages=%s\n" \
+                "$PV_MATRIX_LABEL" "$PV_MATRIX_FAMILY" "$graphics_packages"
               useradd -m pvsmoke 2>/dev/null || true
               stage=/tmp/pv-appimage-bundled-validation-stage
               tmp_result=/tmp/pv-appimage-bundled-runtime-result
@@ -354,6 +368,8 @@ jobs:
               chown -R pvsmoke:pvsmoke "$stage" "$tmp_result"
               result="/workspace/.appimage-bundled-runtime-results/${PV_MATRIX_LABEL}-bundled"
               mkdir -p "$result"
+              printf "matrix_label=%s\nfamily=%s\ngraphics_packages=%s\n" \
+                "$PV_MATRIX_LABEL" "$PV_MATRIX_FAMILY" "$graphics_packages" > "$result/host-graphics-baseline.txt"
               set +e
               runuser -u pvsmoke -- bash /workspace/scripts/run-neutralino-appimage-runtime-smoke.sh \
                 "$stage" "/workspace/.appimage-bundled-download/$PV_CANDIDATE_NAME" "$tmp_result" extract
@@ -398,13 +414,18 @@ jobs:
           sudo apt-get update
           fuse_pkg=libfuse2t64
           apt-cache show "$fuse_pkg" >/dev/null 2>&1 || fuse_pkg=libfuse2
+          graphics_packages="libegl1 libegl-mesa0 libgbm1 libgl1-mesa-dri"
           sudo apt-get install -y --no-install-recommends \
-            xvfb openbox xdotool procps dbus-x11 xdg-utils "$fuse_pkg"
+            xvfb openbox xdotool procps dbus-x11 xdg-utils "$fuse_pkg" $graphics_packages
+          printf 'PV_APPIMAGE_HOST_GRAPHICS_BASELINE=READY label=hosted-fuse family=debian packages=%s\n' \
+            "$graphics_packages"
           rm -rf .appimage-bundled-fuse-results .neutralino-production \
             .appimage-bundled-fuse-stage-extract .appimage-bundled-fuse-stage-direct
           mkdir -p .appimage-bundled-fuse-results/bundled
           candidate="$PWD/.appimage-bundled-download/$PV_APPIMAGE_BUNDLED_NAME"
           result="$PWD/.appimage-bundled-fuse-results/bundled"
+          printf 'label=hosted-fuse\nfamily=debian\ngraphics_packages=%s\n' "$graphics_packages" \
+            > "$result/host-graphics-baseline.txt"
           chmod 0755 "$candidate"
 
           tar -xzf .appimage-bundled-download/neutralino-validation-overlay.tar.gz

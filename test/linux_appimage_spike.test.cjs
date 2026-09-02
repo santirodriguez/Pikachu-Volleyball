@@ -101,18 +101,22 @@ test('bundled candidate explicitly carries the Wayland client runtime closure', 
   );
 });
 
-test('bundled candidate explicitly carries the confirmed GBM runtime closure', () => {
-  assert.match(scriptText, /libgbm\.so\.1/);
-  assert.match(scriptText, /--library "\$gbm_lib"/);
-  assert.match(scriptText, /Bundled candidate is missing libgbm\.so\.1/);
-  assert.match(scriptText, /libgbm1/);
-});
-
-test('bundled candidate explicitly carries the confirmed EGL runtime closure', () => {
-  assert.match(scriptText, /libEGL\.so\.1/);
-  assert.match(scriptText, /--library "\$egl_lib"/);
-  assert.match(scriptText, /Bundled candidate is missing libEGL\.so\.1/);
-  assert.match(scriptText, /libegl1/);
+test('bundled candidate keeps the graphics driver stack host-owned', () => {
+  assert.doesNotMatch(scriptText, /\bgbm_lib\b/);
+  assert.doesNotMatch(scriptText, /\begl_lib\b/);
+  assert.doesNotMatch(scriptText, /--library "\$(?:gbm|egl)_lib"/);
+  assert.doesNotMatch(scriptText, /libgbm1|libegl1/);
+  assert.match(
+    bundledWorkflowText,
+    /Bundled AppImage unexpectedly contains host graphics driver payload/,
+  );
+  assert.match(bundledWorkflowText, /libegl1 libegl-mesa0 libgbm1 libgl1-mesa-dri/);
+  assert.match(
+    bundledWorkflowText,
+    /libglvnd-egl mesa-libEGL mesa-libgbm mesa-dri-drivers/,
+  );
+  assert.match(bundledWorkflowText, /libglvnd Mesa-libEGL1 libgbm1 Mesa-dri/);
+  assert.match(bundledWorkflowText, /PV_APPIMAGE_HOST_GRAPHICS_BASELINE=READY/);
 });
 
 test('bundled candidate relocates WebKit release helper paths into the AppDir', () => {
@@ -165,8 +169,14 @@ test('bundled workflow proves reproducibility, core identity, clean inventory, a
   );
   assert.match(bundledWorkflowText, /PV_APPIMAGE_BUNDLED_CORE_IDENTITY/);
   assert.match(bundledWorkflowText, /Bundled AppImage unexpectedly contains glibc\/ELF loader payload/);
+  assert.match(
+    bundledWorkflowText,
+    /Bundled AppImage unexpectedly contains host graphics driver payload/,
+  );
   assert.match(bundledWorkflowText, /test ! -e "\$appdir\/usr\/bin\/xdg-open"/);
   assert.match(bundledWorkflowText, /PV_APPIMAGE_HOST_APP_PACKAGES=ABSENT/);
+  assert.match(bundledWorkflowText, /PV_APPIMAGE_HOST_GRAPHICS_BASELINE=READY/);
+  assert.match(bundledWorkflowText, /host-graphics-baseline\.txt/);
   assert.match(bundledWorkflowText, /candidate=bundled result=PASS/);
   assert.match(bundledWorkflowText, /Exercise bundled direct FUSE and extract-and-run fallback/);
 });
