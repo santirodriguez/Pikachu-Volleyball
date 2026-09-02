@@ -42,14 +42,32 @@ candidate_sha="$(sha256sum "$candidate" | awk '{print $1}')"
 case "$launch_mode" in
   extract)
     cat > "$stage/bin/neutralino-linux_x64" <<EOF
-#!/bin/sh
-exec "$candidate" --appimage-extract-and-run "\$@"
+#!/usr/bin/env bash
+set -euo pipefail
+args=()
+for arg in "\$@"; do
+  if [[ "\$arg" == '--path=.' ]]; then
+    args+=("--path=$stage")
+  else
+    args+=("\$arg")
+  fi
+done
+exec "$candidate" --appimage-extract-and-run "\${args[@]}"
 EOF
     ;;
   direct)
     cat > "$stage/bin/neutralino-linux_x64" <<EOF
-#!/bin/sh
-exec "$candidate" "\$@"
+#!/usr/bin/env bash
+set -euo pipefail
+args=()
+for arg in "\$@"; do
+  if [[ "\$arg" == '--path=.' ]]; then
+    args+=("--path=$stage")
+  else
+    args+=("\$arg")
+  fi
+done
+exec "$candidate" "\${args[@]}"
 EOF
     ;;
 esac
