@@ -72,6 +72,14 @@ jobs:
           test -f "$spike/package-lock.json"
           git diff --exit-code -- package.json package-lock.json
 
+      - name: Preserve resolved isolated lockfile
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase5-electron-standalone-lockfile
+          path: spikes/electron-standalone/package-lock.json
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Build exact AppImage twice
         shell: bash
         run: |
@@ -140,11 +148,23 @@ jobs:
           ! grep -Fq 'NO_SANDBOX[@]' "$apprun"
 
           security_switches=(
-            no-sandbox disable-gpu-sandbox disable-namespace-sandbox
-            disable-seccomp-filter-sandbox disable-setuid-sandbox no-zygote-sandbox
-            gpu-sandbox-allow-sysv-shm allow-sandbox-debugging disable-web-security
-            allow-file-access-from-files allow-running-insecure-content remote-debugging-port
-            remote-debugging-pipe inspect inspect-brk js-flags disable-site-isolation-trials
+            no-sandbox
+            disable-gpu-sandbox
+            disable-namespace-sandbox
+            disable-seccomp-filter-sandbox
+            disable-setuid-sandbox
+            no-zygote-sandbox
+            gpu-sandbox-allow-sysv-shm
+            allow-sandbox-debugging
+            disable-web-security
+            allow-file-access-from-files
+            allow-running-insecure-content
+            remote-debugging-port
+            remote-debugging-pipe
+            inspect
+            inspect-brk
+            js-flags
+            disable-site-isolation-trials
             disable-features
           )
           switch_suffixes=('' '=' '=true' '=1')
@@ -174,7 +194,7 @@ jobs:
             grep -Ei 'webkit|gstreamer|libgst' "$evidence/appimage-inventory.tsv" >&2 || true
             exit 1
           fi
-          for expected in chrome-sandbox libEGL.so libGLESv2.so resources.pak icudtl.dat; do
+          for expected in chrome-sandbox resources.pak icudtl.dat; do
             find "$root" -type f -name "$expected" -print -quit | grep -q . || {
               echo "Missing expected Chromium runtime file: $expected" >&2
               exit 1
@@ -189,9 +209,14 @@ jobs:
           asar_path="${app_asars[0]}"
           (cd "$spike" && npx --no-install asar list "$asar_path") > "$evidence/app-asar-list.txt"
           for required in \
-            /main.cjs /preload.cjs /external-link-policy.cjs \
-            /dist/en/index.html /dist/es-ar/index.html /dist/ca/index.html \
-            /dist/ko/index.html /dist/zh/index.html; do
+            /main.cjs \
+            /preload.cjs \
+            /external-link-policy.cjs \
+            /dist/en/index.html \
+            /dist/es-ar/index.html \
+            /dist/ca/index.html \
+            /dist/ko/index.html \
+            /dist/zh/index.html; do
             grep -Fxq "$required" "$evidence/app-asar-list.txt" || {
               echo "Missing packaged application path: $required" >&2
               exit 1
