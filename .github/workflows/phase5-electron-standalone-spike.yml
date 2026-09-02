@@ -270,6 +270,7 @@ jobs:
           name: phase5-electron-standalone-candidate
           path: .electron-spike-artifact/
           if-no-files-found: error
+          include-hidden-files: true
           retention-days: 14
 
   runtime-matrix:
