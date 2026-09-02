@@ -110,12 +110,17 @@ test('bundled candidate keeps the graphics driver stack host-owned', () => {
     bundledWorkflowText,
     /Bundled AppImage unexpectedly contains host graphics driver payload/,
   );
-  assert.match(bundledWorkflowText, /libegl1 libegl-mesa0 libgbm1 libgl1-mesa-dri/);
   assert.match(
     bundledWorkflowText,
-    /libglvnd-egl mesa-libEGL mesa-libgbm mesa-dri-drivers/,
+    /libegl1 libegl-mesa0 libgbm1 libgl1-mesa-dri libgles2/,
+  );
+  assert.match(
+    bundledWorkflowText,
+    /libglvnd-egl mesa-libEGL mesa-libgbm mesa-dri-drivers libglvnd-gles/,
   );
   assert.match(bundledWorkflowText, /libglvnd Mesa-libEGL1 libgbm1 Mesa-dri/);
+  assert.match(bundledWorkflowText, /libGLESv2\.so\.2/);
+  assert.match(bundledWorkflowText, /PV_APPIMAGE_HOST_GLES=READY/);
   assert.match(bundledWorkflowText, /PV_APPIMAGE_HOST_GRAPHICS_BASELINE=READY/);
 });
 
