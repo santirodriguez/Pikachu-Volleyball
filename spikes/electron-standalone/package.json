@@ -1,0 +1,56 @@
+{
+  "name": "pikachu-volleyball",
+  "version": "0.0.0-phase5-spike",
+  "private": true,
+  "description": "Isolated Phase 5 Electron standalone compatibility spike",
+  "main": "main.cjs",
+  "scripts": {
+    "test": "node --test ../../test/electron_standalone_spike.test.cjs",
+    "prepare:payload": "node prepare.cjs",
+    "patch:appimage": "node patch-appimage-launcher.cjs",
+    "build:appimage": "npm run prepare:payload && npm run patch:appimage && electron-builder --linux AppImage --publish=never"
+  },
+  "devDependencies": {
+    "electron": "44.1.1",
+    "electron-builder": "26.15.7"
+  },
+  "build": {
+    "appId": "com.santirodriguez.pikachu-volleyball",
+    "productName": "Pikachu Volleyball",
+    "artifactName": "Pikachu-Volleyball-Phase5-Standalone-x86_64.AppImage",
+    "electronVersion": "44.1.1",
+    "compression": "normal",
+    "asar": true,
+    "electronLanguages": [
+      "en-US"
+    ],
+    "npmRebuild": false,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "main.cjs",
+      "preload.cjs",
+      "external-link-policy.cjs",
+      "smoke.cjs",
+      "package.json"
+    ],
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "Game",
+      "icon": ".stage/icon.png"
+    },
+    "toolsets": {
+      "appimage": "1.0.2"
+    },
+    "appImage": {
+      "compression": "zstd",
+      "executableArgs": [
+        "--enable-sandbox"
+      ]
+    }
+  }
+}

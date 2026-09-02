@@ -1,0 +1,427 @@
+name: Phase 5 Electron Standalone Spike
+
+on:
+  push:
+    branches:
+      - v3-phase5-linux-distribution
+    paths:
+      - '.github/workflows/phase5-electron-standalone-spike.yml'
+      - 'spikes/electron-standalone/**'
+      - 'test/electron_standalone_spike.test.cjs'
+      - 'src/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'webpack*.js'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase5-electron-standalone-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PV_ELECTRON_VERSION: '44.1.1'
+  PV_ELECTRON_BUILDER_VERSION: '26.15.7'
+  PV_ELECTRON_APPIMAGE_NAME: Pikachu-Volleyball-Phase5-Standalone-x86_64.AppImage
+
+jobs:
+  build-candidate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22.12.0
+          cache: npm
+
+      - name: Install supported root toolchain
+        run: npm ci
+
+      - name: Validate supported v3 tree
+        run: npm run quality:check
+
+      - name: Validate isolated Electron spike sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --test test/electron_standalone_spike.test.cjs
+          node node_modules/eslint/bin/eslint.js 'spikes/electron-standalone/*.cjs'
+          for file in spikes/electron-standalone/*.cjs; do
+            node --check "$file"
+          done
+          bash -n spikes/electron-standalone/run-runtime-smoke.sh
+
+      - name: Resolve isolated Electron lockfile
+        shell: bash
+        run: |
+          set -euo pipefail
+          spike=spikes/electron-standalone
+          if [[ ! -f "$spike/package-lock.json" ]]; then
+            npm install --prefix "$spike" --package-lock-only --ignore-scripts --no-audit --no-fund
+            echo 'PV_ELECTRON_LOCKFILE_GENERATED=true'
+          else
+            echo 'PV_ELECTRON_LOCKFILE_GENERATED=false'
+          fi
+          test -f "$spike/package-lock.json"
+          git diff --exit-code -- package.json package-lock.json
+
+      - name: Build exact AppImage twice
+        shell: bash
+        run: |
+          set -euo pipefail
+          spike="$PWD/spikes/electron-standalone"
+          builds="$PWD/.electron-spike-builds"
+          rm -rf "$builds"
+          mkdir -p "$builds/first" "$builds/second"
+          export SOURCE_DATE_EPOCH="$(git show -s --format=%ct "$GITHUB_SHA")"
+          export TZ=UTC
+          export LC_ALL=C.UTF-8
+          export LANG=C.UTF-8
+
+          build_once() {
+            local label="$1"
+            rm -rf "$spike/node_modules" "$spike/release" "$spike/dist" "$spike/.stage"
+            npm ci --prefix "$spike" --no-audit --no-fund
+
+            electron_version="$(node -p "require('$spike/node_modules/electron/package.json').version")"
+            builder_version="$(node -p "require('$spike/node_modules/electron-builder/package.json').version")"
+            app_builder_lib_version="$(node -p "require('$spike/node_modules/app-builder-lib/package.json').version")"
+            [[ "$electron_version" == "$PV_ELECTRON_VERSION" ]]
+            [[ "$builder_version" == "$PV_ELECTRON_BUILDER_VERSION" ]]
+            [[ "$app_builder_lib_version" == "$PV_ELECTRON_BUILDER_VERSION" ]]
+
+            npm run --prefix "$spike" build:appimage
+            candidate="$spike/release/$PV_ELECTRON_APPIMAGE_NAME"
+            test -s "$candidate"
+            cp "$candidate" "$builds/$label/$PV_ELECTRON_APPIMAGE_NAME"
+            sha256sum "$builds/$label/$PV_ELECTRON_APPIMAGE_NAME" > "$builds/$label/SHA256SUMS"
+          }
+
+          build_once first
+          build_once second
+          cmp "$builds/first/$PV_ELECTRON_APPIMAGE_NAME" "$builds/second/$PV_ELECTRON_APPIMAGE_NAME"
+
+          first_sha="$(sha256sum "$builds/first/$PV_ELECTRON_APPIMAGE_NAME" | awk '{print $1}')"
+          second_sha="$(sha256sum "$builds/second/$PV_ELECTRON_APPIMAGE_NAME" | awk '{print $1}')"
+          bytes="$(stat -c%s "$builds/first/$PV_ELECTRON_APPIMAGE_NAME")"
+          printf 'PV_ELECTRON_CANDIDATE bytes=%s mib=%s sha256=%s reproducible=true second_sha256=%s\n' \
+            "$bytes" "$(awk -v b="$bytes" 'BEGIN { printf "%.2f", b/1048576 }')" "$first_sha" "$second_sha"
+
+      - name: Inspect candidate contents and launcher security
+        shell: bash
+        run: |
+          set -euo pipefail
+          spike="$PWD/spikes/electron-standalone"
+          candidate="$PWD/.electron-spike-builds/first/$PV_ELECTRON_APPIMAGE_NAME"
+          evidence="$PWD/.electron-spike-evidence"
+          rm -rf "$evidence"
+          mkdir -p "$evidence/extracted"
+          chmod 0755 "$candidate"
+
+          (
+            cd "$evidence/extracted"
+            "$candidate" --appimage-extract >/dev/null
+          )
+          root="$evidence/extracted/squashfs-root"
+          apprun="$root/AppRun"
+          test -f "$apprun"
+          bash -n "$apprun"
+
+          grep -Fq 'ERROR: security-relaxing Chromium/Electron switch is disabled by this AppImage security policy:' "$apprun"
+          grep -Fq 'ERROR: Chromium sandbox prerequisites are unavailable; refusing to launch unsandboxed.' "$apprun"
+          ! grep -Fq 'NO_SANDBOX=(--no-sandbox)' "$apprun"
+          ! grep -Fq 'NO_SANDBOX[@]' "$apprun"
+
+          security_switches=(
+            no-sandbox disable-gpu-sandbox disable-namespace-sandbox
+            disable-seccomp-filter-sandbox disable-setuid-sandbox no-zygote-sandbox
+            gpu-sandbox-allow-sysv-shm allow-sandbox-debugging disable-web-security
+            allow-file-access-from-files allow-running-insecure-content remote-debugging-port
+            remote-debugging-pipe inspect inspect-brk js-flags disable-site-isolation-trials
+            disable-features
+          )
+          switch_suffixes=('' '=' '=true' '=1')
+          for switch_name in "${security_switches[@]}"; do
+            for prefix in '--' '-'; do
+              for suffix in "${switch_suffixes[@]}"; do
+                argument="${prefix}${switch_name}${suffix}"
+                set +e
+                output="$("$apprun" "$argument" 2>&1)"
+                status=$?
+                set -e
+                [[ "$status" -eq 1 ]] || {
+                  echo "AppRun $argument returned $status instead of 1" >&2
+                  exit 1
+                }
+                [[ "$output" == "ERROR: security-relaxing Chromium/Electron switch is disabled by this AppImage security policy: $argument" ]] || {
+                  echo "Unexpected rejection output for $argument: $output" >&2
+                  exit 1
+                }
+              done
+            done
+          done
+
+          find "$root" -printf '%P\t%y\t%s\n' | sort > "$evidence/appimage-inventory.tsv"
+          if grep -Eiq 'webkit|gstreamer|libgst' "$evidence/appimage-inventory.tsv"; then
+            echo 'Electron candidate unexpectedly packages WebKitGTK/GStreamer content.' >&2
+            grep -Ei 'webkit|gstreamer|libgst' "$evidence/appimage-inventory.tsv" >&2 || true
+            exit 1
+          fi
+          for expected in chrome-sandbox libEGL.so libGLESv2.so resources.pak icudtl.dat; do
+            find "$root" -type f -name "$expected" -print -quit | grep -q . || {
+              echo "Missing expected Chromium runtime file: $expected" >&2
+              exit 1
+            }
+          done
+
+          mapfile -t app_asars < <(find "$root" -type f -name app.asar | sort)
+          [[ "${#app_asars[@]}" -eq 1 ]] || {
+            echo "Expected exactly one app.asar, found ${#app_asars[@]}" >&2
+            exit 1
+          }
+          asar_path="${app_asars[0]}"
+          (cd "$spike" && npx --no-install asar list "$asar_path") > "$evidence/app-asar-list.txt"
+          for required in \
+            /main.cjs /preload.cjs /external-link-policy.cjs \
+            /dist/en/index.html /dist/es-ar/index.html /dist/ca/index.html \
+            /dist/ko/index.html /dist/zh/index.html; do
+            grep -Fxq "$required" "$evidence/app-asar-list.txt" || {
+              echo "Missing packaged application path: $required" >&2
+              exit 1
+            }
+          done
+          if grep -Eq '^/node_modules/' "$evidence/app-asar-list.txt"; then
+            echo 'Packaged application unexpectedly contains node_modules.' >&2
+            exit 1
+          fi
+
+          mapfile -t locale_paks < <(find "$root" -type f -path '*/locales/*.pak' | sort)
+          [[ "${#locale_paks[@]}" -eq 1 ]] || {
+            echo "Expected exactly one Electron locale pak, found ${#locale_paks[@]}" >&2
+            printf '%s\n' "${locale_paks[@]}" >&2
+            exit 1
+          }
+          [[ "$(basename "${locale_paks[0]}")" == 'en-US.pak' ]]
+
+          executable="$(find "$root" -type f -name 'pikachu-volleyball' -print -quit || true)"
+          if [[ -n "$executable" ]]; then
+            ldd "$executable" > "$evidence/electron-ldd.txt" 2>&1 || true
+          else
+            echo 'Unable to identify packaged Electron executable for ldd evidence.' > "$evidence/electron-ldd.txt"
+          fi
+
+          cp "$apprun" "$evidence/AppRun"
+          bytes="$(stat -c%s "$candidate")"
+          sha="$(sha256sum "$candidate" | awk '{print $1}')"
+          second_sha="$(sha256sum "$PWD/.electron-spike-builds/second/$PV_ELECTRON_APPIMAGE_NAME" | awk '{print $1}')"
+          runtime_offset="$("$candidate" --appimage-offset)"
+          printf 'bytes=%s\nsha256=%s\nsecond_sha256=%s\nreproducible=true\nruntime_offset=%s\nelectron=%s\nelectron_builder=%s\napp_builder_lib=%s\n' \
+            "$bytes" "$sha" "$second_sha" "$runtime_offset" \
+            "$PV_ELECTRON_VERSION" "$PV_ELECTRON_BUILDER_VERSION" "$PV_ELECTRON_BUILDER_VERSION" \
+            > "$evidence/summary.txt"
+          printf 'PV_ELECTRON_PACKAGE_CONTENTS=PASS\n'
+
+      - name: Prepare candidate artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$PWD/.electron-spike-artifact"
+          rm -rf "$out"
+          mkdir -p "$out/evidence"
+          cp "$PWD/.electron-spike-builds/first/$PV_ELECTRON_APPIMAGE_NAME" "$out/$PV_ELECTRON_APPIMAGE_NAME"
+          cp spikes/electron-standalone/package-lock.json "$out/package-lock.json"
+          cp -a .electron-spike-evidence/. "$out/evidence/"
+          sha256sum "$out/$PV_ELECTRON_APPIMAGE_NAME" > "$out/SHA256SUMS"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phase5-electron-standalone-candidate
+          path: .electron-spike-artifact/
+          if-no-files-found: error
+          retention-days: 14
+
+  runtime-matrix:
+    needs: build-candidate
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: debian-12
+            family: debian
+            image: debian:bookworm-20260824-slim@sha256:88200866dfff7ea7f5cbcb6ec7c8a701889efe6fe859fe64d6990e4b07ea4171
+          - label: ubuntu-22.04
+            family: debian
+            image: ubuntu:jammy-20260810@sha256:79676deb51ebb02885b0b9d33788e78a37cf1045ad79d1bb04c6a222c3556b3d
+          - label: ubuntu-24.04
+            family: debian
+            image: ubuntu:noble-20260810@sha256:1e0a86e57d247923571b75e0aaf48a1449cf8c543d51fb3e07a4a7d7bfa79316
+          - label: fedora-44
+            family: fedora
+            image: fedora:44@sha256:be9d65e2344d805cc11114319c685ecaa96b6d9b4350a0a6460cdb931babbd19
+          - label: opensuse-leap-16.0
+            family: opensuse
+            image: opensuse/leap:16.0@sha256:77732aa024f765ecdb4067affdea9e386d68056d0d281608ce4665d8fb0b4edd
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+
+      - uses: actions/download-artifact@v5
+        with:
+          name: phase5-electron-standalone-candidate
+          path: .electron-spike-download
+
+      - name: Validate extract-and-run on clean distro image
+        shell: bash
+        env:
+          PV_MATRIX_IMAGE: ${{ matrix.image }}
+          PV_MATRIX_FAMILY: ${{ matrix.family }}
+          PV_MATRIX_LABEL: ${{ matrix.label }}
+        run: |
+          set -euo pipefail
+          rm -rf ".electron-runtime-${PV_MATRIX_LABEL}"
+          mkdir -p ".electron-runtime-${PV_MATRIX_LABEL}"
+          docker run --rm --platform linux/amd64 --shm-size=1g --security-opt seccomp=unconfined \
+            -e PV_MATRIX_FAMILY="$PV_MATRIX_FAMILY" \
+            -e PV_MATRIX_LABEL="$PV_MATRIX_LABEL" \
+            -e PV_ELECTRON_APPIMAGE_NAME="$PV_ELECTRON_APPIMAGE_NAME" \
+            -v "$PWD:/workspace" -w /workspace \
+            "$PV_MATRIX_IMAGE" bash -lc '
+              set -euo pipefail
+              case "$PV_MATRIX_FAMILY" in
+                debian)
+                  export DEBIAN_FRONTEND=noninteractive
+                  apt-get update
+                  alsa_pkg=libasound2
+                  cups_pkg=libcups2
+                  gtk_pkg=libgtk-3-0
+                  atspi_pkg=libatspi2.0-0
+                  atkbridge_pkg=libatk-bridge2.0-0
+                  apt-cache show libasound2t64 >/dev/null 2>&1 && alsa_pkg=libasound2t64 || true
+                  apt-cache show libcups2t64 >/dev/null 2>&1 && cups_pkg=libcups2t64 || true
+                  apt-cache show libgtk-3-0t64 >/dev/null 2>&1 && gtk_pkg=libgtk-3-0t64 || true
+                  apt-cache show libatspi2.0-0t64 >/dev/null 2>&1 && atspi_pkg=libatspi2.0-0t64 || true
+                  apt-cache show libatk-bridge2.0-0t64 >/dev/null 2>&1 && atkbridge_pkg=libatk-bridge2.0-0t64 || true
+                  apt-get install -y --no-install-recommends \
+                    ca-certificates dbus-x11 openbox passwd procps python3 time util-linux xdg-utils xdotool xvfb \
+                    gtk-update-icon-cache "$gtk_pkg" libnss3 "$alsa_pkg" libxss1 libgbm1 libdrm2 libxkbcommon0 \
+                    "$atkbridge_pkg" "$atspi_pkg" "$cups_pkg" libxcomposite1 libxdamage1 libxfixes3 \
+                    libxrandr2 libpango-1.0-0 libcairo2 libnotify4 libsecret-1-0
+                  dpkg-query -W -f="\${Package}\t\${Version}\n" | sort > "/workspace/.electron-runtime-$PV_MATRIX_LABEL/installed-packages.txt"
+                  ;;
+                fedora)
+                  dnf -y install \
+                    ca-certificates dbus-x11 openbox procps-ng python3 shadow-utils time util-linux xdg-utils xdotool xorg-x11-server-Xvfb \
+                    gtk3 nss alsa-lib libXScrnSaver mesa-libgbm libdrm libxkbcommon at-spi2-core cups-libs \
+                    libXcomposite libXdamage libXfixes libXrandr pango cairo libnotify libsecret
+                  rpm -qa --qf "%{NAME}\t%{VERSION}-%{RELEASE}\n" | sort > "/workspace/.electron-runtime-$PV_MATRIX_LABEL/installed-packages.txt"
+                  ;;
+                opensuse)
+                  zypper --non-interactive refresh
+                  zypper --non-interactive install --no-recommends \
+                    ca-certificates dbus-1 openbox procps python3 shadow time util-linux xdg-utils xdotool xorg-x11-server-Xvfb \
+                    gtk3 mozilla-nss libasound2 libXss1 Mesa-libgbm1 libdrm2 libxkbcommon0 at-spi2-core libcups2 \
+                    libXcomposite1 libXdamage1 libXfixes3 libXrandr2 pango libcairo2 libnotify4 libsecret-1-0
+                  rpm -qa --qf "%{NAME}\t%{VERSION}-%{RELEASE}\n" | sort > "/workspace/.electron-runtime-$PV_MATRIX_LABEL/installed-packages.txt"
+                  ;;
+                *)
+                  echo "Unknown matrix family: $PV_MATRIX_FAMILY" >&2
+                  exit 2
+                  ;;
+              esac
+
+              if grep -Eiq "webkit|gstreamer" "/workspace/.electron-runtime-$PV_MATRIX_LABEL/installed-packages.txt"; then
+                echo "WebKitGTK/GStreamer unexpectedly present in Electron matrix environment." >&2
+                grep -Ei "webkit|gstreamer" "/workspace/.electron-runtime-$PV_MATRIX_LABEL/installed-packages.txt" >&2 || true
+                exit 1
+              fi
+
+              useradd -m pvsmoke 2>/dev/null || true
+              stage="/tmp/pv-electron-$PV_MATRIX_LABEL"
+              rm -rf "$stage"
+              mkdir -p "$stage"
+              cp "/workspace/.electron-spike-download/$PV_ELECTRON_APPIMAGE_NAME" "$stage/$PV_ELECTRON_APPIMAGE_NAME"
+              cp /workspace/spikes/electron-standalone/run-runtime-smoke.sh "$stage/run-runtime-smoke.sh"
+              chmod 0755 "$stage/$PV_ELECTRON_APPIMAGE_NAME" "$stage/run-runtime-smoke.sh"
+              chown -R pvsmoke:pvsmoke "$stage"
+              runuser -u pvsmoke -- unshare -Ur true
+              runuser -u pvsmoke -- dbus-run-session -- \
+                bash "$stage/run-runtime-smoke.sh" "$stage/$PV_ELECTRON_APPIMAGE_NAME" "$stage/results" extract
+              cp -a "$stage/results/." "/workspace/.electron-runtime-$PV_MATRIX_LABEL/"
+              chown -R "$(stat -c %u /workspace):$(stat -c %g /workspace)" "/workspace/.electron-runtime-$PV_MATRIX_LABEL" || true
+            '
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: electron-runtime-${{ matrix.label }}
+          path: .electron-runtime-${{ matrix.label }}/
+          if-no-files-found: warn
+          include-hidden-files: true
+          retention-days: 14
+
+  hosted-direct-fuse:
+    needs: build-candidate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+
+      - uses: actions/download-artifact@v5
+        with:
+          name: phase5-electron-standalone-candidate
+          path: .electron-spike-download
+
+      - name: Install direct-FUSE validation dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          fuse_pkg=libfuse2
+          alsa_pkg=libasound2
+          cups_pkg=libcups2
+          gtk_pkg=libgtk-3-0
+          atspi_pkg=libatspi2.0-0
+          atkbridge_pkg=libatk-bridge2.0-0
+          apt-cache show libfuse2t64 >/dev/null 2>&1 && fuse_pkg=libfuse2t64 || true
+          apt-cache show libasound2t64 >/dev/null 2>&1 && alsa_pkg=libasound2t64 || true
+          apt-cache show libcups2t64 >/dev/null 2>&1 && cups_pkg=libcups2t64 || true
+          apt-cache show libgtk-3-0t64 >/dev/null 2>&1 && gtk_pkg=libgtk-3-0t64 || true
+          apt-cache show libatspi2.0-0t64 >/dev/null 2>&1 && atspi_pkg=libatspi2.0-0t64 || true
+          apt-cache show libatk-bridge2.0-0t64 >/dev/null 2>&1 && atkbridge_pkg=libatk-bridge2.0-0t64 || true
+          sudo apt-get install -y --no-install-recommends \
+            "$fuse_pkg" dbus-x11 openbox xdg-utils xdotool xvfb \
+            "$gtk_pkg" libnss3 "$alsa_pkg" libxss1 libgbm1 libdrm2 libxkbcommon0 \
+            "$atkbridge_pkg" "$atspi_pkg" "$cups_pkg" libxcomposite1 libxdamage1 libxfixes3 \
+            libxrandr2 libpango-1.0-0 libcairo2 libnotify4 libsecret-1-0
+          unshare -Ur true
+
+      - name: Validate hosted direct-FUSE execution
+        shell: bash
+        run: |
+          set -euo pipefail
+          candidate="$PWD/.electron-spike-download/$PV_ELECTRON_APPIMAGE_NAME"
+          result="$PWD/.electron-direct-fuse"
+          rm -rf "$result"
+          mkdir -p "$result"
+          dbus-run-session -- bash spikes/electron-standalone/run-runtime-smoke.sh "$candidate" "$result" direct
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: electron-hosted-direct-fuse
+          path: .electron-direct-fuse/
+          if-no-files-found: warn
+          include-hidden-files: true
+          retention-days: 14

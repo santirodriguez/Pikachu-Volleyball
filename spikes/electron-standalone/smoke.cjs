@@ -121,7 +121,12 @@ async function runRead(mainWindow, app) {
           );
         }, 2000);
         const after = readSettingState(name, storageKey);
-        return { ok: changed, before: before.value, value: after.value, stored: after.stored };
+        return {
+          ok: changed,
+          before: before.value,
+          value: after.value,
+          stored: after.stored,
+        };
       };
       const probePauseAndSettings = async () => {
         const pauseStates = [];
@@ -208,7 +213,9 @@ async function runRead(mainWindow, app) {
           };
           audio.preload = 'metadata';
           audio.muted = true;
-          audio.addEventListener('loadedmetadata', () => complete(true), { once: true });
+          audio.addEventListener('loadedmetadata', () => complete(true), {
+            once: true,
+          });
           audio.addEventListener('error', () => complete(false), { once: true });
           audio.src = src;
           audio.load();
@@ -235,15 +242,23 @@ async function runRead(mainWindow, app) {
         window.pvDesktop?.isDesktop === true &&
           window.pvDesktop?.runtime === 'electron' &&
           typeof window.pvDesktop?.quit === 'function' &&
-          JSON.stringify(bridgeKeys) === JSON.stringify(['isDesktop', 'quit', 'runtime'])
+          JSON.stringify(bridgeKeys) ===
+            JSON.stringify(['isDesktop', 'quit', 'runtime'])
       );
       const rendererAuthorityOk =
-        typeof window.require === 'undefined' && typeof window.process === 'undefined';
+        typeof window.require === 'undefined' &&
+        typeof window.process === 'undefined';
       const persistenceOk = localStorage.getItem(persistenceKey) === persistenceValue;
       const pauseAndSettings = await probePauseAndSettings();
       const restart = await probeRestart();
-      const bgm = await probeMedia('../resources/assets/sounds/bgm.mp3', 'audio/mpeg');
-      const wav = await probeMedia('../resources/assets/sounds/WAVE145_1.wav', 'audio/wav');
+      const bgm = await probeMedia(
+        '../resources/assets/sounds/bgm.mp3',
+        'audio/mpeg'
+      );
+      const wav = await probeMedia(
+        '../resources/assets/sounds/WAVE145_1.wav',
+        'audio/wav'
+      );
 
       return {
         phase: 'read',
@@ -258,7 +273,11 @@ async function runRead(mainWindow, app) {
           bgm.loaded &&
           wav.loaded,
         firstFrameReady,
-        canvas: { ok: canvasOk, width: canvas?.width || null, height: canvas?.height || null },
+        canvas: {
+          ok: canvasOk,
+          width: canvas?.width || null,
+          height: canvas?.height || null,
+        },
         bridgeOk,
         bridgeKeys,
         rendererAuthorityOk,
@@ -301,15 +320,14 @@ async function runKeyboard(mainWindow, app) {
     window.addEventListener('keyup', (event) => update(event, false), true);
   });
 
-  const codes = ['KeyD', 'KeyR', 'ArrowRight', 'ArrowUp'];
-  for (const code of codes) {
-    mainWindow.webContents.sendInputEvent({ type: 'keyDown', keyCode: code });
+  console.error(`PV_ELECTRON_KEYBOARD_READY firstFrameReady=${firstFrameReady}`);
+  if (!firstFrameReady) {
+    finish(app, { phase: 'keyboard', ok: false, firstFrameReady });
+    return;
   }
-  await delay(150);
-  for (const code of [...codes].reverse()) {
-    mainWindow.webContents.sendInputEvent({ type: 'keyUp', keyCode: code });
-  }
-  await delay(200);
+
+  await delay(4500);
+  const expectedCodes = ['KeyD', 'KeyR', 'ArrowRight', 'ArrowUp'];
   const probe = await executeFunction(mainWindow.webContents, () => ({
     ...window.__pvElectronKeyboardProbe,
     bridgeRuntime: window.pvDesktop?.runtime || null,
@@ -318,14 +336,13 @@ async function runKeyboard(mainWindow, app) {
   finish(app, {
     phase: 'keyboard',
     ok:
-      firstFrameReady &&
-      codes.every((code) => seen.has(code)) &&
-      probe.trustedEvents >= codes.length * 2 &&
-      probe.maxSimultaneous >= codes.length &&
+      expectedCodes.every((code) => seen.has(code)) &&
+      probe.trustedEvents >= expectedCodes.length * 2 &&
+      probe.maxSimultaneous >= expectedCodes.length &&
       (probe.down || []).length === 0 &&
       probe.bridgeRuntime === 'electron',
     firstFrameReady,
-    expectedCodes: codes,
+    expectedCodes,
     ...probe,
   });
 }
