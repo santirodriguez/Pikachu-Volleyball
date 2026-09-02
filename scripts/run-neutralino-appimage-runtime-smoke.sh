@@ -111,10 +111,18 @@ run_stage() {
 production_output_dir="$result_dir/production-window-details"
 mkdir -p "$production_output_dir"
 production_runtime_env=()
+gameplay_runtime_env=()
 if [[ "$(basename "$candidate")" == *bundled-runtime* ]]; then
   production_runtime_env=(
     LD_DEBUG=libs
     LD_DEBUG_OUTPUT="$production_output_dir/loader"
+  )
+  gameplay_runtime_env=(
+    GST_DEBUG_NO_COLOR=1
+    GST_DEBUG='2,typefind:6,decodebin*:6,playbin*:6,mpg123*:6,id3demux:6'
+    LIBGL_DEBUG=verbose
+    EGL_LOG_LEVEL=debug
+    MESA_DEBUG=1
   )
 fi
 set +e
@@ -126,7 +134,8 @@ if [[ "$production_status" -ne 0 ]]; then
   exit "$production_status"
 fi
 rm -f "$production_launcher"
-run_stage gameplay-input-audio-quit "$root/scripts/run-neutralino-fedora-smoke.sh" "$stage"
+run_stage gameplay-input-audio-quit env "${gameplay_runtime_env[@]}" \
+  "$root/scripts/run-neutralino-fedora-smoke.sh" "$stage"
 run_stage external-link "$root/scripts/run-neutralino-external-link-smoke.sh" "$stage"
 run_stage host-navigation bash "$root/scripts/run-neutralino-host-navigation-smoke.sh" "$stage"
 printf 'PV_APPIMAGE_RUNTIME_RESULT=PASS\n' | tee "$result_dir/result.txt"

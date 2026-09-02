@@ -248,16 +248,18 @@ build_bundled() {
   command -v dpkg-query >/dev/null
   command -v pkg-config >/dev/null
   command -v python3 >/dev/null
-  local appdir="$work/bundled.AppDir" webkit_lib wayland_client_lib webkit_process_dir scanner plugin
+  local appdir="$work/bundled.AppDir" webkit_lib wayland_client_lib com_err_lib webkit_process_dir scanner plugin required_plugin
   mkdir -p "$appdir/usr/bin" "$appdir/usr/lib/gstreamer-1.0" "$appdir/usr/libexec/gstreamer-1.0"
   webkit_lib="$(ldconfig -p | awk '/libwebkit2gtk-4.1.so.0/ && !found {value=$NF; found=1} END {if (found) print value}')"
   [[ -f "$webkit_lib" ]] || { echo "Bundled candidate builder is missing WebKitGTK 4.1" >&2; exit 1; }
   wayland_client_lib="$(ldconfig -p | awk '/libwayland-client.so.0/ && !found {value=$NF; found=1} END {if (found) print value}')"
   [[ -f "$wayland_client_lib" ]] || { echo "Bundled candidate builder is missing Wayland client runtime" >&2; exit 1; }
+  com_err_lib="$(ldconfig -p | awk '/libcom_err.so.2/ && !found {value=$NF; found=1} END {if (found) print value}')"
+  [[ -f "$com_err_lib" ]] || { echo "Bundled candidate builder is missing libcom_err.so.2" >&2; exit 1; }
   webkit_process_dir="$(dirname "$(dpkg-query -L libwebkit2gtk-4.1-0 | grep '/WebKitWebProcess$' | head -n1)")"
   [[ -d "$webkit_process_dir" ]] || { echo "Unable to locate WebKitGTK helper processes" >&2; exit 1; }
 
-  local -a deploy_args=(--appdir "$appdir" --library "$webkit_lib" --library "$wayland_client_lib")
+  local -a deploy_args=(--appdir "$appdir" --library "$webkit_lib" --library "$wayland_client_lib" --library "$com_err_lib")
   for process in WebKitWebProcess WebKitNetworkProcess WebKitGPUProcess; do
     [[ -x "$webkit_process_dir/$process" ]] && deploy_args+=(--executable "$webkit_process_dir/$process")
   done
@@ -269,7 +271,7 @@ build_bundled() {
   local -a gst_plugins=(
     libgstcoreelements.so libgstplayback.so libgsttypefindfunctions.so
     libgstaudioconvert.so libgstaudioresample.so libgstvolume.so
-    libgstaudioparsers.so libgstmpg123.so libgstwavparse.so libgstautodetect.so
+    libgstaudioparsers.so libgstid3demux.so libgstmpg123.so libgstwavparse.so libgstautodetect.so
     libgstpulse.so
   )
   for plugin in "${gst_plugins[@]}"; do
@@ -288,11 +290,19 @@ build_bundled() {
   cp -a "$webkit_process_dir/." "$appdir/usr/lib/webkit2gtk-4.1/"
   cp -L --remove-destination "$wayland_client_lib" "$appdir/usr/lib/libwayland-client.so.0"
   [[ -f "$appdir/usr/lib/libwayland-client.so.0" ]] || { echo "Bundled candidate is missing libwayland-client.so.0" >&2; exit 1; }
+  cp -L --remove-destination "$com_err_lib" "$appdir/usr/lib/libcom_err.so.2"
+  [[ -f "$appdir/usr/lib/libcom_err.so.2" ]] || { echo "Bundled candidate is missing libcom_err.so.2" >&2; exit 1; }
   for plugin in "${gst_plugins[@]}"; do
     if [[ -f "$gst_dir/$plugin" ]]; then
       cp -a "$gst_dir/$plugin" "$appdir/usr/lib/gstreamer-1.0/$plugin"
       rm -f "$appdir/usr/lib/$plugin"
     fi
+  done
+  for required_plugin in libgstid3demux.so libgstmpg123.so libgstwavparse.so; do
+    [[ -f "$appdir/usr/lib/gstreamer-1.0/$required_plugin" ]] || {
+      echo "Bundled candidate is missing required GStreamer plugin: $required_plugin" >&2
+      exit 1
+    }
   done
   if [[ -x "$scanner" ]]; then
     cp -a "$scanner" "$appdir/usr/libexec/gstreamer-1.0/gst-plugin-scanner"
@@ -313,7 +323,7 @@ build_bundled() {
   du -sb "$appdir/usr/bin" "$appdir/usr/lib" "$appdir/usr/share" "$appdir/apprun-hooks" 2>/dev/null \
     | sort -n > "$evidence_dir/bundled-appdir-category-bytes.txt" || true
   dpkg-query -W -f='${Package}\t${Version}\t${Architecture}\n' \
-    libwebkit2gtk-4.1-0 libjavascriptcoregtk-4.1-0 libgtk-3-0 libglib2.0-0 libwayland-client0 \
+    libwebkit2gtk-4.1-0 libjavascriptcoregtk-4.1-0 libgtk-3-0 libglib2.0-0 libwayland-client0 libcom-err2 \
     libgstreamer1.0-0 gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-pulseaudio \
     > "$evidence_dir/bundled-package-versions.txt"
 }
