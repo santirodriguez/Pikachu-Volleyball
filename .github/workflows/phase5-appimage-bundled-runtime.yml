@@ -334,14 +334,14 @@ jobs:
                 debian)
                   export DEBIAN_FRONTEND=noninteractive
                   apt-get update
-                  graphics_packages="libegl1 libegl-mesa0 libgbm1 libgl1-mesa-dri"
+                  graphics_packages="libegl1 libegl-mesa0 libgbm1 libgl1-mesa-dri libgles2"
                   apt-get install -y --no-install-recommends \
                     xvfb openbox xdotool procps dbus-x11 python3 passwd time ca-certificates xdg-utils \
                     $graphics_packages
                   assert_debian_absent
                   ;;
                 fedora)
-                  graphics_packages="libglvnd-egl mesa-libEGL mesa-libgbm mesa-dri-drivers"
+                  graphics_packages="libglvnd-egl mesa-libEGL mesa-libgbm mesa-dri-drivers libglvnd-gles"
                   dnf -y install xorg-x11-server-Xvfb openbox xdotool procps-ng dbus-x11 python3 shadow-utils time ca-certificates xdg-utils \
                     $graphics_packages
                   assert_rpm_absent webkit2gtk4.1 gtk3 gstreamer1 gstreamer1-plugins-base gstreamer1-plugins-good
@@ -357,6 +357,11 @@ jobs:
                 *) echo "Unknown matrix family: $PV_MATRIX_FAMILY" >&2; exit 2 ;;
               esac
               printf "PV_APPIMAGE_HOST_APP_PACKAGES=ABSENT label=%s\n" "$PV_MATRIX_LABEL"
+              if ! ldconfig -p 2>/dev/null | grep -F 'libGLESv2.so.2' >/dev/null; then
+                echo "Host graphics baseline is missing libGLESv2.so.2: label=$PV_MATRIX_LABEL family=$PV_MATRIX_FAMILY" >&2
+                exit 1
+              fi
+              printf "PV_APPIMAGE_HOST_GLES=READY label=%s family=%s\n" "$PV_MATRIX_LABEL" "$PV_MATRIX_FAMILY"
               printf "PV_APPIMAGE_HOST_GRAPHICS_BASELINE=READY label=%s family=%s packages=%s\n" \
                 "$PV_MATRIX_LABEL" "$PV_MATRIX_FAMILY" "$graphics_packages"
               useradd -m pvsmoke 2>/dev/null || true
@@ -414,9 +419,14 @@ jobs:
           sudo apt-get update
           fuse_pkg=libfuse2t64
           apt-cache show "$fuse_pkg" >/dev/null 2>&1 || fuse_pkg=libfuse2
-          graphics_packages="libegl1 libegl-mesa0 libgbm1 libgl1-mesa-dri"
+          graphics_packages="libegl1 libegl-mesa0 libgbm1 libgl1-mesa-dri libgles2"
           sudo apt-get install -y --no-install-recommends \
             xvfb openbox xdotool procps dbus-x11 xdg-utils "$fuse_pkg" $graphics_packages
+          if ! ldconfig -p 2>/dev/null | grep -F 'libGLESv2.so.2' >/dev/null; then
+            echo 'Hosted FUSE graphics baseline is missing libGLESv2.so.2' >&2
+            exit 1
+          fi
+          printf 'PV_APPIMAGE_HOST_GLES=READY label=hosted-fuse family=debian\n'
           printf 'PV_APPIMAGE_HOST_GRAPHICS_BASELINE=READY label=hosted-fuse family=debian packages=%s\n' \
             "$graphics_packages"
           rm -rf .appimage-bundled-fuse-results .neutralino-production \
