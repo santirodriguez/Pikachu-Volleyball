@@ -2,10 +2,15 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createReferenceTraces } = require('../scripts/capture-v3-reference-traces.cjs');
+const crypto = require('node:crypto');
+const {
+  createReferenceTraces,
+} = require('../scripts/capture-v3-reference-traces.cjs');
 
 test('captures deterministic Phase 4 reference traces from the accepted controller', () => {
   const traces = createReferenceTraces();
+  const serialized = JSON.stringify(traces);
+  const traceHash = crypto.createHash('sha256').update(serialized).digest('hex');
 
   assert.equal(traces.schemaVersion, 1);
   assert.equal(
@@ -34,5 +39,5 @@ test('captures deterministic Phase 4 reference traces from the accepted controll
     ['score-right', 'slow-motion-fifth-tick', 'winning-score']
   );
 
-  process.stdout.write(`V3_REFERENCE_TRACES=${JSON.stringify(traces)}\n`);
+  process.stdout.write(`V3_REFERENCE_TRACE_SHA256=${traceHash}\n`);
 });
