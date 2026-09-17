@@ -69,6 +69,15 @@ jobs:
       - name: Run baseline quality checks
         run: npm run quality:check
 
+      - name: Freeze baseline web output
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -d dist
+          find dist -type f -print0 | sort -z | xargs -0 sha256sum > "$RUNNER_TEMP/pv-phase2-dist.sha256"
+          test -s "$RUNNER_TEMP/pv-phase2-dist.sha256"
+          echo "Frozen $(wc -l < "$RUNNER_TEMP/pv-phase2-dist.sha256") web output files before Electron overlay."
+
       - name: Overlay supported Electron candidate without changing package metadata
         shell: bash
         run: |
@@ -93,6 +102,7 @@ jobs:
           }
 
           git diff --exit-code -- package.json package-lock.json
+          sha256sum -c "$RUNNER_TEMP/pv-phase2-dist.sha256"
 
           {
             echo "## Phase 2 candidate toolchain"
@@ -101,6 +111,7 @@ jobs:
             echo "- electron-builder: \`$builder_version\`"
             echo "- app-builder-lib: \`$app_builder_lib_version\`"
             echo "- Package metadata modified: \`no\`"
+            echo "- Baseline web output modified by overlay: \`no\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Build candidate AppImage with existing packaging policy
@@ -108,12 +119,13 @@ jobs:
         run: |
           set -euo pipefail
           rm -rf release
-          npm run build:web
+          sha256sum -c "$RUNNER_TEMP/pv-phase2-dist.sha256"
           node scripts/patch-appimage-launcher.cjs
           npx --no-install electron-builder \
             --linux AppImage \
             --publish=never \
             --config.electronVersion="$PV_ELECTRON_VERSION"
+          sha256sum -c "$RUNNER_TEMP/pv-phase2-dist.sha256"
 
       - name: Inspect candidate package and AppImage policy
         shell: bash
@@ -284,7 +296,7 @@ jobs:
         uses: actions/download-artifact@v5
         with:
           name: phase2-electron-candidate
-          path: .phase2-candidate
+          path: phase2-candidate
 
       - name: Validate candidate runtime contract
         shell: bash
@@ -294,7 +306,7 @@ jobs:
           PV_MATRIX_LABEL: ${{ matrix.label }}
         run: |
           set -euo pipefail
-          result="$PWD/.phase2-runtime-$PV_MATRIX_LABEL"
+          result="$PWD/phase2-runtime-$PV_MATRIX_LABEL"
           rm -rf "$result"
           mkdir -p "$result"
 
@@ -324,22 +336,22 @@ jobs:
                     "$gtk_pkg" libnss3 "$alsa_pkg" libxss1 libgbm1 libdrm2 libxkbcommon0 \
                     "$atkbridge_pkg" "$atspi_pkg" "$cups_pkg" libxcomposite1 libxdamage1 libxfixes3 \
                     libxrandr2 libpango-1.0-0 libcairo2
-                  dpkg-query -W -f="\${Package}\t\${Version}\n" | sort > "/workspace/.phase2-runtime-$PV_MATRIX_LABEL/installed-packages.txt"
+                  dpkg-query -W -f="\${Package}\t\${Version}\n" | sort > "/workspace/phase2-runtime-$PV_MATRIX_LABEL/installed-packages.txt"
                   ;;
                 fedora)
                   dnf -y install \
                     ca-certificates dbus-x11 procps-ng shadow-utils util-linux xauth xorg-x11-server-Xvfb \
                     gtk3 nss alsa-lib libXScrnSaver mesa-libgbm libdrm libxkbcommon at-spi2-core cups-libs \
                     libXcomposite libXdamage libXfixes libXrandr pango cairo
-                  rpm -qa --qf "%{NAME}\t%{VERSION}-%{RELEASE}\n" | sort > "/workspace/.phase2-runtime-$PV_MATRIX_LABEL/installed-packages.txt"
+                  rpm -qa --qf "%{NAME}\t%{VERSION}-%{RELEASE}\n" | sort > "/workspace/phase2-runtime-$PV_MATRIX_LABEL/installed-packages.txt"
                   ;;
                 opensuse)
                   zypper --non-interactive refresh
                   zypper --non-interactive install --no-recommends \
                     ca-certificates dbus-1 procps shadow util-linux xauth xorg-x11-server-Xvfb \
-                    gtk3 mozilla-nss libasound2 libXss1 Mesa-libgbm1 libdrm2 libxkbcommon0 at-spi2-core libcups2 \
+                    gtk3 mozilla-nss libasound2 libXss1 libgbm1 libdrm2 libxkbcommon0 at-spi2-core libcups2 \
                     libXcomposite1 libXdamage1 libXfixes3 libXrandr2 pango libcairo2
-                  rpm -qa --qf "%{NAME}\t%{VERSION}-%{RELEASE}\n" | sort > "/workspace/.phase2-runtime-$PV_MATRIX_LABEL/installed-packages.txt"
+                  rpm -qa --qf "%{NAME}\t%{VERSION}-%{RELEASE}\n" | sort > "/workspace/phase2-runtime-$PV_MATRIX_LABEL/installed-packages.txt"
                   ;;
                 *)
                   echo "Unknown matrix family: $PV_MATRIX_FAMILY" >&2
@@ -348,12 +360,12 @@ jobs:
               esac
 
               if unshare -Ur true >/dev/null 2>&1; then
-                echo "user_namespaces=available" > "/workspace/.phase2-runtime-$PV_MATRIX_LABEL/host-capabilities.txt"
+                echo "user_namespaces=available" > "/workspace/phase2-runtime-$PV_MATRIX_LABEL/host-capabilities.txt"
               else
-                echo "user_namespaces=unavailable" > "/workspace/.phase2-runtime-$PV_MATRIX_LABEL/host-capabilities.txt"
+                echo "user_namespaces=unavailable" > "/workspace/phase2-runtime-$PV_MATRIX_LABEL/host-capabilities.txt"
               fi
 
-              candidate="$(find /workspace/.phase2-candidate -maxdepth 1 -type f -name "*.AppImage" -print -quit)"
+              candidate="$(find /workspace/phase2-candidate -maxdepth 1 -type f -name "*.AppImage" -print -quit)"
               test -s "$candidate"
               chmod 0755 "$candidate"
 
@@ -393,8 +405,8 @@ jobs:
                 "$executable" --enable-sandbox
 
               test -s "$stage/results/startup-metrics.json"
-              cp -a "$stage/results/." "/workspace/.phase2-runtime-$PV_MATRIX_LABEL/"
-              chown -R "$(stat -c %u /workspace):$(stat -c %g /workspace)" "/workspace/.phase2-runtime-$PV_MATRIX_LABEL" || true
+              cp -a "$stage/results/." "/workspace/phase2-runtime-$PV_MATRIX_LABEL/"
+              chown -R "$(stat -c %u /workspace):$(stat -c %g /workspace)" "/workspace/phase2-runtime-$PV_MATRIX_LABEL" || true
             '
 
       - name: Upload runtime evidence
@@ -402,7 +414,7 @@ jobs:
         if: always()
         with:
           name: phase2-runtime-${{ matrix.label }}
-          path: .phase2-runtime-${{ matrix.label }}/
+          path: phase2-runtime-${{ matrix.label }}/
           if-no-files-found: warn
           retention-days: 14
 
@@ -416,20 +428,20 @@ jobs:
         uses: actions/download-artifact@v5
         with:
           name: phase2-electron-candidate
-          path: .phase2-candidate
+          path: phase2-candidate
 
       - name: Probe direct AppImage execution without turning host limits into product failures
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p .phase2-direct
-          candidate="$(find .phase2-candidate -maxdepth 1 -type f -name '*.AppImage' -print -quit)"
+          mkdir -p phase2-direct
+          candidate="$(find phase2-candidate -maxdepth 1 -type f -name '*.AppImage' -print -quit)"
           test -s "$candidate"
           chmod 0755 "$candidate"
 
           if ! unshare -Ur true >/dev/null 2>&1; then
-            echo 'status=skipped' > .phase2-direct/result.txt
-            echo 'reason=hosted runner does not provide the unprivileged user namespace capability required by the fail-closed AppRun policy' >> .phase2-direct/result.txt
+            echo 'status=skipped' > phase2-direct/result.txt
+            echo 'reason=hosted runner does not provide the unprivileged user namespace capability required by the fail-closed AppRun policy' >> phase2-direct/result.txt
             echo 'Direct AppImage smoke skipped because the hosted runner lacks the required user-namespace capability.' >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
@@ -439,21 +451,21 @@ jobs:
           apt-cache show libfuse2t64 >/dev/null 2>&1 && fuse_pkg=libfuse2t64 || true
           sudo apt-get install -y --no-install-recommends "$fuse_pkg" xvfb
 
-          metrics="$PWD/.phase2-direct/startup-metrics.json"
-          user_data="$PWD/.phase2-direct/user-data"
+          metrics="$PWD/phase2-direct/startup-metrics.json"
+          user_data="$PWD/phase2-direct/user-data"
           mkdir -p "$user_data"
           xvfb-run -a env \
             PV_STARTUP_METRICS_FILE="$metrics" \
             PV_STARTUP_USER_DATA_DIR="$user_data" \
             "$candidate"
           test -s "$metrics"
-          echo 'status=pass' > .phase2-direct/result.txt
+          echo 'status=pass' > phase2-direct/result.txt
 
       - name: Upload direct execution evidence
         uses: actions/upload-artifact@v6
         if: always()
         with:
           name: phase2-direct-appimage
-          path: .phase2-direct/
+          path: phase2-direct/
           if-no-files-found: warn
           retention-days: 14
