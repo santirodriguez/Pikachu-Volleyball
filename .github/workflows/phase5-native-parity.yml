@@ -13,6 +13,7 @@ on:
       - 'scripts/seed-electron-migration-fixture.cjs'
       - 'scripts/inspect-electron-migration-fixture.cjs'
       - 'scripts/validate-electron-migration-fixture.cjs'
+      - 'scripts/validate-electron-preferences-import.cjs'
       - 'src/resources/js/settings_store.cjs'
       - 'src/resources/js/control_bindings.cjs'
       - 'src/resources/js/utils/local_storage_wrapper.js'
@@ -96,6 +97,13 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v5
 
+      - name: Install migration probe dependency
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libleveldb-dev
+
       - name: Install web dependencies
         run: npm ci
 
@@ -131,7 +139,39 @@ jobs:
           node scripts/validate-electron-migration-fixture.cjs \
             "$evidence/seed-report.json" \
             "$evidence/storage-inspection.json" \
-            | tee "$evidence/validation.json"
+            | tee "$evidence/layout-validation.json"
+
+      - name: Prove bounded LevelDB preference import
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence='build/phase5/migration'
+          database="$PV_MIGRATION_USER_DATA/Local Storage/leveldb"
+          database_copy="$RUNNER_TEMP/pv-electron-leveldb-copy"
+          rm -rf "$database_copy"
+          cp -a "$database" "$database_copy"
+          g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic \
+            desktop/native/electron_preferences_importer.cc \
+            -o "$evidence/electron-preferences-importer" \
+            -lleveldb -lpthread
+          ldd "$evidence/electron-preferences-importer" \
+            | tee "$evidence/importer-ldd.txt"
+          if grep -q 'not found' "$evidence/importer-ldd.txt"; then
+            echo 'Electron preference importer has unresolved libraries.' >&2
+            exit 1
+          fi
+          "$evidence/electron-preferences-importer" \
+            "$database_copy" "$evidence/imported-preferences.json" \
+            | tee "$evidence/importer-runtime.txt"
+          node scripts/validate-electron-preferences-import.cjs \
+            "$evidence/seed-report.json" \
+            "$evidence/imported-preferences.json" \
+            | tee "$evidence/import-validation.json"
+          {
+            echo "importer_bytes=$(stat -c%s "$evidence/electron-preferences-importer")"
+            echo "importer_sha256=$(sha256sum "$evidence/electron-preferences-importer" | awk '{print $1}')"
+            echo "imported_preferences_sha256=$(sha256sum "$evidence/imported-preferences.json" | awk '{print $1}')"
+          } | tee "$evidence/importer-summary.txt"
 
       - name: Report migration evidence
         if: always()
@@ -142,11 +182,13 @@ jobs:
             echo '## Phase 5 Electron preference migration layout'
             echo ''
             for file in \
-              build/phase5/migration/validation.json \
+              build/phase5/migration/layout-validation.json \
+              build/phase5/migration/import-validation.json \
+              build/phase5/migration/importer-summary.txt \
               build/phase5/migration/storage-inspection.json; do
               if [[ -s "$file" ]]; then
                 echo "### $(basename "$file")"
-                echo '```json'
+                echo '```text'
                 cat "$file"
                 echo '```'
               fi
