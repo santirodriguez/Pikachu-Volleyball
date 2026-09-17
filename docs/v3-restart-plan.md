@@ -139,6 +139,59 @@ Gate:
 
 Do not reject the candidate solely because unrelated or transitive packages happen to exist in a CI image. Validate the product's actual dependency and runtime contract.
 
+### Phase 2 result
+
+The candidate isolated the packaged Electron runtime from every other meaningful variable:
+
+- packaged Electron: `44.4.1`;
+- installed/frozen Electron development dependency: `35.7.5`;
+- `electron-builder`: `26.15.7`;
+- `app-builder-lib`: `26.15.7`;
+- package metadata and lockfile unchanged;
+- `npm ci` dependency tree unchanged after installation;
+- web `dist` built once with the frozen baseline toolchain and checksum-locked before packaging;
+- existing normal builder compression and Zstd AppImage SquashFS policy preserved;
+- existing fail-closed AppRun security transform preserved.
+
+The clean AppImage measured:
+
+- size: `116,955,256` bytes (`111.54 MiB`);
+- delta from frozen 2.1 AppImage: `+19,860,484` bytes (`+20.45%`);
+- SHA-256: `605325c655ae12524572a16201ba697ebcfdffff03775bbebae27cc48366804c`;
+- SquashFS: Zstd with `131,072` byte blocks;
+- exactly one Electron locale pack: `en-US.pak`;
+- no packaged production source maps;
+- no redundant packaged `node_modules` in `app.asar`;
+- no packaged WebKitGTK/GStreamer runtime content;
+- fail-closed AppRun rejection of sandbox-disabling switches remained intact.
+
+The application payload was unchanged from the frozen 2.1 baseline:
+
+- `dist`: `3,104,830` bytes;
+- assets: `2,536,399` bytes;
+- JavaScript: `486,219` bytes;
+- `app.asar`: `3,125,473` bytes.
+
+Therefore the measured AppImage increase comes from the supported Electron runtime rather than application growth or a compression/package-format experiment.
+
+The exact clean candidate executed successfully as an extracted packaged runtime on:
+
+- Debian 12;
+- Ubuntu 22.04;
+- Ubuntu 24.04;
+- Fedora 44;
+- openSUSE Leap 16.0.
+
+The hosted direct-AppImage smoke was explicitly recorded as `SKIPPED` because the GitHub hosted runner did not provide the unprivileged user-namespace capability required by the fail-closed launcher policy. That host limitation is not recorded as a product failure, and extraction-based runtime validation is not represented as equivalent to final representative direct-AppImage validation.
+
+CI startup observations were intentionally not used as a pass/fail threshold. The frozen 2.1 reference was about `4.29 s` to first completed game frame, while Electron 44 candidate iterations ranged from roughly `2.22 s` to `6.67 s` on hosted CI. The spread is large enough that a single hosted-runner startup observation is diagnostic evidence only.
+
+Phase 2 conclusion: Electron `44.4.1` is functionally viable with the existing security and AppImage packaging model, but upgrading to a currently supported Electron runtime makes the already-large AppImage materially larger while the application payload remains byte-for-byte at the 2.1 baseline size. That is sufficient measured evidence to test the bounded native alternative rather than committing the project to the larger Electron runtime without first checking the native feasibility target.
+
+Gate: `NATIVE_SPIKE` — PASS.
+
+This gate does **not** select the native architecture. Electron remains the validated fallback. Phase 3 must still prove SDL3 + QuickJS with real project content and the native AppImage size target before any migration or shared-core refactor is authorized.
+
 ## Phase 3 — Native feasibility
 
 Objective: prove or disprove the proposed SDL3 + QuickJS direction with a bounded prototype before migrating the application.
