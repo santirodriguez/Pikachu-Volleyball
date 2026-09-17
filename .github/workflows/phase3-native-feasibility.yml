@@ -12,6 +12,7 @@ on:
       - 'src/ca/index.html'
       - 'src/ko/index.html'
       - 'src/zh/index.html'
+      - 'src/resources/js/integrated_menu_strings.js'
       - 'src/resources/assets/images/sprite_sheet.png'
       - 'src/resources/assets/images/sprite_sheet.json'
       - 'src/resources/assets/images/IDI_PIKAICON-1_gap_filled_192.png'
@@ -42,7 +43,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             build-essential cmake ninja-build pkg-config curl xz-utils patchelf xvfb \
-            libpng-dev libmpg123-dev \
+            libpng-dev libmpg123-dev libfreetype6-dev libharfbuzz-dev \
             libasound2-dev libpulse-dev \
             libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev libxfixes-dev libxss-dev libxtst-dev \
             libxkbcommon-dev libwayland-dev libdrm-dev libgbm-dev \
