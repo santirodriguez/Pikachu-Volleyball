@@ -9,6 +9,13 @@ const {
 
 const REFERENCE_TRACE_SHA256 =
   'cc627e56e7bb13b4a82fe29c25bdcef2bbd379e566d9d36469528d1afa2d9863';
+const REFERENCE_SECTION_SHA256 = Object.freeze({
+  physics: '9826b7e4209d294d2a835c8b4b7e8448d61adcd0925b1b8163c255f59313c1bd',
+  ai: 'c364a39dc050575baa810d4f79146e2fa290254dbaadcb3be3b94a4525116b1b',
+  lifecycle: '2515c79999f144a0ae0359d8b1d6790a576d48286e86db73896417af69303502',
+  scoring: 'b49cd572039c40e3c3251bb45f8305af4d7032ea6989ec2691b7fe8e14d152f7',
+  commands: '0183daa48c4712c052d49592bfe5e2e01e462414656468a1a9a483a846b51df0',
+});
 
 function hash(value) {
   return crypto.createHash('sha256').update(JSON.stringify(value)).digest('hex');
@@ -23,6 +30,11 @@ test('freezes deterministic Phase 4 reference traces from the accepted controlle
     'v3-restart@60f978ec77e1a2c8adf5d56ae14102dccf41d1a9'
   );
   assert.equal(hash(traces), REFERENCE_TRACE_SHA256);
+  for (const [section, expectedHash] of Object.entries(
+    REFERENCE_SECTION_SHA256
+  )) {
+    assert.equal(hash(traces[section]), expectedHash, `${section} trace changed`);
+  }
 
   assert.equal(traces.physics.checkpoints.length, 3);
   assert.deepEqual(traces.physics.rngTrace, [1, 2, 3]);
@@ -164,10 +176,6 @@ test('freezes deterministic Phase 4 reference traces from the accepted controlle
     traces.commands.checkpoints[3].after
   );
   assert.equal(traces.commands.checkpoints[4].state, 'intro');
-
-  for (const section of ['physics', 'ai', 'lifecycle', 'scoring', 'commands']) {
-    process.stdout.write(`V3_REFERENCE_${section.toUpperCase()}_SHA256=${hash(traces[section])}\n`);
-  }
 });
 
-module.exports = { REFERENCE_TRACE_SHA256 };
+module.exports = { REFERENCE_SECTION_SHA256, REFERENCE_TRACE_SHA256 };
