@@ -2,7 +2,22 @@
 
 This document is the active migration plan for the new v3 attempt. It deliberately starts from the stable 2.1 release on `main` and requires measured evidence before committing to a new desktop architecture.
 
-Historical `v3` and `v3-phase5-linux-distribution` work is evidence only. The restart does not branch from those lines and does not inherit their runtime decisions.
+Historical `v3` and `v3-phase5-linux-distribution` work is mandatory evidence, not a code base. The restart does not branch from those lines and does not inherit their runtime decisions, but each phase must review relevant historical experiments before repeating work.
+
+## Design authority
+
+The restart follows the evidence-first direction agreed for this attempt:
+
+- preserve the stable 2.1 product before architecture work;
+- evaluate a currently supported Electron candidate before considering a native migration;
+- keep AppImage as the Linux distribution target;
+- if Electron is not sufficient, prove SDL3 + QuickJS with a bounded native feasibility spike before refactoring the application around it;
+- require a real native AppImage no larger than `30 MiB` with reasonable headroom before approving the native migration;
+- move shared-core boundaries only after feasibility is established;
+- preserve browser/PWA behavior throughout the migration;
+- require functional parity and reproducible AppImage evidence before release readiness.
+
+These constraints outrank historical runtime or packaging decisions from the discarded v3 branches.
 
 ## Frozen source baseline
 
@@ -39,6 +54,48 @@ Unless a later task explicitly changes a requirement with regression evidence, p
 
 The full accepted 2.1 behavior remains defined in `docs/v2.1-preservation-baseline.md`.
 
+## Historical evidence and lessons ledger
+
+The discarded v3 branches contain useful measurements and failed hypotheses. Before starting work that overlaps an old experiment, inspect the relevant old documentation, workflow, and result. Reuse conclusions or narrowly reviewed test techniques where they still apply; do not carry the old implementation forward wholesale.
+
+### Runtime selection
+
+The previous v3 attempt selected Neutralino early, completed substantial compatibility and platform work, retired Electron, and only then discovered that Linux distribution constraints materially changed the value proposition. This restart therefore delays runtime commitment until the cheaper supported Electron path is measured and, if necessary, the native alternative is proven with a real artifact.
+
+### AppImage is the distribution rule
+
+The historical Phase 5 path selected a deterministic `.tar.gz` plus `.deb` and `.rpm`, with system GTK3, WebKitGTK, GStreamer, and `xdg-utils` dependencies. It explicitly rejected AppImage for that Neutralino architecture because bundling the WebKitGTK/GStreamer runtime erased much of the size and maintenance advantage.
+
+That conclusion is useful evidence about Neutralino, but `.tar.gz`, `.deb`, and `.rpm` are not substitutes for the current v3 requirement. Do not redirect the restart into RPM/DEB/tar packaging when an AppImage gate is required. Alternative package formats may only be investigated if a later requirement explicitly authorizes them.
+
+### Do not repeat the WebKitGTK/GStreamer packaging loop
+
+Historical workflows tested both a thin Neutralino AppImage that still depended on distro WebKitGTK/GStreamer and a bundled-runtime AppImage that attempted to carry their dependency closure. Those experiments already demonstrated why that architecture was a poor fit for the current AppImage objective. Do not repeat them during the restart unless a newly approved architecture genuinely requires that dependency stack.
+
+The native fallback for this restart is SDL3 + QuickJS, not another WebView runtime experiment.
+
+### Compression is a measured variable, not a project direction
+
+The stable 2.1 Electron package already uses a known working packaging configuration, including normal builder compression and Zstd AppImage SquashFS. Historical work also explored compression and packaging variants.
+
+Do not spend a phase cycling compressors or settings based on intuition. Start from the known working configuration. Change compression only when a measured candidate shows a material reason, and compare real AppImages side by side for size, startup/runtime behavior, reproducibility, and compatibility. A smaller artifact alone does not justify a less reliable packaging path.
+
+### Validate the product contract, not incidental runner packages
+
+A historical Electron standalone matrix tried to prove independence from WebKitGTK/GStreamer by failing when package names matching `webkit` or `gstreamer` were installed in the test image. On Fedora, unrelated/transitive dependencies caused that assertion to fail before the Electron candidate itself was meaningfully tested.
+
+Do not use package absence as a product gate. Validate the actual AppImage contents, required libraries, startup, gameplay, sandboxing, external-navigation restrictions, and supported runtime behavior.
+
+### Separate CI-host limitations from product failures
+
+A historical direct-FUSE smoke required unprivileged user namespaces and failed when the hosted runner could not write its UID map. That is evidence about the runner environment, not by itself evidence that the AppImage is broken.
+
+Capability-dependent checks must report the missing host capability separately. When direct execution is unavailable, use an appropriate secondary validation such as extraction-based smoke without pretending that it is equivalent to final direct AppImage validation.
+
+### Keep partial portability evidence in proportion
+
+A build that extracts, starts in one container, or works only after installing a WebView runtime is not final AppImage readiness. Each gate must state what was actually proven and what still requires representative Linux/desktop validation.
+
 ## Phase 1 — Baseline & guardrails
 
 Objective: make the stable 2.1 behavior and measurements an explicit gate before architectural experimentation.
@@ -53,16 +110,25 @@ Required evidence:
 
 Gate: `BASELINE_LOCKED`.
 
+Status: passed on `v3-restart` head `43680c7984ff5a9506d4722da84e5a58712b711a` with Pull Request Quality run `35265685053`.
+
 ## Phase 2 — Electron candidate
 
 Objective: evaluate a current supported Electron candidate with the smallest coherent dependency/tooling change before considering a native migration.
 
+Before implementation, review the historical Electron standalone spike for useful security, reproducibility, and runtime checks, while explicitly removing the invalid package-absence and runner-capability assumptions described above.
+
+Start from the current known-working AppImage compression policy. Do not add RPM, DEB, tar, WebKitGTK/GStreamer portability work, or compression experiments to the initial candidate.
+
 Measure a real AppImage and record at least:
 
-- artifact size and contents;
+- exact Electron and packaging-tool versions;
+- artifact size, hash, and relevant contents;
+- reproducibility of the candidate build where practical;
 - startup observations;
 - relevant memory/runtime observations when practical;
 - sandbox and navigation behavior;
+- actual runtime/dependency contract;
 - compatibility with the supported Linux test matrix;
 - web and gameplay regression results.
 
