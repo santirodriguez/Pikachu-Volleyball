@@ -1,0 +1,124 @@
+name: Phase 2 openSUSE Recheck
+
+on:
+  pull_request:
+    branches:
+      - v3-restart
+    paths:
+      - '.github/workflows/phase2-opensuse-recheck.yml'
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  opensuse-runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Download clean Phase 2 candidate
+        uses: actions/download-artifact@v5
+        with:
+          name: phase2-electron-candidate
+          path: phase2-candidate
+          github-token: ${{ github.token }}
+          repository: santirodriguez/Pikachu-Volleyball
+          run-id: '35267395407'
+
+      - name: Validate exact candidate identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          candidate="$(find phase2-candidate -maxdepth 1 -type f -name '*.AppImage' -print -quit)"
+          test -s "$candidate"
+          expected='605325c655ae12524572a16201ba697ebcfdffff03775bbebae27cc48366804c'
+          actual="$(sha256sum "$candidate" | awk '{print $1}')"
+          [[ "$actual" == "$expected" ]] || {
+            echo "Candidate SHA-256 mismatch: expected $expected, found $actual" >&2
+            exit 1
+          }
+          echo "Validated clean Electron 44 candidate: $actual"
+
+      - name: Run extracted candidate on openSUSE Leap 16.0
+        shell: bash
+        run: |
+          set -euo pipefail
+          result="$PWD/phase2-runtime-opensuse-leap-16.0"
+          rm -rf "$result"
+          mkdir -p "$result"
+
+          docker run --rm --platform linux/amd64 --shm-size=1g --security-opt seccomp=unconfined \
+            -v "$PWD:/workspace" -w /workspace \
+            opensuse/leap:16.0@sha256:77732aa024f765ecdb4067affdea9e386d68056d0d281608ce4665d8fb0b4edd \
+            bash -lc '
+              set -euo pipefail
+
+              zypper --non-interactive refresh
+              zypper --non-interactive install --no-recommends \
+                ca-certificates dbus-1 dbus-1-x11 procps shadow util-linux xauth xorg-x11-server-Xvfb \
+                gtk3 mozilla-nss libasound2 libXss1 libgbm1 libdrm2 libxkbcommon0 at-spi2-core libcups2 \
+                libXcomposite1 libXdamage1 libXfixes3 libXrandr2 pango libcairo2
+
+              command -v dbus-run-session > /workspace/phase2-runtime-opensuse-leap-16.0/dbus-run-session.txt
+              rpm -qa --qf "%{NAME}\t%{VERSION}-%{RELEASE}\n" | sort > /workspace/phase2-runtime-opensuse-leap-16.0/installed-packages.txt
+
+              if unshare -Ur true >/dev/null 2>&1; then
+                echo "user_namespaces=available" > /workspace/phase2-runtime-opensuse-leap-16.0/host-capabilities.txt
+              else
+                echo "user_namespaces=unavailable" > /workspace/phase2-runtime-opensuse-leap-16.0/host-capabilities.txt
+              fi
+
+              candidate="$(find /workspace/phase2-candidate -maxdepth 1 -type f -name "*.AppImage" -print -quit)"
+              test -s "$candidate"
+              chmod 0755 "$candidate"
+
+              stage=/tmp/pv-phase2-opensuse
+              rm -rf "$stage"
+              mkdir -p "$stage"
+              cp "$candidate" "$stage/candidate.AppImage"
+              cd "$stage"
+              ./candidate.AppImage --appimage-extract >/dev/null
+              root="$stage/squashfs-root"
+              executable="$root/pikachu-volleyball"
+              test -x "$executable"
+
+              chown root:root "$root/chrome-sandbox"
+              chmod 4755 "$root/chrome-sandbox"
+              useradd -m pvsmoke 2>/dev/null || true
+              mkdir -p "$stage/results" "$stage/user-data"
+              chown -R pvsmoke:pvsmoke "$stage/results" "$stage/user-data"
+
+              LD_LIBRARY_PATH="$root/usr/lib" ldd "$executable" > "$stage/results/ldd.txt"
+              if grep -Fq "not found" "$stage/results/ldd.txt"; then
+                echo "Missing runtime library on openSUSE Leap 16.0" >&2
+                cat "$stage/results/ldd.txt" >&2
+                exit 1
+              fi
+
+              Xvfb :99 -screen 0 1024x768x24 >"$stage/results/xvfb.log" 2>&1 &
+              xvfb_pid=$!
+              trap "kill $xvfb_pid >/dev/null 2>&1 || true" EXIT
+              sleep 1
+
+              runuser -u pvsmoke -- dbus-run-session -- env \
+                DISPLAY=:99 \
+                LD_LIBRARY_PATH="$root/usr/lib" \
+                PV_STARTUP_METRICS_FILE="$stage/results/startup-metrics.json" \
+                PV_STARTUP_USER_DATA_DIR="$stage/user-data" \
+                "$executable" --enable-sandbox
+
+              test -s "$stage/results/startup-metrics.json"
+              cp -a "$stage/results/." /workspace/phase2-runtime-opensuse-leap-16.0/
+              chown -R "$(stat -c %u /workspace):$(stat -c %g /workspace)" /workspace/phase2-runtime-opensuse-leap-16.0 || true
+            '
+
+      - name: Upload openSUSE runtime evidence
+        uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: phase2-runtime-opensuse-leap-16.0-recheck
+          path: phase2-runtime-opensuse-leap-16.0/
+          if-no-files-found: error
+          retention-days: 14
