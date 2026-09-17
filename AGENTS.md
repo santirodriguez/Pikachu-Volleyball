@@ -20,8 +20,10 @@ These rules apply to all future work in this repository.
 - `v3-restart` is the integration branch for the new Pikachu Volleyball 3 attempt.
 - Task branches use the `v3-restart-<task>` naming pattern and target `v3-restart`.
 - Start new v3 work from the accepted restart plan in `docs/v3-restart-plan.md`.
-- Treat the historical `v3` and `v3-phase5-linux-distribution` branches as evidence only. Do not branch from them or reuse their implementation wholesale.
-- Reuse a historical test, measurement, or implementation fragment only after reviewing it against the current `v3-restart` authority and preservation requirements.
+- Treat the historical `v3` and `v3-phase5-linux-distribution` branches as mandatory evidence, not implementation bases. Before repeating an experiment or changing the corresponding architecture area, review the relevant historical documentation, workflow, and result.
+- Do not branch from the historical v3 lines or reuse their implementation wholesale.
+- Reuse a historical test, measurement, workflow technique, or implementation fragment only after reviewing it against the current `v3-restart` authority and preservation requirements.
+- Record materially reusable lessons in the active restart plan so later phases do not need to rediscover them.
 - Promotion from `v3-restart` to `main`, versioning, tags, releases, and publication remain separate explicit decisions.
 
 ## Preservation requirements
@@ -36,8 +38,12 @@ These rules apply to all future work in this repository.
 
 - Do not select a replacement desktop runtime before its phase gate is satisfied.
 - Phase 2 must measure a supported Electron candidate before any native migration is approved.
+- AppImage is the Linux distribution target for the restart. Do not substitute RPM, DEB, tar archives, or another package format for an AppImage gate without an explicitly approved requirement change.
 - SDL3 + QuickJS work is limited to the Phase 3 feasibility spike until `NATIVE_GO` is explicitly established from real functional and AppImage evidence.
 - Shared-core refactoring begins only after feasibility is established and characterization coverage protects the behavior being moved.
+- Treat compression as a measured packaging variable rather than a migration direction; change it only from real artifact evidence.
+- CI gates must validate the product's actual runtime, dependency, security, and behavior contract rather than incidental packages installed in a runner image.
+- Report runner capability limitations separately from product failures.
 
 ## Web and desktop boundaries
 
