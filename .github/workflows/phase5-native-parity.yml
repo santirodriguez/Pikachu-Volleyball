@@ -1,0 +1,163 @@
+name: Phase 5 Native Parity
+
+on:
+  pull_request:
+    branches:
+      - v3-restart
+    paths:
+      - '.github/workflows/phase5-native-parity.yml'
+      - 'desktop/native/**'
+      - 'scripts/build-phase5-accessibility-probe.sh'
+      - 'scripts/run-phase5-accessibility-probe.sh'
+      - 'scripts/validate-phase5-accessibility.py'
+      - 'scripts/seed-electron-migration-fixture.cjs'
+      - 'scripts/inspect-electron-migration-fixture.cjs'
+      - 'scripts/validate-electron-migration-fixture.cjs'
+      - 'src/resources/js/settings_store.cjs'
+      - 'src/resources/js/control_bindings.cjs'
+      - 'src/resources/js/utils/local_storage_wrapper.js'
+      - 'package.json'
+      - 'package-lock.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase5-native-parity-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  accessibility-feasibility:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Install native and AT-SPI dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake ninja-build pkg-config curl xz-utils git \
+            xvfb x11-utils dbus-x11 at-spi2-core python3-pyatspi \
+            libasound2-dev libpulse-dev \
+            libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev \
+            libxfixes-dev libxss-dev libxtst-dev libxkbcommon-dev \
+            libwayland-dev libdrm-dev libgbm-dev \
+            libegl1-mesa-dev libgl1-mesa-dev
+
+      - name: Build pinned SDL3 and AccessKit probe
+        shell: bash
+        run: bash scripts/build-phase5-accessibility-probe.sh
+
+      - name: Exercise semantic tree through AT-SPI
+        shell: bash
+        run: dbus-run-session -- bash scripts/run-phase5-accessibility-probe.sh
+
+      - name: Report accessibility evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo '## Phase 5 accessibility feasibility'
+            echo ''
+            for file in \
+              build/phase5/accessibility/evidence/build-summary.txt \
+              build/phase5/accessibility/evidence/runtime-summary.txt \
+              build/phase5/accessibility/evidence/runtime-state.txt; do
+              if [[ -s "$file" ]]; then
+                echo "### $(basename "$file")"
+                echo '```text'
+                cat "$file"
+                echo '```'
+              fi
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload accessibility evidence
+        uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: phase5-accessibility-feasibility
+          path: build/phase5/accessibility/evidence/**
+          if-no-files-found: warn
+          retention-days: 14
+
+  electron-migration-layout:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Install web dependencies
+        run: npm ci
+
+      - name: Build production web payload
+        run: npm run build:web
+
+      - name: Seed controlled Electron 2.1 preferences
+        shell: bash
+        run: |
+          set -euo pipefail
+          user_data="$RUNNER_TEMP/pv-electron-user-data"
+          report="$RUNNER_TEMP/pv-electron-seed.json"
+          rm -rf "$user_data"
+          mkdir -p "$user_data"
+          PV_MIGRATION_USER_DATA="$user_data" \
+          PV_MIGRATION_REPORT="$report" \
+            xvfb-run -a npx electron --no-sandbox scripts/seed-electron-migration-fixture.cjs
+          test -s "$report"
+          echo "PV_MIGRATION_USER_DATA=$user_data" >> "$GITHUB_ENV"
+          echo "PV_MIGRATION_REPORT=$report" >> "$GITHUB_ENV"
+
+      - name: Inspect actual Chromium localStorage layout
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence='build/phase5/migration'
+          mkdir -p "$evidence"
+          local_storage="$PV_MIGRATION_USER_DATA/Local Storage"
+          test -d "$local_storage"
+          cp "$PV_MIGRATION_REPORT" "$evidence/seed-report.json"
+          node scripts/inspect-electron-migration-fixture.cjs "$local_storage" \
+            > "$evidence/storage-inspection.json"
+          node scripts/validate-electron-migration-fixture.cjs \
+            "$evidence/seed-report.json" \
+            "$evidence/storage-inspection.json" \
+            | tee "$evidence/validation.json"
+
+      - name: Report migration evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo '## Phase 5 Electron preference migration layout'
+            echo ''
+            for file in \
+              build/phase5/migration/validation.json \
+              build/phase5/migration/storage-inspection.json; do
+              if [[ -s "$file" ]]; then
+                echo "### $(basename "$file")"
+                echo '```json'
+                cat "$file"
+                echo '```'
+              fi
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload migration evidence
+        uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: phase5-electron-migration-layout
+          path: build/phase5/migration/**
+          if-no-files-found: warn
+          retention-days: 14
