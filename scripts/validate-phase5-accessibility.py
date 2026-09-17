@@ -127,7 +127,7 @@ def main():
     assert_role(window, "frame") if "frame" in role_name(window).lower() else assert_role(window, "window")
     assert_role(continue_button, "button")
     assert_role(restart_button, "button")
-    assert_role(ready_status, "label")
+    assert_role(ready_status, "status")
 
     focus(restart_button)
     click(require_single("Restart"))
@@ -171,6 +171,7 @@ def main():
     report = {
         "window": {"name": node_name(window), "role": role_name(window)},
         "initial_controls": ["Continue", "Restart"],
+        "initial_status": {"name": node_name(ready_status), "role": role_name(ready_status)},
         "modal": "Restart match?",
         "modal_state_verified": hasattr(pyatspi, "STATE_MODAL"),
         "actions": ["focus Restart", "click Restart", "click Confirm restart", "click Restart", "focus Cancel", "click Cancel"],

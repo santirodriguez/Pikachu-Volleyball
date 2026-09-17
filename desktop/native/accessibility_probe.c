@@ -49,7 +49,7 @@ static accesskit_node *build_button(accesskit_node_id id, const char *label,
 }
 
 static accesskit_node *build_status(const ProbeState *state) {
-  accesskit_node *node = accesskit_node_new(ACCESSKIT_ROLE_LABEL);
+  accesskit_node *node = accesskit_node_new(ACCESSKIT_ROLE_STATUS);
   accesskit_node_set_label(node, state->status);
   accesskit_node_set_live(node, ACCESSKIT_LIVE_POLITE);
   accesskit_rect bounds = {40.0, 320.0, 760.0, 370.0};
