@@ -120,8 +120,15 @@ xvfb-run -a env \
   PV_NATIVE_RENDER_TRACE_PATH="$render_trace" \
   "$APPDIR/AppRun" --self-test \
   | tee "$EVIDENCE_DIR/prepackage-self-test.txt"
-grep -q '^native_host_self_test=PASS
-
+grep -q '^native_host_self_test=PASS$' "$EVIDENCE_DIR/prepackage-self-test.txt"
+grep -q '^native_graphics_bridge=PASS$' "$EVIDENCE_DIR/prepackage-self-test.txt"
+grep -q '^native_framebuffer_variation=PASS$' "$EVIDENCE_DIR/prepackage-self-test.txt"
+test -s "$framebuffer"
+test -s "$render_trace"
+framebuffer_bytes="$(stat -c%s "$framebuffer")"
+framebuffer_sha256="$(sha256sum "$framebuffer" | awk '{print $1}')"
+render_trace_bytes="$(stat -c%s "$render_trace")"
+render_trace_sha256="$(sha256sum "$render_trace" | awk '{print $1}')"
 ARCH=x86_64 APPIMAGE_EXTRACT_AND_RUN=1 "$APPIMAGETOOL" \
   --runtime-file "$APPIMAGE_RUNTIME" \
   --comp zstd \
