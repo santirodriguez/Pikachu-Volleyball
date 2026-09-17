@@ -17,7 +17,7 @@ The restart follows the evidence-first direction agreed for this attempt:
 - preserve browser/PWA behavior throughout the migration;
 - require functional parity and reproducible AppImage evidence before release readiness.
 
-These constraints outrank historical runtime or packaging decisions from the discarded v3 branches.
+These constraints are the current design authority and outrank historical runtime or packaging decisions from the discarded v3 branches.
 
 ## Frozen source baseline
 
