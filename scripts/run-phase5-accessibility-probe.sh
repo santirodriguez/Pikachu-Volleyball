@@ -9,9 +9,10 @@ BINARY="$BUILD_ROOT/probe-build/pikachu-volleyball-accessibility-probe"
 STATE_FILE="$EVIDENCE_DIR/runtime-state.txt"
 VALIDATION_FILE="$EVIDENCE_DIR/atspi-validation.json.txt"
 PROBE_LOG="$EVIDENCE_DIR/probe-runtime.log"
+STATUS_LOG="$EVIDENCE_DIR/atspi-status.txt"
 
 mkdir -p "$EVIDENCE_DIR"
-rm -f "$STATE_FILE" "$VALIDATION_FILE" "$PROBE_LOG"
+rm -f "$STATE_FILE" "$VALIDATION_FILE" "$PROBE_LOG" "$STATUS_LOG"
 
 if [[ ! -x "$BINARY" ]]; then
   echo "Accessibility probe binary is missing: $BINARY" >&2
@@ -77,7 +78,42 @@ fi
 
 "$launcher" --launch-immediately > "$EVIDENCE_DIR/at-spi-bus.log" 2>&1 &
 bus_pid=$!
-sleep 1
+
+for attempt in $(seq 1 50); do
+  if dbus-send --session --print-reply --dest=org.a11y.Bus \
+    /org/a11y/bus org.a11y.Bus.GetAddress \
+    > "$EVIDENCE_DIR/atspi-address.txt" 2>&1; then
+    break
+  fi
+  if [[ "$attempt" -eq 50 ]]; then
+    cat "$EVIDENCE_DIR/at-spi-bus.log" >&2 || true
+    cat "$EVIDENCE_DIR/atspi-address.txt" >&2 || true
+    echo 'AT-SPI bus launcher did not become ready.' >&2
+    exit 1
+  fi
+  sleep 0.1
+done
+
+set_a11y_enabled() {
+  local value="$1"
+  dbus-send --session --print-reply --dest=org.a11y.Bus \
+    /org/a11y/bus org.freedesktop.DBus.Properties.Set \
+    string:org.a11y.Status string:IsEnabled variant:boolean:"$value"
+}
+
+get_a11y_enabled() {
+  dbus-send --session --print-reply --dest=org.a11y.Bus \
+    /org/a11y/bus org.freedesktop.DBus.Properties.Get \
+    string:org.a11y.Status string:IsEnabled
+}
+
+# AccessKit Unix 0.22.1 starts adapters inactive and reacts to subsequent
+# org.a11y.Status.IsEnabled property changes. Force a known disabled state
+# before creating the adapter, then enable after its background listener has
+# subscribed. This tests the same dynamic activation path used by a screen
+# reader starting during an application session.
+set_a11y_enabled false > "$STATUS_LOG"
+get_a11y_enabled >> "$STATUS_LOG"
 
 "$BINARY" > "$PROBE_LOG" 2>&1 &
 probe_pid=$!
@@ -99,6 +135,12 @@ for attempt in $(seq 1 100); do
   sleep 0.1
 done
 
+# Give the AccessKit background thread time to create StatusProxy and subscribe
+# to property changes before generating the false -> true transition.
+sleep 1
+set_a11y_enabled true >> "$STATUS_LOG"
+get_a11y_enabled >> "$STATUS_LOG"
+
 /usr/bin/python3 "$ROOT/scripts/validate-phase5-accessibility.py" \
   | tee "$VALIDATION_FILE"
 
@@ -113,4 +155,5 @@ grep -q '^modal_open=0$' "$STATE_FILE"
   echo "python=$(/usr/bin/python3 --version 2>&1)"
   echo "state_sha256=$(sha256sum "$STATE_FILE" | awk '{print $1}')"
   echo "validation_sha256=$(sha256sum "$VALIDATION_FILE" | awk '{print $1}')"
+  echo "status_sha256=$(sha256sum "$STATUS_LOG" | awk '{print $1}')"
 } | tee "$EVIDENCE_DIR/runtime-summary.txt"
