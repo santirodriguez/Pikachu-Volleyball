@@ -59,3 +59,18 @@ function nativeGetAudioRequests() {
 function nativeGetQuit() {
   return state.quit ? 1 : 0;
 }
+
+function validateNativeApi() {
+  const functions = [
+    nativeHandleKey,
+    nativeGetSelected,
+    nativeGetLocaleIndex,
+    nativeGetAudioRequests,
+    nativeGetQuit,
+  ];
+  if (functions.some((value) => typeof value !== 'function')) {
+    throw new Error('Native QuickJS API initialization failed');
+  }
+}
+
+validateNativeApi();
