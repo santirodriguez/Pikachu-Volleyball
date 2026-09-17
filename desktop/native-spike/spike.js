@@ -12,7 +12,7 @@ function clampMenu(index) {
   return (index + count) % count;
 }
 
-globalThis.nativeHandleKey = function nativeHandleKey(key) {
+function nativeHandleKey(key) {
   switch (key) {
     case 'up':
       state.selected = clampMenu(state.selected - 1);
@@ -42,9 +42,20 @@ globalThis.nativeHandleKey = function nativeHandleKey(key) {
     default:
       break;
   }
-};
+}
 
-globalThis.nativeGetSelected = () => state.selected;
-globalThis.nativeGetLocaleIndex = () => state.localeIndex;
-globalThis.nativeGetAudioRequests = () => state.audioRequests;
-globalThis.nativeGetQuit = () => (state.quit ? 1 : 0);
+function nativeGetSelected() {
+  return state.selected;
+}
+
+function nativeGetLocaleIndex() {
+  return state.localeIndex;
+}
+
+function nativeGetAudioRequests() {
+  return state.audioRequests;
+}
+
+function nativeGetQuit() {
+  return state.quit ? 1 : 0;
+}
