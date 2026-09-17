@@ -57,7 +57,7 @@ jobs:
 
               zypper --non-interactive refresh
               zypper --non-interactive install --no-recommends \
-                ca-certificates dbus-1 dbus-1-x11 procps shadow util-linux xauth xorg-x11-server-Xvfb \
+                ca-certificates dbus-1 dbus-1-daemon procps shadow util-linux xauth xorg-x11-server-Xvfb \
                 gtk3 mozilla-nss libasound2 libXss1 libgbm1 libdrm2 libxkbcommon0 at-spi2-core libcups2 \
                 libXcomposite1 libXdamage1 libXfixes3 libXrandr2 pango libcairo2
 
