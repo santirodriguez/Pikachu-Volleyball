@@ -31,6 +31,9 @@ typedef struct NativeRuntime {
   char base_path[PATH_MAX];
 } NativeRuntime;
 
+static bool render_frame(NativeRuntime *state, bool validate_pixels,
+                         int *command_count_out);
+
 static bool join_path(char *output, size_t output_size, const char *base,
                       const char *relative) {
   int written = snprintf(output, output_size, "%s%s", base, relative);
