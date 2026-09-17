@@ -67,10 +67,43 @@ static void report_js_exception(JSContext *context, const char *operation) {
   JS_FreeValue(context, exception);
 }
 
-static bool eval_script_file(JSContext *context, const char *path) {
+static bool adapt_project_module_for_global_eval(char *source,
+                                                 size_t *source_length) {
+  static const char *kExpectedExport =
+      "export function getIntegratedMenuStrings(locale) {";
+  static const char *kExportKeyword = "export ";
+  const size_t export_keyword_length = strlen(kExportKeyword);
+
+  char *expected = strstr(source, kExpectedExport);
+  char *first_export = strstr(source, kExportKeyword);
+  char *second_export =
+      expected ? strstr(expected + strlen(kExpectedExport), kExportKeyword)
+               : NULL;
+
+  if (!expected || first_export != expected || second_export) {
+    fprintf(stderr,
+            "Unexpected integrated_menu_strings.js module shape; refusing "
+            "to adapt project locale data.\n");
+    return false;
+  }
+
+  size_t offset = (size_t)(expected - source);
+  memmove(source + offset, source + offset + export_keyword_length,
+          *source_length - offset - export_keyword_length + 1);
+  *source_length -= export_keyword_length;
+
+  printf("locale_module_adapter=PASS removed_single_export_keyword\n");
+  return true;
+}
+
+static bool eval_project_strings_file(JSContext *context, const char *path) {
   size_t source_length = 0;
   char *source = read_text_file(path, &source_length);
   if (!source) {
+    return false;
+  }
+  if (!adapt_project_module_for_global_eval(source, &source_length)) {
+    free(source);
     return false;
   }
 
@@ -87,13 +120,11 @@ static bool eval_script_file(JSContext *context, const char *path) {
 }
 
 static char *get_locale_label(JSContext *context, int index) {
-  char expression[512];
+  char expression[384];
   int written = snprintf(
       expression, sizeof(expression),
       "((index) => { const locales = ['en', 'es-ar', 'ca', 'ko', 'zh']; "
-      "const locale = locales[index]; "
-      "const base = BASE_STRINGS[locale] || BASE_STRINGS.en; "
-      "const strings = composeMenuStrings(locale, base); "
+      "const strings = getIntegratedMenuStrings(locales[index]); "
       "return strings.nav.language; })(%d)",
       index);
   if (written <= 0 || (size_t)written >= sizeof(expression)) {
@@ -225,7 +256,7 @@ int main(void) {
 
   runtime = JS_NewRuntime();
   context = runtime ? JS_NewContext(runtime) : NULL;
-  if (!context || !eval_script_file(context, strings_path)) {
+  if (!context || !eval_project_strings_file(context, strings_path)) {
     goto cleanup;
   }
 
