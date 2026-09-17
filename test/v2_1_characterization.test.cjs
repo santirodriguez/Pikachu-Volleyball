@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+const { GameCore } = require('../src/resources/js/game_core.cjs');
 
 function loadPhysicsHarness() {
   const filename = path.join(process.cwd(), 'src/resources/js/physics.js');
@@ -142,33 +143,90 @@ function loadControllerHarness() {
     }
   }
 
+  function createPlayer(isPlayer2) {
+    return {
+      isPlayer2,
+      isComputer: true,
+      isWinner: false,
+      gameEnded: false,
+      x: isPlayer2 ? 396 : 36,
+      y: 244,
+      yVelocity: 0,
+      state: 0,
+      frameNumber: 0,
+      delayBeforeNextFrame: 0,
+      divingDirection: 0,
+      lyingDownDurationLeft: -1,
+      computerBoldness: 0,
+      computerWhereToStandBy: 0,
+      isCollisionWithBallHappened: false,
+      sound: { pipikachu: false, pika: false, chu: false },
+      initializeForNewRound() {
+        this.x = this.isPlayer2 ? 396 : 36;
+        this.y = 244;
+        this.yVelocity = 0;
+        this.state = 0;
+        this.frameNumber = 0;
+        this.delayBeforeNextFrame = 0;
+        this.isCollisionWithBallHappened = false;
+      },
+    };
+  }
+
   class PikaPhysics {
     constructor() {
-      const makePlayer = () => ({
-        isComputer: true,
-        isWinner: false,
-        gameEnded: false,
-        sound: { pipikachu: false, pika: false, chu: false },
-        initializeForNewRound() {},
-      });
-      this.player1 = makePlayer();
-      this.player2 = makePlayer();
+      this.player1 = createPlayer(false);
+      this.player2 = createPlayer(true);
       this.ball = {
-        punchEffectX: 300,
+        x: 56,
+        y: 0,
+        xVelocity: 0,
+        yVelocity: 1,
+        expectedLandingPointX: 0,
+        rotation: 0,
+        fineRotation: 0,
         punchEffectRadius: 0,
+        punchEffectX: 300,
+        punchEffectY: 0,
+        isPowerHit: false,
+        previousX: 0,
+        previousY: 0,
+        previousPreviousX: 0,
+        previousPreviousY: 0,
         sound: { powerHit: false, ballTouchesGround: false },
-        initializeForNewRound() {},
+        initializeForNewRound(isPlayer2Serve) {
+          this.x = isPlayer2Serve ? 376 : 56;
+          this.y = 0;
+          this.xVelocity = 0;
+          this.yVelocity = 1;
+          this.punchEffectRadius = 0;
+          this.isPowerHit = false;
+        },
       };
       this.nextGround = false;
     }
 
     runEngineForNextFrame() {
+      if (this.nextGround) {
+        this.ball.punchEffectRadius = 20;
+        this.ball.sound.ballTouchesGround = true;
+      }
       return this.nextGround;
     }
   }
 
+  const gameLifecycleModule = {
+    GAME_STATE_IDS,
+    getGameStateHandlerName: (stateId) => handlers[stateId] || null,
+    isMatchInProgress: (stateId) =>
+      [
+        GAME_STATE_IDS.START_OF_NEW_GAME,
+        GAME_STATE_IDS.ROUND,
+        GAME_STATE_IDS.AFTER_END_OF_ROUND,
+        GAME_STATE_IDS.BEFORE_START_OF_NEXT_ROUND,
+      ].includes(stateId),
+  };
   const deps = {
-    GROUND_HALF_WIDTH: 216,
     PikaPhysics,
     MenuView,
     GameView,
@@ -176,21 +234,8 @@ function loadControllerHarness() {
     IntroView,
     PikaKeyboard,
     PikaAudio,
-    gameLifecycleModule: {
-      GAME_STATE_IDS,
-      getGameStateHandlerName: (stateId) => handlers[stateId] || null,
-      isMatchInProgress: (stateId) =>
-        [
-          GAME_STATE_IDS.START_OF_NEW_GAME,
-          GAME_STATE_IDS.ROUND,
-          GAME_STATE_IDS.AFTER_END_OF_ROUND,
-          GAME_STATE_IDS.BEFORE_START_OF_NEXT_ROUND,
-        ].includes(stateId),
-    },
-    gamePresentationModule: {
-      createGamePresentationState: () => ({}),
-      advancePunchEffect: () => 0,
-    },
+    GameCore,
+    gameLifecycleModule,
   };
 
   source = source
@@ -205,7 +250,6 @@ function loadControllerHarness() {
     document: { getElementById: () => null },
   });
   const wrapped = `const {
-    GROUND_HALF_WIDTH,
     PikaPhysics,
     MenuView,
     GameView,
@@ -213,15 +257,17 @@ function loadControllerHarness() {
     IntroView,
     PikaKeyboard,
     PikaAudio,
+    GameCore,
     gameLifecycleModule,
-    gamePresentationModule,
-  } = globalThis.__deps;\n${source}`;
+  } = globalThis.__deps;
+  const createGameCore = () => new GameCore({
+    physics: new PikaPhysics(),
+    groundHalfWidth: 216,
+  });
+  ${source}`;
   new vm.Script(wrapped, { filename }).runInContext(context);
 
-  const game = new context.__controllerExport(
-    { addChild() {} },
-    {}
-  );
+  const game = new context.__controllerExport({ addChild() {} }, {});
   return { game, GAME_STATE_IDS };
 }
 
@@ -264,12 +310,7 @@ test('physics preserves power-hit collision velocity and effect semantics', () =
   physics.ball.xVelocity = 0;
   physics.ball.yVelocity = 5;
 
-  processCollisionBetweenBallAndPlayer(
-    physics.ball,
-    100,
-    input,
-    2
-  );
+  processCollisionBetweenBallAndPlayer(physics.ball, 100, input, 2);
 
   assert.equal(physics.ball.xVelocity, 10);
   assert.equal(physics.ball.yVelocity, -30);
