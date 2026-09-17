@@ -202,6 +202,16 @@ Gate: `NATIVE_GO` only when functional feasibility is demonstrated and the AppIm
 
 A failed feasibility gate ends the native migration path rather than starting a large refactor anyway.
 
+### Phase 3 result
+
+`NATIVE_GO` passed and the evidence was integrated through PR #87. The final feasibility AppImage measured `11,528,696` bytes (`10.99 MiB`), leaving about `19.0 MiB` below the `30 MiB` gate, and exercised real SDL3 rendering/input, QuickJS host calls, production graphics/WAV/MP3 inputs and real UTF-8 text for all five production locales.
+
+The detailed pinned inputs, artifact hash, runtime checks, Unicode evidence and explicit limitations are recorded in `docs/v3-native-feasibility.md`.
+
+Gate: `NATIVE_GO` — PASS.
+
+This gate proved architecture feasibility, not native feature parity. Electron remains the validated fallback while the shared core and native host are migrated behind later gates.
+
 ## Phase 4 — Shared core
 
 Objective: move only the runtime boundaries needed by the proven target while preserving the web product and current desktop fallback during the transition.
@@ -209,6 +219,44 @@ Objective: move only the runtime boundaries needed by the proven target while pr
 Before refactoring a behavior, characterize it. Separate only the necessary input, rendering, audio, settings, and host boundaries. Preserve deterministic ordering and externally meaningful game behavior.
 
 Gate: `CORE_PARITY` when reference and migrated scenarios preserve timing, scoring, physics, AI decisions, and RNG ordering for the agreed characterization set.
+
+### Phase 4 result
+
+The shared-core migration preserves the existing reverse-engineered `physics.js`/AI implementation and creates one host-neutral JavaScript gameplay authority rather than rewriting gameplay in C or maintaining separate browser/native rules.
+
+Final ownership is:
+
+- `physics.js` + `rand.js`: reverse-engineered simulation, AI and RNG source;
+- `game_core.cjs`: deterministic lifecycle, scoring, timing, slow motion, practice/reset, quick-rematch and ordered gameplay effects;
+- `shared_core.js`: core construction around the existing physics model;
+- `pikavolley.js`: canonical browser/Electron adapter over the shared core;
+- `game_runtime.js`: Pixi/ticker/loader/startup composition;
+- persistence, locale navigation, integrated DOM menu, color scheme and desktop Quit remain outside the core.
+
+Before changing production authority, deterministic reference traces were frozen from the accepted controller. A candidate shared-core adapter then reproduced the same full trace and physics/AI/lifecycle/scoring/command section hashes before Web/Electron routing changed.
+
+The canonical production facade continues to pass the established 2.1 characterization expectations and all five web/PWA locale-output gates.
+
+The same deliberate shared-core bundle was executed under Node.js `22.12.0`/V8 and pinned QuickJS `2026-06-04`. Pre-closeout run `35276967601` produced byte-identical canonical output with portable trace SHA-256 `1f8cf2eff81d0fcacd671882cb96e5c39b33fc05462e2b61b8937e059d70efb1`. The workflow also freezes that fingerprint so two engines agreeing on a new result does not silently redefine accepted behavior.
+
+The validated shared-core bundle is `71,798` bytes with SHA-256 `787d4954faf997b7bb93d78700a8f4137b8ef05344e982d9982bf937a5e029db`.
+
+A real AppImage was then built from the proven Phase 3 native runtime with that exact validated bundle included and hash-checked after packaging. Pre-closeout run `35276967601` measured:
+
+- AppImage: `11,558,984` bytes (`11.02 MiB`);
+- SHA-256: `1c66c0df0b3237af4ee4020b8b2002661beb1ee410dfac0dded16112d6b83ab2`;
+- remaining budget below `30 MiB`: `19,898,296` bytes (about `18.98 MiB`);
+- incremental AppImage cost over the Phase 3 feasibility artifact: `30,288` bytes (about `0.029 MiB`);
+- packaged shared-core bundle SHA-256 exactly matched the validated source bundle;
+- direct AppImage, extract-and-run and extracted AppRun base/Unicode self-tests passed.
+
+Detailed architecture, frozen reference hashes, cross-engine evidence, native artifact measurements and remaining limitations are recorded in `docs/v3-shared-core.md`.
+
+The tracked closeout documentation is intentionally followed by exact-head CI; the final PR head and those closeout run identifiers belong in PR #88 because a tracked document cannot include the commit that contains itself without creating another commit.
+
+Gate candidate: `CORE_PARITY` — PASS after exact-head Pull Request Quality and Phase 4 Core Parity both pass and the final diff remains within this phase's scope.
+
+Phase 4 does not complete full native graphics/audio/menu/accessibility/settings parity and does not retire Electron. Those are Phase 5 concerns.
 
 ## Phase 5 — Native parity
 
