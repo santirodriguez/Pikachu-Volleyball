@@ -76,20 +76,18 @@ jobs:
           test -d dist
           find dist -type f -print0 | sort -z | xargs -0 sha256sum > "$RUNNER_TEMP/pv-phase2-dist.sha256"
           test -s "$RUNNER_TEMP/pv-phase2-dist.sha256"
-          echo "Frozen $(wc -l < "$RUNNER_TEMP/pv-phase2-dist.sha256") web output files before Electron overlay."
+          echo "Frozen $(wc -l < "$RUNNER_TEMP/pv-phase2-dist.sha256") web output files before packaging."
 
-      - name: Overlay supported Electron candidate without changing package metadata
+      - name: Validate isolated candidate selector
         shell: bash
         run: |
           set -euo pipefail
-          npm install --no-save --package-lock=false --no-audit --no-fund "electron@$PV_ELECTRON_VERSION"
-
-          electron_version="$(node -p "require('electron/package.json').version")"
+          installed_electron_version="$(node -p "require('electron/package.json').version")"
           builder_version="$(node -p "require('electron-builder/package.json').version")"
           app_builder_lib_version="$(node -p "require('app-builder-lib/package.json').version")"
 
-          [[ "$electron_version" == "$PV_ELECTRON_VERSION" ]] || {
-            echo "Expected candidate Electron $PV_ELECTRON_VERSION, found $electron_version" >&2
+          [[ "$installed_electron_version" == '35.7.5' ]] || {
+            echo "Installed Electron changed unexpectedly: $installed_electron_version" >&2
             exit 1
           }
           [[ "$builder_version" == "$PV_ELECTRON_BUILDER_VERSION" ]] || {
@@ -105,13 +103,15 @@ jobs:
           sha256sum -c "$RUNNER_TEMP/pv-phase2-dist.sha256"
 
           {
-            echo "## Phase 2 candidate toolchain"
+            echo "## Phase 2 candidate isolation"
             echo ""
-            echo "- Electron: \`$electron_version\`"
+            echo "- Frozen installed Electron dependency: \`$installed_electron_version\`"
+            echo "- Electron requested for packaging: \`$PV_ELECTRON_VERSION\`"
             echo "- electron-builder: \`$builder_version\`"
             echo "- app-builder-lib: \`$app_builder_lib_version\`"
             echo "- Package metadata modified: \`no\`"
-            echo "- Baseline web output modified by overlay: \`no\`"
+            echo "- Dependency tree modified after npm ci: \`no\`"
+            echo "- Baseline web output modified: \`no\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Build candidate AppImage with existing packaging policy
@@ -119,12 +119,22 @@ jobs:
         run: |
           set -euo pipefail
           rm -rf release
+          mkdir -p release
           sha256sum -c "$RUNNER_TEMP/pv-phase2-dist.sha256"
           node scripts/patch-appimage-launcher.cjs
+          set +e
           npx --no-install electron-builder \
             --linux AppImage \
             --publish=never \
-            --config.electronVersion="$PV_ELECTRON_VERSION"
+            --config.electronVersion="$PV_ELECTRON_VERSION" \
+            2>&1 | tee release/phase2-builder.log
+          builder_status=${PIPESTATUS[0]}
+          set -e
+          [[ "$builder_status" -eq 0 ]] || exit "$builder_status"
+          grep -Fq "electron=$PV_ELECTRON_VERSION" release/phase2-builder.log || {
+            echo "electron-builder log does not confirm Electron $PV_ELECTRON_VERSION packaging." >&2
+            exit 1
+          }
           sha256sum -c "$RUNNER_TEMP/pv-phase2-dist.sha256"
 
       - name: Inspect candidate package and AppImage policy
@@ -260,6 +270,7 @@ jobs:
             release/SHA256SUMS.txt
             release/build-metrics.json
             release/startup-metrics.json
+            release/phase2-builder.log
             release/phase2-evidence/**
           if-no-files-found: error
           retention-days: 14
