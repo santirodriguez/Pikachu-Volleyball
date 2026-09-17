@@ -10,6 +10,7 @@ const controlsModule = require('../src/resources/js/control_bindings.cjs');
 const inputModule = require('../src/resources/js/input_actions.cjs');
 const menuModule = require('../src/resources/js/menu_logic.cjs');
 const presentationModule = require('../src/resources/js/game_presentation.cjs');
+const presentationMathModule = require('../src/resources/js/presentation_math.cjs');
 
 const ROOT = path.resolve(__dirname, '..');
 
@@ -166,17 +167,48 @@ test('native parity freezes accepted audio constants', () => {
   assert.match(source, /new filters\.StereoFilter\(0\.75\)/);
 });
 
-test('native parity freezes critical presentation formulas before extraction', () => {
+test('native parity freezes extracted shared presentation formulas', () => {
+  assert.deepEqual(presentationMathModule.FIGHT_SIZE_SEQUENCE, [
+    20,
+    22,
+    25,
+    27,
+    30,
+    27,
+    25,
+    22,
+    20,
+  ]);
+  assert.equal(presentationMathModule.stepIntroMarkAlpha(1, 0), 0.04);
+  assert.equal(presentationMathModule.getPlayerScaleX(1, 3, -1), -1);
+  assert.equal(presentationMathModule.getPlayerScaleX(2, 3, 1), 1);
+  assert.deepEqual(
+    presentationMathModule.getPunchLayout({
+      punchEffectRadius: 20,
+      punchEffectX: 200,
+      punchEffectY: 272,
+    }),
+    {
+      visible: true,
+      x: 200,
+      y: 272,
+      width: 36,
+      height: 36,
+    }
+  );
+  assert.deepEqual(
+    presentationMathModule.getGameEndLayout(50, 96, 24),
+    {
+      visible: true,
+      x: 168,
+      y: 50,
+      width: 96,
+      height: 24,
+    }
+  );
+
   const source = read('src/resources/js/view.js');
-  assert.match(source, /mark\.alpha \+ 1 \/ 25/);
-  assert.match(source, /mark\.alpha - 1 \/ 25/);
-  assert.match(source, /const sizeArray = \[20, 22, 25, 27, 30, 27, 25, 22, 20\]/);
-  assert.match(source, /this\.sittingPikachuTilesDisplacement \+ 2/);
-  assert.match(source, /frameCounter > 71/);
-  assert.match(source, /ball\.punchEffectRadius -= 2/);
-  assert.match(source, /player1\.scale\.x = player1\.divingDirection === -1 \? -1 : 1/);
-  assert.match(source, /player2\.scale\.x = player2\.divingDirection === 1 \? 1 : -1/);
   assert.match(source, /this\.messages\.ready\.x = 176/);
   assert.match(source, /this\.messages\.ready\.y = 38/);
-  assert.match(source, /gameEndMessage\.x = 216 - w \/ 2/);
+  assert.match(source, /getPlayerFrameIndex\(state, frameNumber\)/);
 });

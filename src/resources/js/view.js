@@ -11,11 +11,27 @@ import { Sprite } from '@pixi/sprite';
 import { Container } from '@pixi/display';
 import { Cloud, Wave, cloudAndWaveEngine } from './cloud_and_wave.js';
 import { ASSETS_PATH } from './assets_path.js';
+import presentationMathModule from './presentation_math.cjs';
 
 /** @typedef {import('@pixi/loaders').LoaderResource} LoaderResource */
 /** @typedef {import('@pixi/core').Texture} Texture */
 
 const TEXTURES = ASSETS_PATH.TEXTURES;
+const {
+  getPlayerFrameIndex,
+  getPlayerScaleX,
+  getPunchLayout,
+  stepIntroMarkAlpha,
+  getFightLayout,
+  stepSachisoft,
+  stepSittingTiles,
+  getPikachuVolleyballLayout,
+  getWithWhoLayouts,
+  getScoreDigits,
+  getGameStartLayout,
+  getGameEndLayout,
+  changeFadeAlpha,
+} = presentationMathModule;
 
 /** @constant @type {number} number of clouds to be rendered */
 const NUM_OF_CLOUDS = 10;
@@ -54,16 +70,7 @@ export class IntroView {
    * @param {number} frameCounter
    */
   drawMark(frameCounter) {
-    const mark = this.mark;
-    if (frameCounter === 0) {
-      mark.alpha = 0;
-      return;
-    }
-    if (frameCounter < 100) {
-      mark.alpha = Math.min(1, mark.alpha + 1 / 25);
-    } else if (frameCounter >= 100) {
-      mark.alpha = Math.max(0, mark.alpha - 1 / 25);
-    }
+    this.mark.alpha = stepIntroMarkAlpha(frameCounter, this.mark.alpha);
   }
 }
 
@@ -148,34 +155,17 @@ export class MenuView {
    * @param {number} frameCounter
    */
   drawFightMessage(frameCounter) {
-    const sizeArray = [20, 22, 25, 27, 30, 27, 25, 22, 20];
     const fightMessage = this.messages.fight;
-    const w = fightMessage.texture.width;
-    const h = fightMessage.texture.height;
-
-    if (frameCounter === 0) {
-      fightMessage.visible = true;
-    }
-
-    if (frameCounter < 30) {
-      const halfWidth = Math.floor(Math.floor((frameCounter * w) / 30) / 2);
-      const halfHeight = Math.floor(Math.floor((frameCounter * h) / 30) / 2);
-      fightMessage.width = halfWidth * 2; // width
-      fightMessage.height = halfHeight * 2; // height
-      fightMessage.x = 100 - halfWidth; // x coord
-      fightMessage.y = 70 - halfHeight; // y coord
-    } else {
-      const index = (frameCounter + 1) % 9;
-      // code ...
-      const halfWidth = Math.floor(Math.floor((sizeArray[index] * w) / 30) / 2);
-      const halfHeight = Math.floor(
-        Math.floor((sizeArray[index] * h) / 30) / 2
-      );
-      fightMessage.width = halfWidth * 2; // width
-      fightMessage.height = halfHeight * 2; // height
-      fightMessage.y = 70 - halfHeight; // y coord
-      fightMessage.x = 100 - halfWidth; // x coord
-    }
+    const layout = getFightLayout(
+      frameCounter,
+      fightMessage.texture.width,
+      fightMessage.texture.height
+    );
+    fightMessage.visible = layout.visible;
+    fightMessage.x = layout.x;
+    fightMessage.y = layout.y;
+    fightMessage.width = layout.width;
+    fightMessage.height = layout.height;
   }
 
   /**
@@ -183,18 +173,12 @@ export class MenuView {
    * @param {number} frameCounter
    */
   drawSachisoft(frameCounter) {
-    if (frameCounter === 0) {
-      this.messages.sachisoft.visible = true;
-      this.messages.sachisoft.alpha = 0;
-    }
-    this.messages.sachisoft.alpha = Math.min(
-      1,
-      this.messages.sachisoft.alpha + 0.04
+    const state = stepSachisoft(
+      frameCounter,
+      this.messages.sachisoft.alpha
     );
-
-    if (frameCounter > 70) {
-      this.messages.sachisoft.alpha = 1;
-    }
+    this.messages.sachisoft.visible = state.visible;
+    this.messages.sachisoft.alpha = state.alpha;
   }
 
   /**
@@ -203,30 +187,20 @@ export class MenuView {
    * @param {number} frameCounter
    */
   drawSittingPikachuTiles(frameCounter) {
-    if (frameCounter === 0) {
-      this.sittingPikachuTilesContainer.visible = true;
-      this.sittingPikachuTilesContainer.alpha = 0;
-    }
-
-    // movement
-    // @ts-ignore
-    const h = this.sittingPikachuTilesContainer.getChildAt(0).texture.height;
-    this.sittingPikachuTilesDisplacement =
-      (this.sittingPikachuTilesDisplacement + 2) % h;
-    this.sittingPikachuTilesContainer.x = -this.sittingPikachuTilesDisplacement;
-    this.sittingPikachuTilesContainer.y = -this.sittingPikachuTilesDisplacement;
-
-    if (frameCounter > 30) {
-      // alpha
-      this.sittingPikachuTilesContainer.alpha = Math.min(
-        1,
-        this.sittingPikachuTilesContainer.alpha + 0.04
-      );
-    }
-
-    if (frameCounter > 70) {
-      this.sittingPikachuTilesContainer.alpha = 1;
-    }
+    const tileHeight =
+      // @ts-ignore
+      this.sittingPikachuTilesContainer.getChildAt(0).texture.height;
+    const state = stepSittingTiles(
+      frameCounter,
+      this.sittingPikachuTilesDisplacement,
+      this.sittingPikachuTilesContainer.alpha,
+      tileHeight
+    );
+    this.sittingPikachuTilesDisplacement = state.displacement;
+    this.sittingPikachuTilesContainer.visible = state.visible;
+    this.sittingPikachuTilesContainer.x = state.x;
+    this.sittingPikachuTilesContainer.y = state.y;
+    this.sittingPikachuTilesContainer.alpha = state.alpha;
   }
 
   /**
@@ -235,29 +209,14 @@ export class MenuView {
    * @param {number} frameCounter
    */
   drawPikachuVolleyballMessage(frameCounter) {
-    if (frameCounter === 0) {
-      this.messages.pikachuVolleyball.visible = false;
-      return;
-    }
-
-    if (frameCounter > 30) {
-      this.messages.pikachuVolleyball.visible = true;
-    }
-
-    if (frameCounter > 30 && frameCounter <= 44) {
-      const xDiff = 195 - 15 * (frameCounter - 30);
-      this.messages.pikachuVolleyball.x = 140 + xDiff;
-    } else if (frameCounter > 44 && frameCounter <= 55) {
-      this.messages.pikachuVolleyball.x = 140;
-      this.messages.pikachuVolleyball.width = 200 - 15 * (frameCounter - 44);
-    } else if (frameCounter > 55 && frameCounter <= 71) {
-      this.messages.pikachuVolleyball.x = 140;
-      this.messages.pikachuVolleyball.width = 40 + 15 * (frameCounter - 55);
-    } else if (frameCounter > 71) {
-      this.messages.pikachuVolleyball.x = 140;
-      this.messages.pikachuVolleyball.width =
-        this.messages.pikachuVolleyball.texture.width;
-    }
+    const message = this.messages.pikachuVolleyball;
+    const layout = getPikachuVolleyballLayout(
+      frameCounter,
+      message.texture.width
+    );
+    message.visible = layout.visible;
+    message.x = layout.x;
+    message.width = layout.width;
   }
 
   /**
@@ -283,33 +242,23 @@ export class MenuView {
    */
   drawWithWhoMessages(frameCounter) {
     const withWho = this.messages.withWho;
-    const w = withWho[0].texture.width;
-    const h = withWho[0].texture.height;
+    const state = getWithWhoLayouts(
+      frameCounter,
+      this.selectedWithWho,
+      this.selectedWithWhoMessageSizeIncrement,
+      withWho[0].texture.width,
+      withWho[0].texture.height
+    );
+    this.selectedWithWhoMessageSizeIncrement = state.sizeIncrement;
 
-    if (frameCounter === 0) {
-      for (let i = 0; i < 2; i++) {
-        withWho[i].visible = false;
-      }
-      return;
-    }
-
-    if (frameCounter > 70) {
-      if (this.selectedWithWhoMessageSizeIncrement < 10) {
-        this.selectedWithWhoMessageSizeIncrement += 1;
-      }
-      for (let i = 0; i < 2; i++) {
-        const selected = Number(this.selectedWithWho === i); // 1 if selected, 0 otherwise
-        const halfWidthIncrement =
-          selected * (this.selectedWithWhoMessageSizeIncrement + 2);
-        const halfHeightIncrement =
-          selected * this.selectedWithWhoMessageSizeIncrement;
-
-        withWho[i].visible = true;
-        withWho[i].x = 216 - w / 2 - halfWidthIncrement;
-        withWho[i].y = 184 + 30 * i - halfHeightIncrement;
-        withWho[i].width = w + 2 * halfWidthIncrement;
-        withWho[i].height = h + 2 * halfHeightIncrement;
-      }
+    for (let index = 0; index < 2; index += 1) {
+      const layout = state.layouts[index];
+      withWho[index].visible = layout.visible;
+      if (!layout.visible) continue;
+      withWho[index].x = layout.x;
+      withWho[index].y = layout.y;
+      withWho[index].width = layout.width;
+      withWho[index].height = layout.height;
     }
   }
 
@@ -466,48 +415,41 @@ export class GameView {
 
     this.player1.x = player1.x;
     this.player1.y = player1.y;
-    if (player1.state === 3 || player1.state === 4) {
-      this.player1.scale.x = player1.divingDirection === -1 ? -1 : 1;
-    } else {
-      this.player1.scale.x = 1;
-    }
+    this.player1.scale.x = getPlayerScaleX(
+      1,
+      player1.state,
+      player1.divingDirection
+    );
     this.shadows.forPlayer1.x = player1.x;
 
     this.player2.x = player2.x;
     this.player2.y = player2.y;
-    if (player2.state === 3 || player2.state === 4) {
-      this.player2.scale.x = player2.divingDirection === 1 ? 1 : -1;
-    } else {
-      this.player2.scale.x = -1;
-    }
+    this.player2.scale.x = getPlayerScaleX(
+      2,
+      player2.state,
+      player2.divingDirection
+    );
     this.shadows.forPlayer2.x = player2.x;
 
-    const frameNumber1 = getFrameNumberForPlayerAnimatedSprite(
-      player1.state,
-      player1.frameNumber
+    this.player1.gotoAndStop(
+      getFrameNumberForPlayerAnimatedSprite(player1.state, player1.frameNumber)
     );
-    const frameNumber2 = getFrameNumberForPlayerAnimatedSprite(
-      player2.state,
-      player2.frameNumber
+    this.player2.gotoAndStop(
+      getFrameNumberForPlayerAnimatedSprite(player2.state, player2.frameNumber)
     );
-    this.player1.gotoAndStop(frameNumber1);
-    this.player2.gotoAndStop(frameNumber2);
 
     this.ball.x = ball.x;
     this.ball.y = ball.y;
     this.shadows.forBall.x = ball.x;
     this.ball.gotoAndStop(ball.rotation);
 
-    // For punch effect, refer FUN_00402ee0
-    if (ball.punchEffectRadius > 0) {
-      ball.punchEffectRadius -= 2;
-      this.punch.width = 2 * ball.punchEffectRadius;
-      this.punch.height = 2 * ball.punchEffectRadius;
-      this.punch.x = ball.punchEffectX;
-      this.punch.y = ball.punchEffectY;
-      this.punch.visible = true;
-    } else {
-      this.punch.visible = false;
+    const punch = getPunchLayout(ball);
+    this.punch.visible = punch.visible;
+    if (punch.visible) {
+      this.punch.width = punch.width;
+      this.punch.height = punch.height;
+      this.punch.x = punch.x;
+      this.punch.y = punch.y;
     }
 
     if (ball.isPowerHit === true) {
@@ -515,7 +457,6 @@ export class GameView {
       this.ballHyper.y = ball.previousY;
       this.ballTrail.x = ball.previousPreviousX;
       this.ballTrail.y = ball.previousPreviousY;
-
       this.ballHyper.visible = true;
       this.ballTrail.visible = true;
     } else {
@@ -529,20 +470,16 @@ export class GameView {
    * @param {number[]} scores [0] for player1 score, [1] for player2 score
    */
   drawScoresToScoreBoards(scores) {
-    for (let i = 0; i < 2; i++) {
-      const scoreBoard = this.scoreBoards[i];
-      const score = scores[i];
+    for (let index = 0; index < 2; index += 1) {
+      const scoreBoard = this.scoreBoards[index];
+      const digits = getScoreDigits(scores[index]);
       const unitsAnimatedSprite = scoreBoard.getChildAt(0);
       const tensAnimatedSprite = scoreBoard.getChildAt(1);
       // @ts-ignore
-      unitsAnimatedSprite.gotoAndStop(score % 10);
+      unitsAnimatedSprite.gotoAndStop(digits.units);
       // @ts-ignore
-      tensAnimatedSprite.gotoAndStop(Math.floor(score / 10) % 10);
-      if (score >= 10) {
-        tensAnimatedSprite.visible = true;
-      } else {
-        tensAnimatedSprite.visible = false;
-      }
+      tensAnimatedSprite.gotoAndStop(digits.tens);
+      tensAnimatedSprite.visible = digits.tensVisible;
     }
   }
 
@@ -579,23 +516,19 @@ export class GameView {
    * @param {number} frameTotal total frame number for game start message
    */
   drawGameStartMessage(frameCounter, frameTotal) {
-    if (frameCounter === 0) {
-      this.messages.gameStart.visible = true;
-    } else if (frameCounter >= frameTotal - 1) {
-      this.messages.gameStart.visible = false;
-      return;
-    }
-
-    const gameStartMessage = this.messages.gameStart;
-    // game start message rendering
-    const w = gameStartMessage.texture.width; // game start message texture width
-    const h = gameStartMessage.texture.height; // game start message texture height
-    const halfWidth = Math.floor((w * frameCounter) / 50);
-    const halfHeight = Math.floor((h * frameCounter) / 50);
-    gameStartMessage.x = 216 - halfWidth;
-    gameStartMessage.y = 50 + 2 * halfHeight;
-    gameStartMessage.width = 2 * halfWidth;
-    gameStartMessage.height = 2 * halfHeight;
+    const message = this.messages.gameStart;
+    const layout = getGameStartLayout(
+      frameCounter,
+      frameTotal,
+      message.texture.width,
+      message.texture.height
+    );
+    message.visible = layout.visible;
+    if (!layout.visible) return;
+    message.x = layout.x;
+    message.y = layout.y;
+    message.width = layout.width;
+    message.height = layout.height;
   }
 
   /**
@@ -620,28 +553,17 @@ export class GameView {
    * @param {number} frameCounter
    */
   drawGameEndMessage(frameCounter) {
-    const gameEndMessage = this.messages.gameEnd;
-    const w = gameEndMessage.texture.width; // game end message texture width;
-    const h = gameEndMessage.texture.height; // game end message texture height;
-
-    if (frameCounter === 0) {
-      gameEndMessage.visible = true;
-    }
-    if (frameCounter < 50) {
-      const halfWidthIncrement = 2 * Math.floor(((50 - frameCounter) * w) / 50);
-      const halfHeightIncrement =
-        2 * Math.floor(((50 - frameCounter) * h) / 50);
-
-      gameEndMessage.x = 216 - w / 2 - halfWidthIncrement;
-      gameEndMessage.y = 50 - halfHeightIncrement;
-      gameEndMessage.width = w + 2 * halfWidthIncrement;
-      gameEndMessage.height = h + 2 * halfHeightIncrement;
-    } else {
-      gameEndMessage.x = 216 - w / 2;
-      gameEndMessage.y = 50;
-      gameEndMessage.width = w;
-      gameEndMessage.height = h;
-    }
+    const message = this.messages.gameEnd;
+    const layout = getGameEndLayout(
+      frameCounter,
+      message.texture.width,
+      message.texture.height
+    );
+    message.visible = layout.visible;
+    message.x = layout.x;
+    message.y = layout.y;
+    message.width = layout.width;
+    message.height = layout.height;
   }
 }
 
@@ -687,16 +609,8 @@ export class FadeInOut {
    * @param {number} alphaIncrement if alphaIncrement > 0: fade out, else fade in
    */
   changeBlackAlphaBy(alphaIncrement) {
-    if (alphaIncrement >= 0) {
-      this.black.alpha = Math.min(1, this.black.alpha + alphaIncrement);
-    } else {
-      this.black.alpha = Math.max(0, this.black.alpha + alphaIncrement);
-    }
-    if (this.black.alpha === 0) {
-      this.black.visible = false;
-    } else {
-      this.black.visible = true;
-    }
+    this.black.alpha = changeFadeAlpha(this.black.alpha, alphaIncrement);
+    this.black.visible = this.black.alpha !== 0;
   }
 }
 
@@ -956,11 +870,5 @@ function addChildToParentAndSetLocalPosition(parent, child, x, y) {
  * @param {number} frameNumber
  */
 function getFrameNumberForPlayerAnimatedSprite(state, frameNumber) {
-  if (state < 4) {
-    return 5 * state + frameNumber;
-  } else if (state === 4) {
-    return 17 + frameNumber;
-  } else if (state > 4) {
-    return 18 + 5 * (state - 5) + frameNumber;
-  }
+  return getPlayerFrameIndex(state, frameNumber);
 }
