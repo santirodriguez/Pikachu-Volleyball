@@ -49,10 +49,10 @@ export LD_LIBRARY_PATH="$PREFIX/lib:$PREFIX/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY
 
 cc -std=c11 -O2 -Wall -Wextra -Wpedantic -D_GNU_SOURCE \
   -I"$QUICKJS_SOURCE" \
-  $(pkg-config --cflags sdl3) \
+  $(pkg-config --cflags sdl3 libpng) \
   "$ROOT/desktop/native/native_main.c" "$QUICKJS_SOURCE/libquickjs.a" \
   -o "$BINARY" \
-  $(pkg-config --libs sdl3) \
+  $(pkg-config --libs sdl3 libpng) \
   -lm -ldl -pthread -latomic \
   -Wl,-rpath,'$ORIGIN/../lib'
 strip --strip-unneeded "$BINARY"
@@ -111,10 +111,369 @@ if grep -q 'not found' "$EVIDENCE_DIR/host-ldd.txt"; then
   exit 1
 fi
 
-xvfb-run -a env SDL_AUDIODRIVER=dummy \
+framebuffer="$EVIDENCE_DIR/native-menu-framebuffer.bmp"
+render_trace="$EVIDENCE_DIR/native-menu-render.json"
+xvfb-run -a env \
+  SDL_AUDIODRIVER=dummy \
+  SDL_RENDER_DRIVER=software \
+  PV_NATIVE_FRAMEBUFFER_PATH="$framebuffer" \
+  PV_NATIVE_RENDER_TRACE_PATH="$render_trace" \
   "$APPDIR/AppRun" --self-test \
   | tee "$EVIDENCE_DIR/prepackage-self-test.txt"
-grep -q '^native_host_self_test=PASS$' "$EVIDENCE_DIR/prepackage-self-test.txt"
+grep -q '^native_host_self_test=PASS
+
+ARCH=x86_64 APPIMAGE_EXTRACT_AND_RUN=1 "$APPIMAGETOOL" \
+  --runtime-file "$APPIMAGE_RUNTIME" \
+  --comp zstd \
+  --no-appstream \
+  "$APPDIR" "$OUTPUT"
+chmod 0755 "$OUTPUT"
+
+bytes="$(stat -c%s "$OUTPUT")"
+mib="$(awk -v bytes="$bytes" 'BEGIN { printf "%.2f", bytes / 1048576 }')"
+sha256="$(sha256sum "$OUTPUT" | awk '{print $1}')"
+headroom_bytes=$((MAX_APPIMAGE_BYTES - bytes))
+bundle_bytes="$(stat -c%s "$BUNDLE")"
+bundle_sha256="$(sha256sum "$BUNDLE" | awk '{print $1}')"
+host_bytes="$(stat -c%s "$BINARY")"
+host_sha256="$(sha256sum "$BINARY" | awk '{print $1}')"
+base_bytes="$(stat -c%s "$BASE_APPIMAGE")"
+base_sha256="$(sha256sum "$BASE_APPIMAGE" | awk '{print $1}')"
+
+if (( bytes > MAX_APPIMAGE_BYTES )); then
+  {
+    echo 'size_gate=FAIL'
+    echo "bytes=$bytes"
+    echo "mib=$mib"
+    echo "limit_bytes=$MAX_APPIMAGE_BYTES"
+    echo "native_bundle_bytes=$bundle_bytes"
+    echo "native_bundle_sha256=$bundle_sha256"
+  } | tee "$EVIDENCE_DIR/summary.txt"
+  echo 'Phase 5 native host AppImage exceeds the 30 MiB architecture budget.' >&2
+  exit 1
+fi
+
+is_known_appimage_host_limit() {
+  local log_file="$1"
+  grep -Eiq \
+    'dlopen\(\): error loading libfuse|AppImages require FUSE|Cannot mount AppImage|failed to open /dev/fuse|fusermount.*failed|FUSE setup failed' \
+    "$log_file"
+}
+
+run_direct_appimage_test() {
+  local log_file="$EVIDENCE_DIR/direct-self-test.txt"
+  set +e
+  timeout 30 xvfb-run -a env SDL_AUDIODRIVER=dummy SDL_RENDER_DRIVER=software \
+    "$OUTPUT" --self-test > "$log_file" 2>&1
+  local status=$?
+  set -e
+  if [[ "$status" -eq 0 ]]; then
+    grep -q '^native_host_self_test=PASS$' "$log_file"
+    printf 'PASS'
+    return 0
+  fi
+  if is_known_appimage_host_limit "$log_file"; then
+    printf 'SKIPPED_HOST_LIMITATION'
+    return 0
+  fi
+  cat "$log_file" >&2
+  echo "Direct native AppImage self-test failed with status $status." >&2
+  return 1
+}
+
+direct_result="$(run_direct_appimage_test)"
+
+APPIMAGE_EXTRACT_AND_RUN=1 timeout 30 xvfb-run -a env \
+  SDL_AUDIODRIVER=dummy SDL_RENDER_DRIVER=software \
+  "$OUTPUT" --self-test \
+  | tee "$EVIDENCE_DIR/extract-run-self-test.txt"
+grep -q '^native_host_self_test=PASS$' "$EVIDENCE_DIR/extract-run-self-test.txt"
+
+rm -rf "$BUILD_ROOT/verify"
+mkdir -p "$BUILD_ROOT/verify"
+(
+  cd "$BUILD_ROOT/verify"
+  "$OUTPUT" --appimage-extract >/dev/null
+)
+xvfb-run -a env SDL_AUDIODRIVER=dummy SDL_RENDER_DRIVER=software \
+  "$BUILD_ROOT/verify/squashfs-root/AppRun" --self-test \
+  | tee "$EVIDENCE_DIR/extracted-apprun-self-test.txt"
+grep -q '^native_host_self_test=PASS$' "$EVIDENCE_DIR/extracted-apprun-self-test.txt"
+
+packaged_bundle="$BUILD_ROOT/verify/squashfs-root/usr/bin/native-app.bundle.js"
+packaged_host="$BUILD_ROOT/verify/squashfs-root/usr/bin/pikachu-volleyball-native"
+if [[ "$(sha256sum "$packaged_bundle" | awk '{print $1}')" != "$bundle_sha256" ]]; then
+  echo 'Native application bundle changed during packaging.' >&2
+  exit 1
+fi
+if [[ "$(sha256sum "$packaged_host" | awk '{print $1}')" != "$host_sha256" ]]; then
+  echo 'Native host binary changed during packaging.' >&2
+  exit 1
+fi
+
+printf '%s  %s\n' "$sha256" "$(basename "$OUTPUT")" \
+  > "$BUILD_ROOT/SHA256SUMS.txt"
+
+{
+  echo 'size_gate=PASS'
+  echo "bytes=$bytes"
+  echo "mib=$mib"
+  echo "limit_bytes=$MAX_APPIMAGE_BYTES"
+  echo "headroom_bytes=$headroom_bytes"
+  echo "sha256=$sha256"
+  echo "native_bundle_bytes=$bundle_bytes"
+  echo "native_bundle_sha256=$bundle_sha256"
+  echo "native_host_bytes=$host_bytes"
+  echo "native_host_sha256=$host_sha256"
+  echo "render_trace_bytes=$render_trace_bytes"
+  echo "render_trace_sha256=$render_trace_sha256"
+  echo "framebuffer_bytes=$framebuffer_bytes"
+  echo "framebuffer_sha256=$framebuffer_sha256"
+  echo "phase3_base_appimage_bytes=$base_bytes"
+  echo "phase3_base_appimage_sha256=$base_sha256"
+  echo "direct_appimage_self_test=$direct_result"
+  echo 'extract_run_self_test=PASS'
+  echo 'extracted_apprun_self_test=PASS'
+  echo 'shared_core_bridge=PASS'
+  echo 'semantic_input_bridge=PASS'
+  echo 'focus_reset_bridge=PASS'
+  echo 'native_graphics_bridge=PASS'
+} | tee "$EVIDENCE_DIR/summary.txt"
+ "$EVIDENCE_DIR/prepackage-self-test.txt"
+grep -q '^native_graphics_bridge=PASS
+
+ARCH=x86_64 APPIMAGE_EXTRACT_AND_RUN=1 "$APPIMAGETOOL" \
+  --runtime-file "$APPIMAGE_RUNTIME" \
+  --comp zstd \
+  --no-appstream \
+  "$APPDIR" "$OUTPUT"
+chmod 0755 "$OUTPUT"
+
+bytes="$(stat -c%s "$OUTPUT")"
+mib="$(awk -v bytes="$bytes" 'BEGIN { printf "%.2f", bytes / 1048576 }')"
+sha256="$(sha256sum "$OUTPUT" | awk '{print $1}')"
+headroom_bytes=$((MAX_APPIMAGE_BYTES - bytes))
+bundle_bytes="$(stat -c%s "$BUNDLE")"
+bundle_sha256="$(sha256sum "$BUNDLE" | awk '{print $1}')"
+host_bytes="$(stat -c%s "$BINARY")"
+host_sha256="$(sha256sum "$BINARY" | awk '{print $1}')"
+base_bytes="$(stat -c%s "$BASE_APPIMAGE")"
+base_sha256="$(sha256sum "$BASE_APPIMAGE" | awk '{print $1}')"
+
+if (( bytes > MAX_APPIMAGE_BYTES )); then
+  {
+    echo 'size_gate=FAIL'
+    echo "bytes=$bytes"
+    echo "mib=$mib"
+    echo "limit_bytes=$MAX_APPIMAGE_BYTES"
+    echo "native_bundle_bytes=$bundle_bytes"
+    echo "native_bundle_sha256=$bundle_sha256"
+  } | tee "$EVIDENCE_DIR/summary.txt"
+  echo 'Phase 5 native host AppImage exceeds the 30 MiB architecture budget.' >&2
+  exit 1
+fi
+
+is_known_appimage_host_limit() {
+  local log_file="$1"
+  grep -Eiq \
+    'dlopen\(\): error loading libfuse|AppImages require FUSE|Cannot mount AppImage|failed to open /dev/fuse|fusermount.*failed|FUSE setup failed' \
+    "$log_file"
+}
+
+run_direct_appimage_test() {
+  local log_file="$EVIDENCE_DIR/direct-self-test.txt"
+  set +e
+  timeout 30 xvfb-run -a env SDL_AUDIODRIVER=dummy \
+    "$OUTPUT" --self-test > "$log_file" 2>&1
+  local status=$?
+  set -e
+  if [[ "$status" -eq 0 ]]; then
+    grep -q '^native_host_self_test=PASS$' "$log_file"
+    printf 'PASS'
+    return 0
+  fi
+  if is_known_appimage_host_limit "$log_file"; then
+    printf 'SKIPPED_HOST_LIMITATION'
+    return 0
+  fi
+  cat "$log_file" >&2
+  echo "Direct native AppImage self-test failed with status $status." >&2
+  return 1
+}
+
+direct_result="$(run_direct_appimage_test)"
+
+APPIMAGE_EXTRACT_AND_RUN=1 timeout 30 xvfb-run -a env SDL_AUDIODRIVER=dummy \
+  "$OUTPUT" --self-test \
+  | tee "$EVIDENCE_DIR/extract-run-self-test.txt"
+grep -q '^native_host_self_test=PASS$' "$EVIDENCE_DIR/extract-run-self-test.txt"
+
+rm -rf "$BUILD_ROOT/verify"
+mkdir -p "$BUILD_ROOT/verify"
+(
+  cd "$BUILD_ROOT/verify"
+  "$OUTPUT" --appimage-extract >/dev/null
+)
+xvfb-run -a env SDL_AUDIODRIVER=dummy \
+  "$BUILD_ROOT/verify/squashfs-root/AppRun" --self-test \
+  | tee "$EVIDENCE_DIR/extracted-apprun-self-test.txt"
+grep -q '^native_host_self_test=PASS$' "$EVIDENCE_DIR/extracted-apprun-self-test.txt"
+
+packaged_bundle="$BUILD_ROOT/verify/squashfs-root/usr/bin/native-app.bundle.js"
+packaged_host="$BUILD_ROOT/verify/squashfs-root/usr/bin/pikachu-volleyball-native"
+if [[ "$(sha256sum "$packaged_bundle" | awk '{print $1}')" != "$bundle_sha256" ]]; then
+  echo 'Native application bundle changed during packaging.' >&2
+  exit 1
+fi
+if [[ "$(sha256sum "$packaged_host" | awk '{print $1}')" != "$host_sha256" ]]; then
+  echo 'Native host binary changed during packaging.' >&2
+  exit 1
+fi
+
+printf '%s  %s\n' "$sha256" "$(basename "$OUTPUT")" \
+  > "$BUILD_ROOT/SHA256SUMS.txt"
+
+{
+  echo 'size_gate=PASS'
+  echo "bytes=$bytes"
+  echo "mib=$mib"
+  echo "limit_bytes=$MAX_APPIMAGE_BYTES"
+  echo "headroom_bytes=$headroom_bytes"
+  echo "sha256=$sha256"
+  echo "native_bundle_bytes=$bundle_bytes"
+  echo "native_bundle_sha256=$bundle_sha256"
+  echo "native_host_bytes=$host_bytes"
+  echo "native_host_sha256=$host_sha256"
+  echo "phase3_base_appimage_bytes=$base_bytes"
+  echo "phase3_base_appimage_sha256=$base_sha256"
+  echo "direct_appimage_self_test=$direct_result"
+  echo 'extract_run_self_test=PASS'
+  echo 'extracted_apprun_self_test=PASS'
+  echo 'shared_core_bridge=PASS'
+  echo 'semantic_input_bridge=PASS'
+  echo 'focus_reset_bridge=PASS'
+} | tee "$EVIDENCE_DIR/summary.txt"
+ "$EVIDENCE_DIR/prepackage-self-test.txt"
+grep -q '^native_framebuffer_variation=PASS
+
+ARCH=x86_64 APPIMAGE_EXTRACT_AND_RUN=1 "$APPIMAGETOOL" \
+  --runtime-file "$APPIMAGE_RUNTIME" \
+  --comp zstd \
+  --no-appstream \
+  "$APPDIR" "$OUTPUT"
+chmod 0755 "$OUTPUT"
+
+bytes="$(stat -c%s "$OUTPUT")"
+mib="$(awk -v bytes="$bytes" 'BEGIN { printf "%.2f", bytes / 1048576 }')"
+sha256="$(sha256sum "$OUTPUT" | awk '{print $1}')"
+headroom_bytes=$((MAX_APPIMAGE_BYTES - bytes))
+bundle_bytes="$(stat -c%s "$BUNDLE")"
+bundle_sha256="$(sha256sum "$BUNDLE" | awk '{print $1}')"
+host_bytes="$(stat -c%s "$BINARY")"
+host_sha256="$(sha256sum "$BINARY" | awk '{print $1}')"
+base_bytes="$(stat -c%s "$BASE_APPIMAGE")"
+base_sha256="$(sha256sum "$BASE_APPIMAGE" | awk '{print $1}')"
+
+if (( bytes > MAX_APPIMAGE_BYTES )); then
+  {
+    echo 'size_gate=FAIL'
+    echo "bytes=$bytes"
+    echo "mib=$mib"
+    echo "limit_bytes=$MAX_APPIMAGE_BYTES"
+    echo "native_bundle_bytes=$bundle_bytes"
+    echo "native_bundle_sha256=$bundle_sha256"
+  } | tee "$EVIDENCE_DIR/summary.txt"
+  echo 'Phase 5 native host AppImage exceeds the 30 MiB architecture budget.' >&2
+  exit 1
+fi
+
+is_known_appimage_host_limit() {
+  local log_file="$1"
+  grep -Eiq \
+    'dlopen\(\): error loading libfuse|AppImages require FUSE|Cannot mount AppImage|failed to open /dev/fuse|fusermount.*failed|FUSE setup failed' \
+    "$log_file"
+}
+
+run_direct_appimage_test() {
+  local log_file="$EVIDENCE_DIR/direct-self-test.txt"
+  set +e
+  timeout 30 xvfb-run -a env SDL_AUDIODRIVER=dummy \
+    "$OUTPUT" --self-test > "$log_file" 2>&1
+  local status=$?
+  set -e
+  if [[ "$status" -eq 0 ]]; then
+    grep -q '^native_host_self_test=PASS$' "$log_file"
+    printf 'PASS'
+    return 0
+  fi
+  if is_known_appimage_host_limit "$log_file"; then
+    printf 'SKIPPED_HOST_LIMITATION'
+    return 0
+  fi
+  cat "$log_file" >&2
+  echo "Direct native AppImage self-test failed with status $status." >&2
+  return 1
+}
+
+direct_result="$(run_direct_appimage_test)"
+
+APPIMAGE_EXTRACT_AND_RUN=1 timeout 30 xvfb-run -a env SDL_AUDIODRIVER=dummy \
+  "$OUTPUT" --self-test \
+  | tee "$EVIDENCE_DIR/extract-run-self-test.txt"
+grep -q '^native_host_self_test=PASS$' "$EVIDENCE_DIR/extract-run-self-test.txt"
+
+rm -rf "$BUILD_ROOT/verify"
+mkdir -p "$BUILD_ROOT/verify"
+(
+  cd "$BUILD_ROOT/verify"
+  "$OUTPUT" --appimage-extract >/dev/null
+)
+xvfb-run -a env SDL_AUDIODRIVER=dummy \
+  "$BUILD_ROOT/verify/squashfs-root/AppRun" --self-test \
+  | tee "$EVIDENCE_DIR/extracted-apprun-self-test.txt"
+grep -q '^native_host_self_test=PASS$' "$EVIDENCE_DIR/extracted-apprun-self-test.txt"
+
+packaged_bundle="$BUILD_ROOT/verify/squashfs-root/usr/bin/native-app.bundle.js"
+packaged_host="$BUILD_ROOT/verify/squashfs-root/usr/bin/pikachu-volleyball-native"
+if [[ "$(sha256sum "$packaged_bundle" | awk '{print $1}')" != "$bundle_sha256" ]]; then
+  echo 'Native application bundle changed during packaging.' >&2
+  exit 1
+fi
+if [[ "$(sha256sum "$packaged_host" | awk '{print $1}')" != "$host_sha256" ]]; then
+  echo 'Native host binary changed during packaging.' >&2
+  exit 1
+fi
+
+printf '%s  %s\n' "$sha256" "$(basename "$OUTPUT")" \
+  > "$BUILD_ROOT/SHA256SUMS.txt"
+
+{
+  echo 'size_gate=PASS'
+  echo "bytes=$bytes"
+  echo "mib=$mib"
+  echo "limit_bytes=$MAX_APPIMAGE_BYTES"
+  echo "headroom_bytes=$headroom_bytes"
+  echo "sha256=$sha256"
+  echo "native_bundle_bytes=$bundle_bytes"
+  echo "native_bundle_sha256=$bundle_sha256"
+  echo "native_host_bytes=$host_bytes"
+  echo "native_host_sha256=$host_sha256"
+  echo "phase3_base_appimage_bytes=$base_bytes"
+  echo "phase3_base_appimage_sha256=$base_sha256"
+  echo "direct_appimage_self_test=$direct_result"
+  echo 'extract_run_self_test=PASS'
+  echo 'extracted_apprun_self_test=PASS'
+  echo 'shared_core_bridge=PASS'
+  echo 'semantic_input_bridge=PASS'
+  echo 'focus_reset_bridge=PASS'
+} | tee "$EVIDENCE_DIR/summary.txt"
+ "$EVIDENCE_DIR/prepackage-self-test.txt"
+test -s "$framebuffer"
+test -s "$render_trace"
+framebuffer_bytes="$(stat -c%s "$framebuffer")"
+framebuffer_sha256="$(sha256sum "$framebuffer" | awk '{print $1}')"
+render_trace_bytes="$(stat -c%s "$render_trace")"
+render_trace_sha256="$(sha256sum "$render_trace" | awk '{print $1}')"
 
 ARCH=x86_64 APPIMAGE_EXTRACT_AND_RUN=1 "$APPIMAGETOOL" \
   --runtime-file "$APPIMAGE_RUNTIME" \

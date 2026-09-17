@@ -1,5 +1,6 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
+#include <png.h>
 #include <quickjs.h>
 
 #include <limits.h>
@@ -24,6 +25,9 @@ typedef struct NativeRuntime {
   JSValue api;
   SDL_Window *window;
   SDL_Renderer *renderer;
+  SDL_Texture *sprite_texture;
+  int sprite_width;
+  int sprite_height;
   char base_path[PATH_MAX];
 } NativeRuntime;
 
@@ -63,6 +67,52 @@ static char *read_text_file(const char *path, size_t *length_out) {
   if (length_out) *length_out = read_length;
   return buffer;
 }
+
+static SDL_Texture *load_png_texture(SDL_Renderer *renderer, const char *path,
+                                     int *width_out, int *height_out) {
+  png_image image;
+  memset(&image, 0, sizeof(image));
+  image.version = PNG_IMAGE_VERSION;
+
+  if (!png_image_begin_read_from_file(&image, path)) {
+    fprintf(stderr, "libpng could not read %s: %s\n", path, image.message);
+    return NULL;
+  }
+
+  image.format = PNG_FORMAT_RGBA;
+  size_t buffer_size = PNG_IMAGE_SIZE(image);
+  void *pixels = malloc(buffer_size);
+  if (!pixels) {
+    png_image_free(&image);
+    return NULL;
+  }
+
+  if (!png_image_finish_read(&image, NULL, pixels, 0, NULL)) {
+    fprintf(stderr, "libpng could not decode %s: %s\n", path, image.message);
+    free(pixels);
+    png_image_free(&image);
+    return NULL;
+  }
+
+  SDL_Texture *texture = SDL_CreateTexture(
+      renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STATIC,
+      (int)image.width, (int)image.height);
+  if (!texture ||
+      !SDL_UpdateTexture(texture, NULL, pixels, (int)image.width * 4) ||
+      !SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND)) {
+    fprintf(stderr, "SDL texture creation failed: %s\n", SDL_GetError());
+    if (texture) SDL_DestroyTexture(texture);
+    texture = NULL;
+  } else {
+    *width_out = (int)image.width;
+    *height_out = (int)image.height;
+  }
+
+  free(pixels);
+  png_image_free(&image);
+  return texture;
+}
+
 
 static void report_js_exception(JSContext *context, const char *operation) {
   JSValue exception = JS_GetException(context);
@@ -193,6 +243,123 @@ static bool js_get_string(NativeRuntime *state, const char *name, char *output,
   JS_FreeCString(state->context, value);
   return fits;
 }
+
+static bool js_object_get_double(JSContext *context, JSValueConst object,
+                                 const char *name, double *value_out) {
+  JSValue value = JS_GetPropertyStr(context, object, name);
+  if (JS_IsException(value)) {
+    JS_FreeValue(context, value);
+    return false;
+  }
+  int status = JS_ToFloat64(context, value_out, value);
+  JS_FreeValue(context, value);
+  return status == 0;
+}
+
+static bool js_object_get_bool(JSContext *context, JSValueConst object,
+                               const char *name, bool *value_out) {
+  JSValue value = JS_GetPropertyStr(context, object, name);
+  if (JS_IsException(value)) {
+    JS_FreeValue(context, value);
+    return false;
+  }
+  int converted = JS_ToBool(context, value);
+  JS_FreeValue(context, value);
+  if (converted < 0) return false;
+  *value_out = converted != 0;
+  return true;
+}
+
+static bool js_object_get_string(JSContext *context, JSValueConst object,
+                                 const char *name, char *output,
+                                 size_t output_size) {
+  JSValue value = JS_GetPropertyStr(context, object, name);
+  if (JS_IsException(value)) {
+    JS_FreeValue(context, value);
+    return false;
+  }
+  const char *text = JS_ToCString(context, value);
+  JS_FreeValue(context, value);
+  if (!text) return false;
+  size_t length = strlen(text);
+  bool fits = length < output_size;
+  if (fits) memcpy(output, text, length + 1);
+  JS_FreeCString(context, text);
+  return fits;
+}
+
+static bool js_array_length(JSContext *context, JSValueConst array,
+                            uint32_t *length_out) {
+  JSValue length = JS_GetPropertyStr(context, array, "length");
+  if (JS_IsException(length)) {
+    JS_FreeValue(context, length);
+    return false;
+  }
+  int status = JS_ToUint32(context, length_out, length);
+  JS_FreeValue(context, length);
+  return status == 0;
+}
+
+static bool write_render_trace(NativeRuntime *state) {
+  const char *path = getenv("PV_NATIVE_RENDER_TRACE_PATH");
+  if (!path || path[0] == '\0') return true;
+
+  JSValue result;
+  if (!call_api(state, "getRenderFrameJson", 0, NULL, &result)) return false;
+  size_t length = 0;
+  const char *text = JS_ToCStringLen(state->context, &length, result);
+  JS_FreeValue(state->context, result);
+  if (!text) return false;
+
+  FILE *file = fopen(path, "wb");
+  bool ok = file && fwrite(text, 1, length, file) == length;
+  if (file) fclose(file);
+  JS_FreeCString(state->context, text);
+  if (!ok) {
+    fprintf(stderr, "Unable to write native render trace: %s\n", path);
+    return false;
+  }
+  printf("native_render_trace_bytes=%zu\n", length);
+  return true;
+}
+
+static bool validate_framebuffer(NativeRuntime *state) {
+  SDL_Surface *surface = SDL_RenderReadPixels(state->renderer, NULL);
+  if (!surface) {
+    fprintf(stderr, "SDL_RenderReadPixels failed: %s\n", SDL_GetError());
+    return false;
+  }
+
+  int bytes_per_pixel = SDL_BYTESPERPIXEL(surface->format);
+  bool varied = false;
+  if (bytes_per_pixel > 0 && surface->pixels) {
+    const Uint8 *first = (const Uint8 *)surface->pixels;
+    for (int y = 0; y < surface->h && !varied; y += 1) {
+      const Uint8 *row = (const Uint8 *)surface->pixels + y * surface->pitch;
+      for (int x = 0; x < surface->w; x += 1) {
+        if (memcmp(row + x * bytes_per_pixel, first,
+                   (size_t)bytes_per_pixel) != 0) {
+          varied = true;
+          break;
+        }
+      }
+    }
+  }
+
+  const char *path = getenv("PV_NATIVE_FRAMEBUFFER_PATH");
+  bool saved = true;
+  if (path && path[0] != '\0') {
+    saved = SDL_SaveBMP(surface, path);
+    if (!saved) {
+      fprintf(stderr, "SDL_SaveBMP failed: %s\n", SDL_GetError());
+    }
+  }
+
+  SDL_DestroySurface(surface);
+  printf("native_framebuffer_variation=%s\n", varied ? "PASS" : "FAIL");
+  return varied && saved;
+}
+
 
 static const char *scancode_to_code(SDL_Scancode scancode, char *buffer,
                                     size_t buffer_size) {
@@ -338,6 +505,19 @@ static bool run_self_test(NativeRuntime *state) {
     return false;
   }
 
+  if (!js_step(state)) {
+    fprintf(stderr, "Native menu presentation step failed\n");
+    return false;
+  }
+
+  int render_command_count = 0;
+  if (!render_frame(state, true, &render_command_count) ||
+      render_command_count < 20 || !write_render_trace(state)) {
+    fprintf(stderr, "Native atlas presentation self-test failed\n");
+    return false;
+  }
+  printf("native_render_commands=PASS count=%d\n", render_command_count);
+
   if (!js_handle_key(state, "KeyP", true, false) ||
       !js_get_string(state, "getStateJson", json, sizeof(json)) ||
       !contains(json, "\"paused\":true") ||
@@ -388,32 +568,128 @@ static bool run_self_test(NativeRuntime *state) {
   printf("semantic_input_bridge=PASS\n");
   printf("settings_bridge=PASS\n");
   printf("focus_reset_bridge=PASS\n");
+  printf("native_graphics_bridge=PASS\n");
   return true;
 }
 
-static void render_frame(NativeRuntime *state) {
-  char state_id[96] = "unknown";
-  int target_fps = 0;
-  js_get_string(state, "getStateId", state_id, sizeof(state_id));
-  js_get_int(state, "getTargetFps", &target_fps);
+static bool render_frame(NativeRuntime *state, bool validate_pixels,
+                         int *command_count_out) {
+  JSValue frame;
+  if (!call_api(state, "getRenderFrame", 0, NULL, &frame)) return false;
 
-  SDL_SetRenderDrawColor(state->renderer, 16, 22, 30, 255);
+  char scale_mode[16];
+  if (!js_object_get_string(state->context, frame, "scaleMode", scale_mode,
+                            sizeof(scale_mode))) {
+    JS_FreeValue(state->context, frame);
+    return false;
+  }
+
+  SDL_ScaleMode sdl_scale_mode =
+      strcmp(scale_mode, "linear") == 0 ? SDL_SCALEMODE_LINEAR
+                                        : SDL_SCALEMODE_NEAREST;
+  if (!SDL_SetTextureScaleMode(state->sprite_texture, sdl_scale_mode)) {
+    fprintf(stderr, "SDL_SetTextureScaleMode failed: %s\n", SDL_GetError());
+    JS_FreeValue(state->context, frame);
+    return false;
+  }
+
+  JSValue commands = JS_GetPropertyStr(state->context, frame, "commands");
+  if (JS_IsException(commands)) {
+    JS_FreeValue(state->context, commands);
+    JS_FreeValue(state->context, frame);
+    return false;
+  }
+
+  uint32_t command_count = 0;
+  if (!js_array_length(state->context, commands, &command_count)) {
+    JS_FreeValue(state->context, commands);
+    JS_FreeValue(state->context, frame);
+    return false;
+  }
+
+  SDL_SetRenderDrawColor(state->renderer, 0, 0, 0, 255);
   SDL_RenderClear(state->renderer);
-  SDL_SetRenderDrawColor(state->renderer, 245, 245, 245, 255);
-  SDL_RenderDebugText(state->renderer, 24.0f, 24.0f,
-                      "Pikachu Volleyball native production host");
-  SDL_RenderDebugText(state->renderer, 24.0f, 44.0f,
-                      "Phase 5.2: SDL3 + QuickJS shared-core bridge");
-  char status[160];
-  snprintf(status, sizeof(status), "Core state: %s | target FPS: %d", state_id,
-           target_fps);
-  SDL_RenderDebugText(state->renderer, 24.0f, 72.0f, status);
-  SDL_RenderDebugText(state->renderer, 24.0f, 96.0f,
-                      "Presentation parity replaces this diagnostic view in 5.3");
+
+  for (uint32_t index = 0; index < command_count; index += 1) {
+    JSValue command = JS_GetPropertyUint32(state->context, commands, index);
+    if (JS_IsException(command)) {
+      JS_FreeValue(state->context, command);
+      JS_FreeValue(state->context, commands);
+      JS_FreeValue(state->context, frame);
+      return false;
+    }
+
+    double sx = 0;
+    double sy = 0;
+    double sw = 0;
+    double sh = 0;
+    double x = 0;
+    double y = 0;
+    double width = 0;
+    double height = 0;
+    double anchor_x = 0;
+    double anchor_y = 0;
+    double alpha = 1;
+    bool flip_x = false;
+
+    bool ok =
+        js_object_get_double(state->context, command, "sx", &sx) &&
+        js_object_get_double(state->context, command, "sy", &sy) &&
+        js_object_get_double(state->context, command, "sw", &sw) &&
+        js_object_get_double(state->context, command, "sh", &sh) &&
+        js_object_get_double(state->context, command, "x", &x) &&
+        js_object_get_double(state->context, command, "y", &y) &&
+        js_object_get_double(state->context, command, "width", &width) &&
+        js_object_get_double(state->context, command, "height", &height) &&
+        js_object_get_double(state->context, command, "anchorX", &anchor_x) &&
+        js_object_get_double(state->context, command, "anchorY", &anchor_y) &&
+        js_object_get_double(state->context, command, "alpha", &alpha) &&
+        js_object_get_bool(state->context, command, "flipX", &flip_x);
+
+    if (!ok) {
+      JS_FreeValue(state->context, command);
+      JS_FreeValue(state->context, commands);
+      JS_FreeValue(state->context, frame);
+      return false;
+    }
+
+    if (width > 0 && height > 0 && alpha > 0) {
+      SDL_FRect source = {(float)sx, (float)sy, (float)sw, (float)sh};
+      SDL_FRect destination = {
+          (float)(x - width * anchor_x),
+          (float)(y - height * anchor_y),
+          (float)width,
+          (float)height,
+      };
+      double clamped_alpha = alpha < 0 ? 0 : (alpha > 1 ? 1 : alpha);
+      Uint8 alpha_mod = (Uint8)(clamped_alpha * 255.0 + 0.5);
+      if (!SDL_SetTextureAlphaMod(state->sprite_texture, alpha_mod) ||
+          !SDL_RenderTextureRotated(
+              state->renderer, state->sprite_texture, &source, &destination,
+              0.0, NULL, flip_x ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE)) {
+        fprintf(stderr, "SDL atlas render failed: %s\n", SDL_GetError());
+        JS_FreeValue(state->context, command);
+        JS_FreeValue(state->context, commands);
+        JS_FreeValue(state->context, frame);
+        return false;
+      }
+    }
+
+    JS_FreeValue(state->context, command);
+  }
+
+  SDL_SetTextureAlphaMod(state->sprite_texture, 255);
+  bool framebuffer_ok = !validate_pixels || validate_framebuffer(state);
   SDL_RenderPresent(state->renderer);
+
+  JS_FreeValue(state->context, commands);
+  JS_FreeValue(state->context, frame);
+  if (command_count_out) *command_count_out = (int)command_count;
+  return framebuffer_ok;
 }
 
 static void destroy_runtime(NativeRuntime *state) {
+  if (state->sprite_texture) SDL_DestroyTexture(state->sprite_texture);
   if (state->renderer) SDL_DestroyRenderer(state->renderer);
   if (state->window) SDL_DestroyWindow(state->window);
   if (state->context && !JS_IsUndefined(state->api)) {
@@ -456,6 +732,22 @@ int main(int argc, char **argv) {
           SDL_LOGICAL_PRESENTATION_LETTERBOX)) {
     fprintf(stderr, "Unable to configure native window/renderer: %s\n",
             SDL_GetError());
+    destroy_runtime(&state);
+    return 2;
+  }
+
+  char sprite_path[PATH_MAX];
+  if (!join_path(sprite_path, sizeof(sprite_path), state.base_path,
+                 "assets/sprite_sheet.png")) {
+    destroy_runtime(&state);
+    return 2;
+  }
+  state.sprite_texture =
+      load_png_texture(state.renderer, sprite_path, &state.sprite_width,
+                       &state.sprite_height);
+  if (!state.sprite_texture || state.sprite_width != 476 ||
+      state.sprite_height != 885) {
+    fprintf(stderr, "Unable to load production sprite atlas\n");
     destroy_runtime(&state);
     return 2;
   }
@@ -512,7 +804,10 @@ int main(int argc, char **argv) {
       next_tick = now + (frame_ms > 0 ? frame_ms : 1);
     }
 
-    render_frame(&state);
+    if (!render_frame(&state, false, NULL)) {
+      destroy_runtime(&state);
+      return 2;
+    }
     SDL_Delay(1);
   }
 

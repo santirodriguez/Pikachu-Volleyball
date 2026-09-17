@@ -6,6 +6,7 @@ import inputFrameModule from './input_frame.cjs';
 import controlBindingsModule from './control_bindings.cjs';
 import settingsStoreModule from './settings_store.cjs';
 import gameSettingsModule from './game_settings.cjs';
+import { createNativeRenderState } from './native_render_state.js';
 
 const { INPUT_ACTIONS, InputActionState } = inputActionsModule;
 const { createFrameInputFromActionSnapshot } = inputFrameModule;
@@ -78,6 +79,7 @@ export function initialize(serializedPreferences = '{}') {
   const controlBindings = parseControlBindings(
     preferences[CONTROL_BINDING_STORAGE_KEY]
   );
+  const renderState = createNativeRenderState(settings.graphic);
   const core = createGameCore();
   core.normalFPS = FPS_BY_SPEED[settings.speed];
   core.winningScore = Number(settings.winningScore);
@@ -85,6 +87,7 @@ export function initialize(serializedPreferences = '{}') {
 
   application = {
     core,
+    renderState,
     settings,
     controlBindings,
     actionStates: [
@@ -142,6 +145,7 @@ export function step() {
   }
 
   active.lastResult = active.core.step({ players: frameInputs });
+  active.renderState.applyEffects(active.lastResult.effects);
   return active.lastResult;
 }
 
@@ -174,5 +178,14 @@ export function getTargetFps() {
 export function setPracticeMode(enabled) {
   const active = requireApplication();
   active.lastResult = active.core.setPracticeMode(Boolean(enabled));
+  active.renderState.applyEffects(active.lastResult.effects);
   return active.core.isPracticeMode;
+}
+
+export function getRenderFrame() {
+  return requireApplication().renderState.getRenderFrame();
+}
+
+export function getRenderFrameJson() {
+  return JSON.stringify(getRenderFrame());
 }
