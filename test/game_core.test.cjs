@@ -199,7 +199,7 @@ test('core preserves quick rematch, practice reset, pause and restart commands',
   core.requestPracticeReset();
   result = core.runState(GAME_STATE_IDS.ROUND);
   assert.equal(result.snapshot.physics.ball.x, 56);
-  assert.equal(result.snapshot.practiceResetRequested, undefined);
+  assert.equal(core.practiceResetRequested, false);
 
   core.setPaused(true);
   const before = core.getSnapshot();
