@@ -100,13 +100,19 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          expected_trace_sha256='1f8cf2eff81d0fcacd671882cb96e5c39b33fc05462e2b61b8937e059d70efb1'
           cmp build/phase4/evidence/node-trace.json \
             build/phase4/evidence/quickjs-trace.json
           trace_sha256="$(sha256sum build/phase4/evidence/node-trace.json | awk '{print $1}')"
+          if [[ "$trace_sha256" != "$expected_trace_sha256" ]]; then
+            echo "Portable gameplay trace changed: expected $expected_trace_sha256, got $trace_sha256" >&2
+            exit 1
+          fi
           bundle_bytes="$(stat -c%s build/phase4/core-parity.bundle.js)"
           bundle_sha256="$(sha256sum build/phase4/core-parity.bundle.js | awk '{print $1}')"
           {
             echo "quickjs_version=2026-06-04"
+            echo "expected_trace_sha256=$expected_trace_sha256"
             echo "trace_sha256=$trace_sha256"
             echo "bundle_bytes=$bundle_bytes"
             echo "bundle_sha256=$bundle_sha256"
