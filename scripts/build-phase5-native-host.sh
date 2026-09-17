@@ -56,6 +56,7 @@ cc -std=c11 -O2 -Wall -Wextra -Wpedantic -D_GNU_SOURCE \
   -lm -ldl -pthread -latomic \
   -Wl,-rpath,'$ORIGIN/../lib'
 strip --strip-unneeded "$BINARY"
+patchelf --set-rpath '$ORIGIN/../lib' "$BINARY"
 
 rm -rf "$BUILD_ROOT/extract"
 mkdir -p "$BUILD_ROOT/extract"
@@ -80,7 +81,6 @@ fi
 
 install -m 0755 "$BINARY" "$APPDIR/usr/bin/pikachu-volleyball-native"
 install -m 0644 "$BUNDLE" "$APPDIR/usr/bin/native-app.bundle.js"
-patchelf --set-rpath '$ORIGIN/../lib' "$APPDIR/usr/bin/pikachu-volleyball-native"
 
 cat > "$APPDIR/AppRun" <<'APP_RUN'
 #!/usr/bin/env bash
