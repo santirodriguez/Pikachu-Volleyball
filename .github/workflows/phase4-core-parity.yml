@@ -1,0 +1,131 @@
+name: Phase 4 Core Parity
+
+on:
+  pull_request:
+    branches:
+      - v3-restart
+    paths:
+      - '.github/workflows/phase4-core-parity.yml'
+      - 'src/resources/js/core_parity_runner.js'
+      - 'src/resources/js/game_core.cjs'
+      - 'src/resources/js/game_lifecycle.cjs'
+      - 'src/resources/js/game_presentation.cjs'
+      - 'src/resources/js/physics.js'
+      - 'src/resources/js/rand.js'
+      - 'src/resources/js/shared_core.js'
+      - 'webpack.core-parity.js'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase4-core-parity-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quickjs-parity:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22.12.0
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build shared-core parity bundle
+        run: npx webpack --config webpack.core-parity.js
+
+      - name: Run parity bundle under Node
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/phase4/evidence
+          node build/phase4/core-parity.bundle.js \
+            > build/phase4/evidence/node-trace.json
+
+      - name: Build pinned QuickJS
+        shell: bash
+        run: |
+          set -euo pipefail
+          quickjs_version='2026-06-04'
+          quickjs_sha256='b376e839b322978313d929fd20663b11ba58b75df5a46c126dd19ea2fa70ad2a'
+          archive="build/phase4/quickjs-${quickjs_version}.tar.xz"
+          source_dir='build/phase4/quickjs'
+          curl --fail --location --retry 3 --retry-all-errors --silent --show-error \
+            "https://bellard.org/quickjs/quickjs-${quickjs_version}.tar.xz" \
+            --output "$archive"
+          printf '%s  %s\n' "$quickjs_sha256" "$archive" \
+            | sha256sum --check --status
+          mkdir -p "$source_dir"
+          tar -xJf "$archive" --strip-components=1 -C "$source_dir"
+          make -C "$source_dir" -j2 qjs
+
+      - name: Run parity bundle under QuickJS
+        shell: bash
+        run: |
+          set -euo pipefail
+          wrapper='build/phase4/quickjs-runner.js'
+          {
+            echo 'globalThis.console = {'
+            echo '  log(value) { std.puts(String(value) + "\\n"); }'
+            echo '};'
+            cat build/phase4/core-parity.bundle.js
+          } > "$wrapper"
+          build/phase4/quickjs/qjs --std "$wrapper" \
+            > build/phase4/evidence/quickjs-trace.json
+
+      - name: Compare cross-engine traces
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmp build/phase4/evidence/node-trace.json \
+            build/phase4/evidence/quickjs-trace.json
+          trace_sha256="$(sha256sum build/phase4/evidence/node-trace.json | awk '{print $1}')"
+          bundle_bytes="$(stat -c%s build/phase4/core-parity.bundle.js)"
+          bundle_sha256="$(sha256sum build/phase4/core-parity.bundle.js | awk '{print $1}')"
+          {
+            echo "quickjs_version=2026-06-04"
+            echo "trace_sha256=$trace_sha256"
+            echo "bundle_bytes=$bundle_bytes"
+            echo "bundle_sha256=$bundle_sha256"
+            echo 'cross_engine_parity=PASS'
+          } | tee build/phase4/evidence/summary.txt
+
+      - name: Report core parity evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          summary='build/phase4/evidence/summary.txt'
+          if [[ -s "$summary" ]]; then
+            {
+              echo '## Phase 4 QuickJS core parity'
+              echo ''
+              echo '```text'
+              cat "$summary"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'Phase 4 did not reach final cross-engine evidence generation.' \
+              >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload core parity evidence
+        uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: phase4-core-parity
+          path: |
+            build/phase4/core-parity.bundle.js
+            build/phase4/evidence/**
+          if-no-files-found: warn
+          retention-days: 14
