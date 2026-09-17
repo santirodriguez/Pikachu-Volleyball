@@ -89,7 +89,7 @@ jobs:
           wrapper='build/phase4/quickjs-runner.js'
           {
             echo 'globalThis.console = {'
-            echo '  log(value) { std.puts(String(value) + "\\n"); }'
+            echo '  log(value) { std.puts(String(value) + "\n"); }'
             echo '};'
             cat build/phase4/core-parity.bundle.js
           } > "$wrapper"
