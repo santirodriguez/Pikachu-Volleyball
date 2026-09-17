@@ -1,0 +1,83 @@
+name: Phase 3 Native Feasibility
+
+on:
+  pull_request:
+    branches:
+      - v3-restart
+    paths:
+      - '.github/workflows/phase3-native-feasibility.yml'
+      - 'desktop/native-spike/**'
+      - 'src/en/index.html'
+      - 'src/es-ar/index.html'
+      - 'src/ca/index.html'
+      - 'src/ko/index.html'
+      - 'src/zh/index.html'
+      - 'src/resources/assets/images/sprite_sheet.png'
+      - 'src/resources/assets/images/sprite_sheet.json'
+      - 'src/resources/assets/images/IDI_PIKAICON-1_gap_filled_192.png'
+      - 'src/resources/assets/sounds/WAVE140_1.wav'
+      - 'src/resources/assets/sounds/bgm.mp3'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase3-native-feasibility-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-spike:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Install native build dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake ninja-build pkg-config curl xz-utils patchelf xvfb \
+            libpng-dev libmpg123-dev \
+            libasound2-dev libpulse-dev \
+            libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev libxfixes-dev \
+            libxkbcommon-dev libwayland-dev libdrm-dev libgbm-dev \
+            libegl1-mesa-dev libgl1-mesa-dev
+
+      - name: Build and validate native AppImage spike
+        shell: bash
+        run: bash desktop/native-spike/build-appimage.sh
+
+      - name: Report feasibility evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          summary='build/native-spike/evidence/summary.txt'
+          if [[ -s "$summary" ]]; then
+            {
+              echo '## Phase 3 native feasibility evidence'
+              echo ''
+              echo '```text'
+              cat "$summary"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'Phase 3 did not reach final evidence generation.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload native feasibility artifact
+        uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: phase3-native-feasibility
+          path: |
+            build/native-spike/*.AppImage
+            build/native-spike/SHA256SUMS.txt
+            build/native-spike/evidence/**
+          if-no-files-found: warn
+          retention-days: 14
