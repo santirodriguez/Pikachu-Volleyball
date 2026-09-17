@@ -61,8 +61,8 @@ test('shared presentation math preserves intro and menu animation boundaries', (
     {
       visible: true,
       displacement: 0,
-      x: 0,
-      y: 0,
+      x: -0,
+      y: -0,
       alpha: 0.04,
     }
   );
