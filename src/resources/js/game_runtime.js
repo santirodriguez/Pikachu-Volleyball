@@ -42,7 +42,7 @@ import { CanvasRenderer } from '@pixi/canvas-renderer';
 import { CanvasSpriteRenderer } from '@pixi/canvas-sprite';
 import { CanvasPrepare } from '@pixi/canvas-prepare';
 import '@pixi/canvas-display';
-import { PikachuVolleyball } from './pikavolley_core_adapter.js';
+import { PikachuVolleyball } from './pikavolley.js';
 import { ASSETS_PATH } from './assets_path.js';
 import { createGameCommands } from './game_commands.js';
 import { setUpIntegratedMenuLauncher } from './integrated_menu_launcher.js';
