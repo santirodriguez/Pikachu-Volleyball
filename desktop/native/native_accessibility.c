@@ -252,7 +252,7 @@ static accesskit_rect item_rect(const NativeAccessibleItem *item) {
 }
 
 static accesskit_node *build_item_node(const NativeAccessibleItem *item) {
-  accesskit_role role =
+  enum accesskit_role role =
       strcmp(item->kind, "link") == 0 ? ACCESSKIT_ROLE_LINK
                                       : ACCESSKIT_ROLE_BUTTON;
   accesskit_node *node = accesskit_node_new(role);
