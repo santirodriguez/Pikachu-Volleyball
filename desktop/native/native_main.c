@@ -6,6 +6,7 @@
 #include "native_accessibility.h"
 #include "native_audio.h"
 #include "native_menu_renderer.h"
+#include "native_startup.h"
 
 #include <errno.h>
 #include <limits.h>
@@ -681,8 +682,7 @@ static bool process_platform_commands(NativeRuntime *state, bool *quit_out,
 }
 
 static const char *detect_initial_locale(void) {
-  const char *language = getenv("LANG");
-  return language && language[0] != '\0' ? language : "en";
+  return native_startup_normalize_locale(getenv("LANG"));
 }
 
 static bool write_render_trace(NativeRuntime *state) {
@@ -1114,6 +1114,12 @@ static bool run_self_test(NativeRuntime *state) {
   }
   printf("native_quit_path=PASS\n");
 
+  if (!native_startup_self_test()) {
+    fprintf(stderr, "Native startup localization contract failed\n");
+    return false;
+  }
+  printf("native_startup_localization=PASS\n");
+
   printf("native_graphics_bridge=PASS\n");
   printf("native_preferences_store=PASS\n");
   return true;
@@ -1268,56 +1274,81 @@ static void destroy_runtime(NativeRuntime *state) {
 int main(int argc, char **argv) {
   bool self_test = argc > 1 && strcmp(argv[1], "--self-test") == 0;
   bool a11y_test = argc > 1 && strcmp(argv[1], "--a11y-test") == 0;
+  const char *startup_locale = detect_initial_locale();
+
+  if (argc > 1 && strcmp(argv[1], "--startup-error-test") == 0) {
+    const char *test_locale = argc > 2 ? argv[2] : startup_locale;
+    const char *normalized = native_startup_normalize_locale(test_locale);
+    native_startup_report_error(normalized, NATIVE_STARTUP_ERROR_JAVASCRIPT,
+                                "startup-error-test", NULL);
+    printf("native_startup_error_test[%s]=PASS\n", normalized);
+    return 2;
+  }
+
   NativeRuntime state;
   memset(&state, 0, sizeof(state));
   state.api = JS_UNDEFINED;
 
   const char *base_path = SDL_GetBasePath();
   if (!base_path || strlen(base_path) >= sizeof(state.base_path)) {
-    fprintf(stderr, "Unable to determine executable base path: %s\n",
-            SDL_GetError());
+    native_startup_report_error(startup_locale, NATIVE_STARTUP_ERROR_BASE_PATH,
+                                SDL_GetError(), NULL);
     return 2;
   }
   strcpy(state.base_path, base_path);
   if (!native_audio_init(&state.audio, state.base_path) ||
       !initialize_preferences_path(&state)) {
-    fprintf(stderr, "Unable to initialize native platform paths\n");
+    native_startup_report_error(startup_locale,
+                                NATIVE_STARTUP_ERROR_PLATFORM_PATHS, NULL,
+                                NULL);
     return 2;
   }
+  native_startup_checkpoint("platform-paths");
 
   if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO)) {
-    fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
+    native_startup_report_error(startup_locale, NATIVE_STARTUP_ERROR_SDL,
+                                SDL_GetError(), NULL);
     return 2;
   }
+  native_startup_checkpoint("sdl");
+
   if (!SDL_CreateWindowAndRenderer(kWindowTitle, WINDOW_WIDTH, WINDOW_HEIGHT,
                                    SDL_WINDOW_RESIZABLE, &state.window,
                                    &state.renderer)) {
-    fprintf(stderr, "SDL_CreateWindowAndRenderer failed: %s\n", SDL_GetError());
+    native_startup_report_error(startup_locale, NATIVE_STARTUP_ERROR_WINDOW,
+                                SDL_GetError(), NULL);
     destroy_runtime(&state);
     return 2;
   }
+  native_startup_checkpoint("window");
+
   if (!SDL_SetWindowMinimumSize(state.window, MIN_WINDOW_WIDTH,
                                 MIN_WINDOW_HEIGHT) ||
       !SDL_SetRenderLogicalPresentation(
           state.renderer, LOGICAL_WIDTH, LOGICAL_HEIGHT,
           SDL_LOGICAL_PRESENTATION_LETTERBOX)) {
-    fprintf(stderr, "Unable to configure native window/renderer: %s\n",
-            SDL_GetError());
+    native_startup_report_error(startup_locale, NATIVE_STARTUP_ERROR_RENDERER,
+                                SDL_GetError(), state.window);
     destroy_runtime(&state);
     return 2;
   }
+  native_startup_checkpoint("renderer");
 
   if (!native_menu_renderer_init(&state.menu_renderer, state.base_path) ||
       !native_accessibility_init(&state.accessibility, state.window,
                                  state.renderer)) {
-    fprintf(stderr, "Unable to initialize native menu/accessibility adapters\n");
+    native_startup_report_error(startup_locale, NATIVE_STARTUP_ERROR_UI, NULL,
+                                state.window);
     destroy_runtime(&state);
     return 2;
   }
+  native_startup_checkpoint("native-ui");
 
   char sprite_path[PATH_MAX];
   if (!join_path(sprite_path, sizeof(sprite_path), state.base_path,
                  "assets/sprite_sheet.png")) {
+    native_startup_report_error(startup_locale, NATIVE_STARTUP_ERROR_ASSETS,
+                                "sprite_sheet.png", state.window);
     destroy_runtime(&state);
     return 2;
   }
@@ -1326,28 +1357,39 @@ int main(int argc, char **argv) {
                        &state.sprite_height);
   if (!state.sprite_texture || state.sprite_width != 476 ||
       state.sprite_height != 885) {
-    fprintf(stderr, "Unable to load production sprite atlas\n");
+    native_startup_report_error(startup_locale, NATIVE_STARTUP_ERROR_ASSETS,
+                                "sprite_sheet.png", state.window);
     destroy_runtime(&state);
     return 2;
   }
+  native_startup_checkpoint("assets");
 
   bool migrated_preferences = false;
   char *preferences =
       load_initial_preferences(&state, &migrated_preferences);
   if (!preferences ||
-      !initialize_javascript(&state, preferences, detect_initial_locale())) {
+      !initialize_javascript(&state, preferences, startup_locale)) {
     free(preferences);
+    native_startup_report_error(startup_locale,
+                                NATIVE_STARTUP_ERROR_JAVASCRIPT, NULL,
+                                state.window);
     destroy_runtime(&state);
     return 2;
   }
   free(preferences);
+  native_startup_checkpoint("javascript");
+
   if (migrated_preferences) {
     if (!persist_preferences(&state)) {
+      native_startup_report_error(startup_locale,
+                                  NATIVE_STARTUP_ERROR_PREFERENCES, NULL,
+                                  state.window);
       destroy_runtime(&state);
       return 2;
     }
     printf("electron_preferences_migrated=PASS\n");
   }
+  native_startup_checkpoint("ready");
 
   if (self_test) {
     bool ok = run_self_test(&state);

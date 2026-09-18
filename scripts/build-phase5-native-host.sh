@@ -111,6 +111,7 @@ cc -std=c11 -O2 -Wall -Wextra -Wpedantic -D_GNU_SOURCE \
   "$ROOT/desktop/native/native_audio.c" \
   "$ROOT/desktop/native/native_menu_renderer.c" \
   "$ROOT/desktop/native/native_accessibility.c" \
+  "$ROOT/desktop/native/native_startup.c" \
   "$QUICKJS_SOURCE/libquickjs.a" "$ACCESSKIT_STATIC" -o "$BINARY" \
   $(pkg-config --libs sdl3 sdl3-ttf libpng libmpg123) \
   -static-libgcc -lm -ldl -pthread -latomic -Wl,-rpath,'$ORIGIN/../lib'
@@ -175,6 +176,26 @@ install -m 0644 \
   "$ROOT/src/resources/assets/images/IDI_PIKAICON-1_gap_filled_192.png" \
   "$APPDIR/pikachu-volleyball-native.png"
 
+startup_error_evidence="$EVIDENCE_DIR/startup-errors.txt"
+: > "$startup_error_evidence"
+for locale in en es-ar ca ko zh; do
+  set +e
+  startup_output="$("$APPDIR/AppRun" --startup-error-test "$locale" 2>&1)"
+  startup_status=$?
+  set -e
+  if [[ "$startup_status" -ne 2 ]]; then
+    echo "Localized startup error test for $locale returned $startup_status instead of 2." >&2
+    exit 1
+  fi
+  grep -Fq "native_startup_error_test[$locale]=PASS" <<<"$startup_output"
+  printf '### %s\n%s\n' "$locale" "$startup_output" >> "$startup_error_evidence"
+done
+grep -Fq 'No se pudo inicializar la lógica de la aplicación.' "$startup_error_evidence"
+grep -Fq "No s'ha pogut inicialitzar la lògica de l'aplicació." "$startup_error_evidence"
+grep -Fq '애플리케이션 로직을 초기화할 수 없습니다.' "$startup_error_evidence"
+grep -Fq '无法初始化应用程序逻辑。' "$startup_error_evidence"
+echo 'native_startup_error_locales=PASS' >> "$startup_error_evidence"
+
 LD_LIBRARY_PATH="$APPDIR/usr/lib" ldd "$APPDIR/usr/bin/pikachu-volleyball-native" \
   | tee "$EVIDENCE_DIR/host-ldd.txt"
 if grep -q 'not found' "$EVIDENCE_DIR/host-ldd.txt"; then
@@ -206,6 +227,7 @@ grep -q '^native_pointer_menu=PASS$' "$EVIDENCE_DIR/prepackage-self-test.txt"
 grep -q '^native_locale_menu=PASS$' "$EVIDENCE_DIR/prepackage-self-test.txt"
 grep -q '^native_external_url_allowlist=PASS$' "$EVIDENCE_DIR/prepackage-self-test.txt"
 grep -q '^native_quit_path=PASS$' "$EVIDENCE_DIR/prepackage-self-test.txt"
+grep -q '^native_startup_localization=PASS$' "$EVIDENCE_DIR/prepackage-self-test.txt"
 grep -q '^native_framebuffer_variation=PASS$' "$EVIDENCE_DIR/prepackage-self-test.txt"
 test -s "$framebuffer"
 test -s "$render_trace"
@@ -357,4 +379,6 @@ printf '%s  %s\n' "$sha256" "$(basename "$OUTPUT")" \
   echo 'native_locale_menu=PASS'
   echo 'native_external_url_allowlist=PASS'
   echo 'native_quit_path=PASS'
+  echo 'native_startup_localization=PASS'
+  echo 'native_startup_error_locales=PASS'
 } | tee "$EVIDENCE_DIR/summary.txt"
