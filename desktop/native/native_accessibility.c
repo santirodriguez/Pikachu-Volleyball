@@ -42,6 +42,8 @@ typedef struct NativeAccessibilitySnapshot {
   NativeAccessibleItem items[MAX_ACCESSIBLE_ITEMS];
   size_t item_count;
   accesskit_node_id focus;
+  int window_width;
+  int window_height;
 } NativeAccessibilitySnapshot;
 
 typedef struct NativeAccessibilityImpl {
@@ -192,6 +194,10 @@ static bool build_snapshot(NativeAccessibilityImpl *impl, JSContext *context,
                            NativeAccessibilitySnapshot *snapshot) {
   memset(snapshot, 0, sizeof(*snapshot));
   snapshot->focus = ROOT_ID;
+  if (!SDL_GetWindowSize(impl->window, &snapshot->window_width,
+                         &snapshot->window_height)) {
+    return false;
+  }
   if (!get_bool(context, frame, "visible", &snapshot->visible) ||
       !get_string(context, frame, "title", snapshot->title,
                   sizeof(snapshot->title)) ||
@@ -276,9 +282,8 @@ static accesskit_tree_update *build_tree_locked(
     accesskit_tree_update_set_tree(update, tree);
   }
 
-  int width = 0;
-  int height = 0;
-  SDL_GetWindowSize(impl->window, &width, &height);
+  const int width = snapshot->window_width;
+  const int height = snapshot->window_height;
   accesskit_node *root = accesskit_node_new(ACCESSKIT_ROLE_WINDOW);
   accesskit_node_set_label(root, "Pikachu Volleyball Native");
   accesskit_rect root_bounds = {0.0, 0.0, (double)width, (double)height};
