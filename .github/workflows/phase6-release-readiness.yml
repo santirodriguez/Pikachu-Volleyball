@@ -408,7 +408,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          app="$(find candidate -type f -name '*.AppImage' -print -quit)"
+          app="candidate/Pikachu-Volleyball-Native-x86_64.AppImage"
           test -s "$app"
           chmod 0755 "$app"
           Xvfb :99 -screen 0 1024x768x24 -nolisten tcp > /tmp/xvfb.log 2>&1 &
