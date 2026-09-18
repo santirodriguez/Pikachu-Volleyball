@@ -79,6 +79,7 @@ class InputActionState {
     this.bindings = normalizeBindings(bindings);
     this.boundCodes = new Set(Object.values(this.bindings).flat());
     this.downCodes = new Set();
+    this.pendingPressedActions = new Set();
     this.previousActionDown = new Map(
       Object.keys(this.bindings).map((action) => [action, false])
     );
@@ -86,7 +87,13 @@ class InputActionState {
 
   handleKeyDown(code) {
     if (!this.boundCodes.has(code)) return false;
+    const wasDown = this.downCodes.has(code);
     this.downCodes.add(code);
+    if (!wasDown) {
+      for (const [action, codes] of Object.entries(this.bindings)) {
+        if (codes.includes(code)) this.pendingPressedActions.add(action);
+      }
+    }
     return true;
   }
 
@@ -107,14 +114,18 @@ class InputActionState {
     for (const action of Object.keys(this.bindings)) {
       const isDown = this.isActionDown(action);
       down[action] = isDown;
-      pressed[action] = isDown && !this.previousActionDown.get(action);
+      pressed[action] =
+        this.pendingPressedActions.has(action) ||
+        (isDown && !this.previousActionDown.get(action));
       this.previousActionDown.set(action, isDown);
     }
+    this.pendingPressedActions.clear();
     return { down, pressed };
   }
 
   reset() {
     this.downCodes.clear();
+    this.pendingPressedActions.clear();
     for (const action of Object.keys(this.bindings)) {
       this.previousActionDown.set(action, false);
     }
