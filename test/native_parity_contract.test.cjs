@@ -349,18 +349,27 @@ test('native menu polish uses a proportional primary font with Unicode fallback'
   const header = read('desktop/native/native_menu_renderer.h');
   const renderer = read('desktop/native/native_menu_renderer.c');
 
-  assert.match(toolchain, /DEJAVU_VERSION="2\.37"/);
+  assert.match(toolchain, /INTER_VERSION="4\.1"/);
   assert.match(
     toolchain,
-    /DEJAVU_SHA256="fa9ca4d13871dd122f61258a80d01751d603b4d3ee14095d65453b4e846e17d7"/
+    /INTER_COMMIT="e3a3d4c57d5ecc01453a575621882a384c1995a3"/
   );
-  assert.match(packaging, /fonts\/DejaVuSans\.ttf/);
-  assert.match(packaging, /DejaVu-LICENSE\.txt/);
+  assert.match(
+    toolchain,
+    /INTER_FONT_BLOB_SHA="4ab79e0102bbe0ffa1ed879b13e52ac8c6487833"/
+  );
+  assert.match(
+    toolchain,
+    /INTER_LICENSE_BLOB_SHA="9b2ca37b3ffc77391d8b2ebef4a974ef32bf46ea"/
+  );
+  assert.match(toolchain, /fetch_git_blob_verified/);
+  assert.match(packaging, /fonts\/InterVariable\.ttf/);
+  assert.match(packaging, /Inter-LICENSE\.txt/);
   assert.match(header, /void \*fallback_font;/);
   assert.match(renderer, /TTF_AddFallbackFont\(font, fallback\)/);
   assert.match(renderer, /TTF_HINTING_LIGHT/);
   assert.match(renderer, /TTF_SetFontKerning\(font, true\)/);
-  assert.match(renderer, /fonts\/DejaVuSans\.ttf/);
+  assert.match(renderer, /fonts\/InterVariable\.ttf/);
   assert.match(renderer, /fonts\/unifont-17\.0\.04\.otf/);
 });
 

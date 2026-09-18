@@ -533,7 +533,7 @@ bool native_menu_renderer_init(NativeMenuRenderer *menu,
   char font_path[PATH_MAX];
   char fallback_path[PATH_MAX];
   int written = snprintf(font_path, sizeof(font_path),
-                         "%sfonts/DejaVuSans.ttf", base_path);
+                         "%sfonts/InterVariable.ttf", base_path);
   int fallback_written =
       snprintf(fallback_path, sizeof(fallback_path),
                "%sfonts/unifont-17.0.04.otf", base_path);

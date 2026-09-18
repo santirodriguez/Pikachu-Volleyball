@@ -36,9 +36,8 @@ QUICKJS_SOURCE="$TOOLCHAIN_ROOT/sources/quickjs"
 SDL_SOURCE="$TOOLCHAIN_ROOT/sources/sdl"
 SDL_TTF_SOURCE="$TOOLCHAIN_ROOT/sources/sdl-ttf"
 UNIFONT_FILE="$TOOLCHAIN_ROOT/downloads/unifont-17.0.04.otf"
-DEJAVU_ROOT="$TOOLCHAIN_ROOT/sources/dejavu/dejavu-fonts-ttf-2.37"
-DEJAVU_FONT="$DEJAVU_ROOT/ttf/DejaVuSans.ttf"
-DEJAVU_LICENSE="$DEJAVU_ROOT/LICENSE"
+INTER_FONT="$TOOLCHAIN_ROOT/downloads/InterVariable-4.1.ttf"
+INTER_LICENSE="$TOOLCHAIN_ROOT/downloads/Inter-LICENSE-4.1.txt"
 APPIMAGETOOL="$TOOLCHAIN_ROOT/downloads/appimagetool-x86_64.AppImage"
 APPIMAGE_RUNTIME="$TOOLCHAIN_ROOT/downloads/runtime-x86_64"
 
@@ -46,8 +45,8 @@ for required in \
   "$PREFIX" \
   "$QUICKJS_SOURCE/libquickjs.a" \
   "$UNIFONT_FILE" \
-  "$DEJAVU_FONT" \
-  "$DEJAVU_LICENSE" \
+  "$INTER_FONT" \
+  "$INTER_LICENSE" \
   "$APPIMAGETOOL" \
   "$APPIMAGE_RUNTIME"; do
   if [[ ! -e "$required" ]]; then
@@ -154,10 +153,10 @@ mkdir -p "$APPDIR/usr/bin/assets" "$APPDIR/usr/bin/fonts" "$APPDIR/usr/lib" \
 
 install -m 0644 "$UNIFONT_FILE" \
   "$APPDIR/usr/bin/fonts/unifont-17.0.04.otf"
-install -m 0644 "$DEJAVU_FONT" \
-  "$APPDIR/usr/bin/fonts/DejaVuSans.ttf"
-install -m 0644 "$DEJAVU_LICENSE" \
-  "$APPDIR/usr/share/licenses/pikachu-volleyball-native/DejaVu-LICENSE.txt"
+install -m 0644 "$INTER_FONT" \
+  "$APPDIR/usr/bin/fonts/InterVariable.ttf"
+install -m 0644 "$INTER_LICENSE" \
+  "$APPDIR/usr/share/licenses/pikachu-volleyball-native/Inter-LICENSE.txt"
 install -m 0644 "$ROOT/src/resources/assets/images/sprite_sheet.png" \
   "$APPDIR/usr/bin/assets/sprite_sheet.png"
 install -m 0644 "$ROOT/src/resources/assets/images/sprite_sheet.json" \
