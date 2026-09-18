@@ -257,9 +257,6 @@ jobs:
           retention-days: 14
 
   native-host-core-bridge:
-    needs:
-      - accessibility-feasibility
-      - electron-migration-layout
     runs-on: ubuntu-22.04
     timeout-minutes: 60
 
