@@ -13,6 +13,7 @@ on:
       - 'scripts/run-phase5-accessibility-probe.sh'
       - 'scripts/validate-phase5-accessibility.py'
       - 'scripts/seed-electron-migration-fixture.cjs'
+      - 'scripts/report-electron-user-data.cjs'
       - 'scripts/inspect-electron-migration-fixture.cjs'
       - 'scripts/validate-electron-migration-fixture.cjs'
       - 'scripts/validate-electron-preferences-import.cjs'
@@ -129,6 +130,27 @@ jobs:
       - name: Build production web payload
         run: npm run build:web
 
+      - name: Characterize default Electron user-data path
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/pv-electron-default-path"
+          report="build/phase5/migration/default-user-data.json"
+          mkdir -p "$root/config" "$(dirname "$report")"
+          XDG_CONFIG_HOME="$root/config" \
+          PV_ELECTRON_PATH_REPORT="$report" \
+            xvfb-run -a npx electron --no-sandbox scripts/report-electron-user-data.cjs
+          node - "$report" <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const report = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+          if (report.name !== 'Pikachu Volleyball') throw new Error('Unexpected Electron app name');
+          if (report.userData !== path.join(report.appData, report.name)) {
+            throw new Error('Electron userData is not appData/appName');
+          }
+          console.log('electron_default_user_data=PASS');
+          NODE
+
       - name: Seed controlled Electron 2.1 preferences
         shell: bash
         run: |
@@ -236,6 +258,21 @@ jobs:
 
       - name: Install web dependencies
         run: npm ci
+
+      - name: Seed Electron migration fixture for production host
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run build:web
+          user_data="$RUNNER_TEMP/pv-native-electron-user-data"
+          report="$RUNNER_TEMP/pv-native-electron-seed.json"
+          rm -rf "$user_data"
+          mkdir -p "$user_data"
+          PV_MIGRATION_USER_DATA="$user_data" \
+          PV_MIGRATION_REPORT="$report" \
+            xvfb-run -a npx electron --no-sandbox scripts/seed-electron-migration-fixture.cjs
+          test -s "$report"
+          echo "PV_ELECTRON_USER_DATA_DIR=$user_data" >> "$GITHUB_ENV"
 
       - name: Install native build dependencies
         shell: bash

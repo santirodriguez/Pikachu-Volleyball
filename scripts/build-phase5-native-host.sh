@@ -47,6 +47,43 @@ done
 export PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig:$PREFIX/lib64/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
 export LD_LIBRARY_PATH="$PREFIX/lib:$PREFIX/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 
+LEVELDB_VERSION="1.23"
+LEVELDB_SHA256="9a37f8a6174f09bd622bc723b55881dc541cd50747cbd08831c2a82d620f6d76"
+LEVELDB_ARCHIVE="$TOOLCHAIN_ROOT/downloads/leveldb-${LEVELDB_VERSION}.tar.gz"
+LEVELDB_SOURCE="$TOOLCHAIN_ROOT/sources/leveldb"
+LEVELDB_BUILD="$TOOLCHAIN_ROOT/leveldb-build"
+curl --fail --location --retry 3 --retry-all-errors --silent --show-error \
+  "https://github.com/google/leveldb/archive/refs/tags/${LEVELDB_VERSION}.tar.gz" \
+  --output "$LEVELDB_ARCHIVE"
+printf '%s  %s\n' "$LEVELDB_SHA256" "$LEVELDB_ARCHIVE" \
+  | sha256sum --check --status || {
+    echo "LevelDB source checksum mismatch." >&2
+    exit 1
+  }
+rm -rf "$LEVELDB_SOURCE" "$LEVELDB_BUILD"
+mkdir -p "$LEVELDB_SOURCE"
+tar -xzf "$LEVELDB_ARCHIVE" --strip-components=1 -C "$LEVELDB_SOURCE"
+cmake -S "$LEVELDB_SOURCE" -B "$LEVELDB_BUILD" -G Ninja \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DBUILD_SHARED_LIBS=OFF \
+  -DLEVELDB_BUILD_TESTS=OFF \
+  -DLEVELDB_BUILD_BENCHMARKS=OFF \
+  -DCMAKE_DISABLE_FIND_PACKAGE_Snappy=TRUE
+cmake --build "$LEVELDB_BUILD" --parallel 2 --target leveldb
+LEVELDB_STATIC="$LEVELDB_BUILD/libleveldb.a"
+if [[ ! -s "$LEVELDB_STATIC" ]]; then
+  echo "Pinned LevelDB static library was not produced." >&2
+  exit 1
+fi
+
+IMPORTER="$BUILD_ROOT/electron-preferences-importer"
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic \
+  -I"$LEVELDB_SOURCE/include" \
+  "$ROOT/desktop/native/electron_preferences_importer.cc" \
+  "$LEVELDB_STATIC" -pthread -static-libstdc++ -static-libgcc \
+  -o "$IMPORTER"
+strip --strip-unneeded "$IMPORTER"
+
 cc -std=c11 -O2 -Wall -Wextra -Wpedantic -D_GNU_SOURCE \
   -I"$QUICKJS_SOURCE" \
   $(pkg-config --cflags sdl3 libpng libmpg123) \
@@ -82,7 +119,11 @@ if [[ -d "$APPDIR/usr/share/licenses/native-spike" ]]; then
 fi
 
 install -m 0755 "$BINARY" "$APPDIR/usr/bin/pikachu-volleyball-native"
+install -m 0755 "$IMPORTER" "$APPDIR/usr/bin/electron-preferences-importer"
 install -m 0644 "$BUNDLE" "$APPDIR/usr/bin/native-app.bundle.js"
+mkdir -p "$APPDIR/usr/share/licenses/pikachu-volleyball-native/leveldb"
+install -m 0644 "$LEVELDB_SOURCE/LICENSE" \
+  "$APPDIR/usr/share/licenses/pikachu-volleyball-native/leveldb/LICENSE"
 for wav in WAVE140_1.wav WAVE141_1.wav WAVE142_1.wav WAVE143_1.wav \
   WAVE144_1.wav WAVE145_1.wav WAVE146_1.wav; do
   install -m 0644 "$ROOT/src/resources/assets/sounds/$wav" \
@@ -119,6 +160,12 @@ if grep -q 'not found' "$EVIDENCE_DIR/host-ldd.txt"; then
   echo 'Native production host has unresolved shared libraries.' >&2
   exit 1
 fi
+ldd "$APPDIR/usr/bin/electron-preferences-importer" \
+  | tee "$EVIDENCE_DIR/importer-ldd.txt"
+if grep -Eq 'not found|libleveldb|libsnappy' "$EVIDENCE_DIR/importer-ldd.txt"; then
+  echo 'Production Electron importer has an undeclared LevelDB/Snappy runtime dependency.' >&2
+  exit 1
+fi
 
 framebuffer="$EVIDENCE_DIR/native-menu-framebuffer.bmp"
 render_trace="$EVIDENCE_DIR/native-menu-render.json"
@@ -130,6 +177,7 @@ xvfb-run -a env \
   SDL_RENDER_DRIVER=software \
   PV_NATIVE_FRAMEBUFFER_PATH="$framebuffer" \
   PV_NATIVE_RENDER_TRACE_PATH="$render_trace" \
+  PV_NATIVE_EXPECT_MIGRATION=1 \
   PV_NATIVE_PREFS_DIR="$preference_root/prepackage" \
   "$APPDIR/AppRun" --self-test \
   | tee "$EVIDENCE_DIR/prepackage-self-test.txt"
@@ -157,6 +205,8 @@ bundle_bytes="$(stat -c%s "$BUNDLE")"
 bundle_sha256="$(sha256sum "$BUNDLE" | awk '{print $1}')"
 host_bytes="$(stat -c%s "$BINARY")"
 host_sha256="$(sha256sum "$BINARY" | awk '{print $1}')"
+importer_bytes="$(stat -c%s "$IMPORTER")"
+importer_sha256="$(sha256sum "$IMPORTER" | awk '{print $1}')"
 base_bytes="$(stat -c%s "$BASE_APPIMAGE")"
 base_sha256="$(sha256sum "$BASE_APPIMAGE" | awk '{print $1}')"
 
@@ -186,7 +236,8 @@ run_direct_appimage_test() {
   rm -rf "$preference_root/direct"
   mkdir -p "$preference_root/direct"
   timeout 30 xvfb-run -a env SDL_AUDIODRIVER=dummy SDL_RENDER_DRIVER=software \
-    PV_NATIVE_PREFS_DIR="$preference_root/direct" \
+    PV_NATIVE_EXPECT_MIGRATION=1 \
+  PV_NATIVE_PREFS_DIR="$preference_root/direct" \
     "$OUTPUT" --self-test > "$log_file" 2>&1
   local status=$?
   set -e
@@ -210,6 +261,7 @@ rm -rf "$preference_root/extract-run"
 mkdir -p "$preference_root/extract-run"
 APPIMAGE_EXTRACT_AND_RUN=1 timeout 30 xvfb-run -a env \
   SDL_AUDIODRIVER=dummy SDL_RENDER_DRIVER=software \
+  PV_NATIVE_EXPECT_MIGRATION=1 \
   PV_NATIVE_PREFS_DIR="$preference_root/extract-run" \
   "$OUTPUT" --self-test \
   | tee "$EVIDENCE_DIR/extract-run-self-test.txt"
@@ -224,6 +276,7 @@ mkdir -p "$BUILD_ROOT/verify"
 rm -rf "$preference_root/extracted-apprun"
 mkdir -p "$preference_root/extracted-apprun"
 xvfb-run -a env SDL_AUDIODRIVER=dummy SDL_RENDER_DRIVER=software \
+  PV_NATIVE_EXPECT_MIGRATION=1 \
   PV_NATIVE_PREFS_DIR="$preference_root/extracted-apprun" \
   "$BUILD_ROOT/verify/squashfs-root/AppRun" --self-test \
   | tee "$EVIDENCE_DIR/extracted-apprun-self-test.txt"
@@ -254,6 +307,10 @@ printf '%s  %s\n' "$sha256" "$(basename "$OUTPUT")" \
   echo "native_bundle_sha256=$bundle_sha256"
   echo "native_host_bytes=$host_bytes"
   echo "native_host_sha256=$host_sha256"
+  echo "electron_importer_bytes=$importer_bytes"
+  echo "electron_importer_sha256=$importer_sha256"
+  echo "leveldb_version=$LEVELDB_VERSION"
+  echo "leveldb_source_sha256=$LEVELDB_SHA256"
   echo "render_trace_bytes=$render_trace_bytes"
   echo "render_trace_sha256=$render_trace_sha256"
   echo "framebuffer_bytes=$framebuffer_bytes"
@@ -269,6 +326,7 @@ printf '%s  %s\n' "$sha256" "$(basename "$OUTPUT")" \
   echo 'native_graphics_bridge=PASS'
   echo 'native_audio_mixer=PASS'
   echo 'native_preferences_store=PASS'
+  echo 'electron_migration_runtime=PASS'
 } | tee "$EVIDENCE_DIR/summary.txt"
  "$EVIDENCE_DIR/prepackage-self-test.txt"
 grep -q '^native_audio_mixer=PASS

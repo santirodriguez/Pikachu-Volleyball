@@ -13,6 +13,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 #define WINDOW_WIDTH 1024
@@ -42,6 +43,7 @@ typedef struct NativeRuntime {
 static bool render_frame(NativeRuntime *state, bool validate_pixels,
                          int *command_count_out);
 static char *read_text_file(const char *path, size_t *length_out);
+static bool persist_preferences(NativeRuntime *state);
 
 static bool join_path(char *output, size_t output_size, const char *base,
                       const char *relative) {
@@ -83,19 +85,115 @@ static bool initialize_preferences_path(NativeRuntime *state) {
                              state->preferences_dir, "preferences.json");
 }
 
-static char *read_optional_preferences(const char *path) {
-  size_t length = 0;
-  char *content = read_text_file(path, &length);
-  if (content) return content;
-  if (errno != ENOENT) {
-    fprintf(stderr, "Unable to read native preferences: %s\n", path);
+static bool path_exists(const char *path) {
+  return access(path, F_OK) == 0;
+}
+
+static bool get_electron_user_data_path(char *output, size_t output_size) {
+  const char *override = getenv("PV_ELECTRON_USER_DATA_DIR");
+  if (override && override[0] != '\0') {
+    if (strlen(override) >= output_size) return false;
+    strcpy(output, override);
+    return true;
+  }
+
+  const char *config = getenv("XDG_CONFIG_HOME");
+  char fallback[PATH_MAX];
+  if (!config || config[0] == '\0') {
+    const char *home = getenv("HOME");
+    if (!home || home[0] == '\0') return false;
+    int written = snprintf(fallback, sizeof(fallback), "%s/.config", home);
+    if (written <= 0 || (size_t)written >= sizeof(fallback)) return false;
+    config = fallback;
+  }
+  return join_directory_file(output, output_size, config,
+                             "Pikachu Volleyball");
+}
+
+static bool run_electron_importer(NativeRuntime *state,
+                                  const char *database_path,
+                                  const char *output_path) {
+  char importer_path[PATH_MAX];
+  if (!join_path(importer_path, sizeof(importer_path), state->base_path,
+                 "electron-preferences-importer")) {
+    return false;
+  }
+  if (!path_exists(importer_path)) {
+    fprintf(stderr, "Electron preference importer is missing: %s\n",
+            importer_path);
+    return false;
+  }
+
+  pid_t child = fork();
+  if (child < 0) {
+    perror("fork");
+    return false;
+  }
+  if (child == 0) {
+    execl(importer_path, importer_path, database_path, output_path,
+          "--allow-partial", (char *)NULL);
+    _exit(127);
+  }
+
+  int status = 0;
+  if (waitpid(child, &status, 0) < 0) {
+    perror("waitpid");
+    return false;
+  }
+  return WIFEXITED(status) && WEXITSTATUS(status) == 0;
+}
+
+static char *load_initial_preferences(NativeRuntime *state,
+                                      bool *migrated_out) {
+  *migrated_out = false;
+  if (path_exists(state->preferences_path)) {
+    return read_text_file(state->preferences_path, NULL);
+  }
+
+  char electron_user_data[PATH_MAX];
+  if (!get_electron_user_data_path(electron_user_data,
+                                   sizeof(electron_user_data))) {
+    char *empty = malloc(3);
+    if (empty) memcpy(empty, "{}", 3);
+    return empty;
+  }
+
+  char local_storage[PATH_MAX];
+  char database_path[PATH_MAX];
+  if (!join_directory_file(local_storage, sizeof(local_storage),
+                           electron_user_data, "Local Storage") ||
+      !join_directory_file(database_path, sizeof(database_path),
+                           local_storage, "leveldb") ||
+      !path_exists(database_path)) {
+    char *empty = malloc(3);
+    if (empty) memcpy(empty, "{}", 3);
+    return empty;
+  }
+
+  char migration_path[PATH_MAX];
+  if (!join_directory_file(migration_path, sizeof(migration_path),
+                           state->preferences_dir,
+                           "electron-migration.json")) {
     return NULL;
   }
-  content = malloc(3);
-  if (!content) return NULL;
-  memcpy(content, "{}", 3);
-  return content;
+  unlink(migration_path);
+  if (!run_electron_importer(state, database_path, migration_path)) {
+    fprintf(stderr,
+            "Electron preferences exist but could not be imported safely; using defaults.\n");
+    unlink(migration_path);
+    char *empty = malloc(3);
+    if (empty) memcpy(empty, "{}", 3);
+    return empty;
+  }
+
+  char *migrated = read_text_file(migration_path, NULL);
+  unlink(migration_path);
+  if (migrated) {
+    *migrated_out = true;
+  }
+  return migrated;
 }
+
 
 static char *read_text_file(const char *path, size_t *length_out) {
   FILE *file = fopen(path, "rb");
@@ -688,11 +786,24 @@ static bool run_self_test(NativeRuntime *state) {
   int target_fps = 0;
   char json[16384];
 
-  if (!js_get_int(state, "getTargetFps", &target_fps) || target_fps != 25 ||
+  bool expect_migration =
+      getenv("PV_NATIVE_EXPECT_MIGRATION") != NULL;
+  if (!js_get_int(state, "getTargetFps", &target_fps) ||
+      target_fps != (expect_migration ? 30 : 25) ||
       !js_get_string(state, "getStateJson", json, sizeof(json)) ||
-      !contains(json, "\"state\":\"intro\"")) {
-    fprintf(stderr, "Default native JS initialization contract failed\n");
+      !contains(json, "\"state\":\"intro\"") ||
+      (expect_migration &&
+       (!contains(json, "\"graphic\":\"soft\"") ||
+        !contains(json, "\"bgm\":\"off\"") ||
+        !contains(json, "\"sfx\":\"mono\"") ||
+        !contains(json, "\"winningScore\":\"10\"") ||
+        !contains(json, "\"p1.left\":\"KeyA\"")))) {
+    fprintf(stderr,
+            "Native JS initialization/migration contract failed\n");
     return false;
+  }
+  if (expect_migration) {
+    printf("electron_migration_runtime=PASS\n");
   }
 
   if (!js_handle_key(state, "KeyZ", true, false) || !step_runtime(state) ||
@@ -994,13 +1105,22 @@ int main(int argc, char **argv) {
     return 2;
   }
 
-  char *preferences = read_optional_preferences(state.preferences_path);
+  bool migrated_preferences = false;
+  char *preferences =
+      load_initial_preferences(&state, &migrated_preferences);
   if (!preferences || !initialize_javascript(&state, preferences)) {
     free(preferences);
     destroy_runtime(&state);
     return 2;
   }
   free(preferences);
+  if (migrated_preferences) {
+    if (!persist_preferences(&state)) {
+      destroy_runtime(&state);
+      return 2;
+    }
+    printf("electron_preferences_migrated=PASS\n");
+  }
 
   if (self_test) {
     bool ok = run_self_test(&state);

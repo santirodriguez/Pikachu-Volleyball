@@ -3,6 +3,7 @@
 #include <leveldb/options.h>
 
 #include <cstdint>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <map>
@@ -12,6 +13,8 @@
 #include <string>
 #include <utility>
 #include <vector>
+
+namespace fs = std::filesystem;
 
 namespace {
 
@@ -192,19 +195,41 @@ bool ParseDataEntry(const leveldb::Slice& raw_key, const leveldb::Slice& raw_val
 }  // namespace
 
 int main(int argc, char** argv) {
-  if (argc != 3) {
-    std::cerr << "usage: electron-preferences-importer <leveldb-copy> <output.json>\n";
+  const bool allow_partial =
+      argc == 4 && std::string(argv[3]) == "--allow-partial";
+  if (argc != 3 && !allow_partial) {
+    std::cerr
+        << "usage: electron-preferences-importer <leveldb-source> <output.json> [--allow-partial]\n";
     return 2;
   }
 
   const std::string database_path = argv[1];
   const std::string output_path = argv[2];
+  const fs::path copy_path = fs::path(output_path + ".leveldb-copy");
+  std::error_code filesystem_error;
+  fs::remove_all(copy_path, filesystem_error);
+  filesystem_error.clear();
+  fs::create_directories(copy_path, filesystem_error);
+  if (filesystem_error) {
+    std::cerr << "Unable to create temporary LevelDB copy directory: "
+              << filesystem_error.message() << "\n";
+    return 1;
+  }
+  fs::copy(database_path, copy_path,
+           fs::copy_options::recursive | fs::copy_options::overwrite_existing,
+           filesystem_error);
+  if (filesystem_error) {
+    std::cerr << "Unable to copy Electron LevelDB without modifying source: "
+              << filesystem_error.message() << "\n";
+    fs::remove_all(copy_path, filesystem_error);
+    return 1;
+  }
 
   leveldb::Options options;
   options.create_if_missing = false;
   leveldb::DB* raw_database = nullptr;
   const leveldb::Status open_status =
-      leveldb::DB::Open(options, database_path, &raw_database);
+      leveldb::DB::Open(options, copy_path.string(), &raw_database);
   if (!open_status.ok()) {
     std::cerr << "Unable to open copied Electron localStorage LevelDB: "
               << open_status.ToString() << "\n";
@@ -238,6 +263,7 @@ int main(int argc, char** argv) {
   for (const std::string& key : kAcceptedKeys) {
     const auto found = observed.find(key);
     if (found == observed.end() || found->second.empty()) {
+      if (allow_partial) continue;
       std::cerr << "Required preference was not found in Electron LevelDB: "
                 << key << "\n";
       return 1;
@@ -254,6 +280,11 @@ int main(int argc, char** argv) {
     selected[key] = first;
   }
 
+  if (selected.empty()) {
+    std::cerr << "No accepted Pikachu Volleyball preferences were found in Electron LevelDB.\n";
+    return 1;
+  }
+
   std::ofstream output(output_path, std::ios::binary | std::ios::trunc);
   if (!output) {
     std::cerr << "Unable to create importer output: " << output_path << "\n";
@@ -261,21 +292,27 @@ int main(int argc, char** argv) {
   }
 
   output << "{\n  \"schema\": 1,\n  \"values\": {\n";
-  for (size_t index = 0; index < kAcceptedKeys.size(); ++index) {
-    const std::string& key = kAcceptedKeys[index];
+  size_t written_values = 0;
+  for (const std::string& key : kAcceptedKeys) {
+    const auto found = selected.find(key);
+    if (found == selected.end()) continue;
+    if (written_values++ > 0) output << ",\n";
     output << "    \"" << JsonEscape(key) << "\": \""
-           << JsonEscape(selected[key].value) << "\"";
-    output << (index + 1 == kAcceptedKeys.size() ? "\n" : ",\n");
+           << JsonEscape(found->second.value) << "\"";
   }
-  output << "  },\n  \"origins\": {\n";
-  for (size_t index = 0; index < kAcceptedKeys.size(); ++index) {
-    const std::string& key = kAcceptedKeys[index];
+  output << "\n  },\n  \"origins\": {\n";
+  size_t written_origins = 0;
+  for (const std::string& key : kAcceptedKeys) {
+    const auto found = selected.find(key);
+    if (found == selected.end()) continue;
+    if (written_origins++ > 0) output << ",\n";
     output << "    \"" << JsonEscape(key) << "\": \""
-           << JsonEscape(selected[key].origin) << "\"";
-    output << (index + 1 == kAcceptedKeys.size() ? "\n" : ",\n");
+           << JsonEscape(found->second.origin) << "\"";
   }
+  output << "\n"
   output << "  }\n}\n";
   output.close();
+  fs::remove_all(copy_path, filesystem_error);
 
   std::cout << "electron_preferences_import=PASS\n";
   std::cout << "accepted_key_count=" << selected.size() << "\n";
