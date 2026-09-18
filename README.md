@@ -111,10 +111,12 @@ npm run build:desktop:linux
 - `npm run quality:check` runs lint, unit tests and the production web build.
 - `npm run build:desktop:linux` builds the SDL3 + QuickJS Linux AppImage with the repository-owned native toolchain.
 
-### Extension guides
+### Extension and release guides
 
 - [Game presentation and graphical extension guide](docs/game-presentation-extension-guide.md)
 - [Control binding extension guide](docs/control-binding-extension-guide.md)
+- [v3 manual AppImage QA checklist](docs/v3-manual-qa.md)
+- [v3 release-readiness evidence](docs/v3-release-readiness.md)
 
 The project keeps simulation, input, presentation and desktop integration separated so future visual work does not accidentally rewrite the game itself. The supported desktop runtime is SDL3 + QuickJS; the legacy Electron preference importer exists only to migrate existing 2.1 user settings.
 
