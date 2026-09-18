@@ -215,8 +215,8 @@ done
 install -m 0644 "$ROOT/src/resources/assets/sounds/bgm.mp3" "$APPDIR/usr/bin/assets/bgm.mp3"
 
 {
-  echo "runner_image_os=\${ImageOS:-unknown}"
-  echo "runner_image_version=\${ImageVersion:-unknown}"
+  echo "runner_image_os=${ImageOS:-unknown}"
+  echo "runner_image_version=${ImageVersion:-unknown}"
   echo "cc=$(cc --version | head -1)"
   echo "gxx=$(g++ --version | head -1)"
   echo "cmake=$(cmake --version | head -1)"
