@@ -222,6 +222,7 @@ xvfb-run -a env \
 grep -q '^native_host_self_test=PASS$' "$EVIDENCE_DIR/prepackage-self-test.txt"
 grep -q '^native_graphics_bridge=PASS$' "$EVIDENCE_DIR/prepackage-self-test.txt"
 grep -q '^native_audio_mixer=PASS$' "$EVIDENCE_DIR/prepackage-self-test.txt"
+grep -q '^native_bgm_position_preserved=PASS$' "$EVIDENCE_DIR/prepackage-self-test.txt"
 grep -q '^native_preferences_store=PASS$' "$EVIDENCE_DIR/prepackage-self-test.txt"
 grep -q '^electron_migration_runtime=PASS$' "$EVIDENCE_DIR/prepackage-self-test.txt"
 grep -q '^native_pointer_menu=PASS$' "$EVIDENCE_DIR/prepackage-self-test.txt"
