@@ -779,15 +779,27 @@ static bool run_self_test(NativeRuntime *state) {
   size_t persisted_length = 0;
   char *persisted =
       read_text_file(state->preferences_path, &persisted_length);
+  JSValue expected_preferences;
+  if (!persisted ||
+      !call_api(state, "getPersistedPreferencesJson", 0, NULL,
+                &expected_preferences)) {
+    free(persisted);
+    fprintf(stderr, "Unable to read back persisted native preferences\n");
+    return false;
+  }
+  size_t expected_length = 0;
+  const char *expected_text =
+      JS_ToCStringLen(state->context, &expected_length,
+                      expected_preferences);
+  JS_FreeValue(state->context, expected_preferences);
   bool persisted_ok =
-      persisted && persisted_length > 0 &&
-      contains(persisted, "\"pv-offline-graphic\":\"soft\"") &&
-      contains(persisted, "\"pv-offline-bgm\":\"off\"") &&
-      contains(persisted, "\"colorScheme\":\"dark\"") &&
-      contains(persisted, "\"p1.left\":\"KeyA\"");
+      expected_text && persisted_length == expected_length &&
+      memcmp(persisted, expected_text, expected_length) == 0;
   free(persisted);
+  if (expected_text) JS_FreeCString(state->context, expected_text);
   if (!persisted_ok) {
-    fprintf(stderr, "Persisted native preference bytes did not match\n");
+    fprintf(stderr,
+            "Persisted native preference bytes did not match shared JS serialization\n");
     return false;
   }
 
