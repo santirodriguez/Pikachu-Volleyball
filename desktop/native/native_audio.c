@@ -185,20 +185,36 @@ static NativeAudioAsset *find_asset(NativeAudio *audio, const char *name) {
   return NULL;
 }
 
+static void destroy_streams(NativeAudio *audio) {
+  if (audio->bgm_stream) SDL_DestroyAudioStream(audio->bgm_stream);
+  audio->bgm_stream = NULL;
+  for (int index = 0; index < NATIVE_AUDIO_SFX_STREAM_COUNT; index += 1) {
+    if (audio->sfx_streams[index]) {
+      SDL_DestroyAudioStream(audio->sfx_streams[index]);
+    }
+    audio->sfx_streams[index] = NULL;
+  }
+  if (audio->device) SDL_CloseAudioDevice(audio->device);
+  audio->device = 0;
+  audio->backend_available = false;
+}
+
 static bool create_streams(NativeAudio *audio) {
   SDL_AudioSpec source_spec = target_spec();
   audio->device =
-      SDL_OpenAudioDevice(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &source_spec);
+      SDL_OpenAudioDevice(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, NULL);
   if (!audio->device) {
-    fprintf(stderr, "SDL_OpenAudioDevice failed: %s\n", SDL_GetError());
+    fprintf(stderr, "Native audio backend unavailable: SDL_OpenAudioDevice: %s\n",
+            SDL_GetError());
     return false;
   }
 
   audio->bgm_stream = SDL_CreateAudioStream(&source_spec, NULL);
   if (!audio->bgm_stream ||
       !SDL_BindAudioStream(audio->device, audio->bgm_stream)) {
-    fprintf(stderr, "Unable to create/bind BGM audio stream: %s\n",
+    fprintf(stderr, "Native audio backend unavailable: BGM stream: %s\n",
             SDL_GetError());
+    destroy_streams(audio);
     return false;
   }
 
@@ -206,13 +222,23 @@ static bool create_streams(NativeAudio *audio) {
     audio->sfx_streams[index] = SDL_CreateAudioStream(&source_spec, NULL);
     if (!audio->sfx_streams[index] ||
         !SDL_BindAudioStream(audio->device, audio->sfx_streams[index])) {
-      fprintf(stderr, "Unable to create/bind SFX audio stream: %s\n",
+      fprintf(stderr, "Native audio backend unavailable: SFX stream: %s\n",
               SDL_GetError());
+      destroy_streams(audio);
       return false;
     }
   }
 
-  return SDL_SetAudioDeviceGain(audio->device, audio->muted ? 0.0f : 1.0f);
+  if (!SDL_SetAudioDeviceGain(audio->device, audio->muted ? 0.0f : 1.0f) ||
+      !SDL_ResumeAudioDevice(audio->device)) {
+    fprintf(stderr, "Native audio backend unavailable: device start: %s\n",
+            SDL_GetError());
+    destroy_streams(audio);
+    return false;
+  }
+
+  audio->backend_available = true;
+  return true;
 }
 
 static bool ensure_loaded(NativeAudio *audio) {
@@ -231,8 +257,11 @@ static bool ensure_loaded(NativeAudio *audio) {
     if (!ok) return false;
   }
 
-  if (!create_streams(audio)) return false;
   audio->loaded = true;
+  if (!create_streams(audio)) {
+    fprintf(stderr,
+            "Native audio disabled for this session; gameplay will continue muted.\n");
+  }
   return true;
 }
 
@@ -247,13 +276,7 @@ bool native_audio_init(NativeAudio *audio, const char *base_path) {
 
 void native_audio_destroy(NativeAudio *audio) {
   if (!audio) return;
-  if (audio->bgm_stream) SDL_DestroyAudioStream(audio->bgm_stream);
-  for (int index = 0; index < NATIVE_AUDIO_SFX_STREAM_COUNT; index += 1) {
-    if (audio->sfx_streams[index]) {
-      SDL_DestroyAudioStream(audio->sfx_streams[index]);
-    }
-  }
-  if (audio->device) SDL_CloseAudioDevice(audio->device);
+  destroy_streams(audio);
   for (int index = 0; index < NATIVE_AUDIO_ASSET_COUNT; index += 1) {
     if (audio->assets[index].samples) SDL_free(audio->assets[index].samples);
   }
@@ -324,6 +347,7 @@ bool native_audio_play(NativeAudio *audio, const char *sound, float volume,
     fprintf(stderr, "Unknown native audio asset: %s\n", sound);
     return false;
   }
+  if (!audio->backend_available) return true;
   if (strcmp(sound, "bgm") == 0) {
     return queue_bgm(audio, asset, volume);
   }
@@ -332,6 +356,10 @@ bool native_audio_play(NativeAudio *audio, const char *sound, float volume,
 
 bool native_audio_stop(NativeAudio *audio, const char *sound) {
   if (!audio->loaded) return true;
+  if (!audio->backend_available) {
+    if (strcmp(sound, "bgm") == 0) audio->bgm_playing = false;
+    return true;
+  }
   if (strcmp(sound, "bgm") == 0) {
     audio->bgm_playing = false;
     return SDL_ClearAudioStream(audio->bgm_stream);
@@ -344,17 +372,20 @@ bool native_audio_stop(NativeAudio *audio, const char *sound) {
 
 bool native_audio_set_bgm_gain(NativeAudio *audio, float volume) {
   if (!ensure_loaded(audio)) return false;
+  if (!audio->backend_available) return true;
   return SDL_SetAudioStreamGain(audio->bgm_stream, volume);
 }
 
 bool native_audio_set_muted(NativeAudio *audio, bool muted) {
   audio->muted = muted;
-  if (!audio->loaded) return true;
+  if (!audio->loaded || !audio->backend_available) return true;
   return SDL_SetAudioDeviceGain(audio->device, muted ? 0.0f : 1.0f);
 }
 
 bool native_audio_pump(NativeAudio *audio) {
-  if (!audio->loaded || !audio->bgm_playing) return true;
+  if (!audio->loaded || !audio->backend_available || !audio->bgm_playing) {
+    return true;
+  }
   NativeAudioAsset *bgm = find_asset(audio, "bgm");
   if (!bgm) return false;
   int queued = SDL_GetAudioStreamQueued(audio->bgm_stream);
@@ -366,7 +397,8 @@ bool native_audio_pump(NativeAudio *audio) {
 }
 
 bool native_audio_self_test(NativeAudio *audio) {
-  if (!ensure_loaded(audio) || !SDL_PauseAudioDevice(audio->device)) {
+  if (!ensure_loaded(audio) || !audio->backend_available ||
+      !SDL_PauseAudioDevice(audio->device)) {
     return false;
   }
 

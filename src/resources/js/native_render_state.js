@@ -490,8 +490,12 @@ export class NativeRenderState {
       );
     }
 
+    const ballTexture =
+      ball.rotation === 5
+        ? TEXTURES.BALL('hyper')
+        : TEXTURES.BALL(ball.rotation);
     commands.push(
-      spriteCommand(TEXTURES.BALL(ball.rotation), ball.x, ball.y, {
+      spriteCommand(ballTexture, ball.x, ball.y, {
         anchorX: 0.5,
         anchorY: 0.5,
       })

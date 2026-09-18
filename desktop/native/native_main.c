@@ -1148,6 +1148,25 @@ static bool run_self_test(NativeRuntime *state) {
     return false;
   }
 
+  bool escape_requested_quit = false;
+  if (!js_handle_key(state, "Escape", true, false) ||
+      !js_handle_key(state, "Escape", false, false) ||
+      !process_platform_commands(state, &escape_requested_quit, true) ||
+      escape_requested_quit ||
+      !js_handle_key(state, "KeyP", true, false) ||
+      !js_handle_key(state, "KeyP", false, false) ||
+      !js_handle_key(state, "Escape", true, false) ||
+      !js_handle_key(state, "Escape", false, false) ||
+      !js_get_string(state, "getStateJson", json, sizeof(json)) ||
+      !contains(json, "\"paused\":false") ||
+      !contains(json, "\"visible\":false") ||
+      !process_platform_commands(state, &escape_requested_quit, true) ||
+      escape_requested_quit) {
+    fprintf(stderr, "Native Escape back/cancel contract failed\n");
+    return false;
+  }
+  printf("native_escape_recovery=PASS\n");
+
   const char *custom_preferences =
       "{\"pv-offline-speed\":\"fast\","
       "\"pv-offline-winningScore\":\"10\","
@@ -1666,7 +1685,8 @@ int main(int argc, char **argv) {
     }
     uint64_t now = SDL_GetTicks();
     if (now >= next_tick) {
-      if (!js_step(&state)) {
+      if (!step_runtime(&state)) {
+        fprintf(stderr, "Native interactive runtime step failed\n");
         destroy_runtime(&state);
         return 2;
       }
@@ -1675,7 +1695,6 @@ int main(int argc, char **argv) {
     }
 
     if (!native_audio_pump(&state.audio) ||
-        !persist_preferences_if_dirty(&state) ||
         !process_platform_commands(&state, &quit, false) ||
         !render_frame(&state, false, NULL)) {
       destroy_runtime(&state);

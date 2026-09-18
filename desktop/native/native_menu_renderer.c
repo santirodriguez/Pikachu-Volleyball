@@ -122,6 +122,13 @@ static bool render_text(NativeMenuRenderer *menu, SDL_Renderer *renderer,
     SDL_DestroySurface(surface);
     return false;
   }
+  if (!SDL_SetTextureScaleMode(texture, SDL_SCALEMODE_NEAREST)) {
+    fprintf(stderr, "SDL_SetTextureScaleMode failed for menu text: %s\n",
+            SDL_GetError());
+    SDL_DestroyTexture(texture);
+    SDL_DestroySurface(surface);
+    return false;
+  }
 
   SDL_FRect destination = {
       x,
@@ -152,6 +159,13 @@ static bool render_centered_text(NativeMenuRenderer *menu,
   }
   SDL_Texture *texture = SDL_CreateTextureFromSurface(renderer, surface);
   if (!texture) {
+    SDL_DestroySurface(surface);
+    return false;
+  }
+  if (!SDL_SetTextureScaleMode(texture, SDL_SCALEMODE_NEAREST)) {
+    fprintf(stderr, "SDL_SetTextureScaleMode failed for centered menu text: %s\n",
+            SDL_GetError());
+    SDL_DestroyTexture(texture);
     SDL_DestroySurface(surface);
     return false;
   }

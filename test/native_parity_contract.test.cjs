@@ -282,3 +282,39 @@ test('native host renders quick-rematch copy, interface themes and extended rema
   assert.match(hostSource, /SDL_SCANCODE_KP_EQUALS/);
   assert.match(hostSource, /native_remap_scancode_coverage=PASS/);
 });
+
+test('native stabilization covers interactive audio, hyper-ball rendering, Escape and crisp menu text', () => {
+  const hostSource = read('desktop/native/native_main.c');
+  const audioHeader = read('desktop/native/native_audio.h');
+  const audioSource = read('desktop/native/native_audio.c');
+  const renderSource = read('src/resources/js/native_render_state.js');
+  const menuRenderer = read('desktop/native/native_menu_renderer.c');
+  const atlas = JSON.parse(
+    read('src/resources/assets/images/sprite_sheet.json')
+  );
+
+  assert.match(hostSource, /step_runtime\(&state\)/);
+  assert.match(hostSource, /native_escape_recovery=PASS/);
+  assert.match(audioHeader, /bool backend_available;/);
+  assert.match(
+    audioSource,
+    /SDL_OpenAudioDevice\(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, NULL\)/
+  );
+  assert.match(audioSource, /SDL_ResumeAudioDevice\(audio->device\)/);
+  assert.match(
+    audioSource,
+    /gameplay will continue muted/
+  );
+
+  assert.equal(atlas.frames['ball/ball_5.png'], undefined);
+  assert.ok(atlas.frames['ball/ball_hyper.png']);
+  assert.match(
+    renderSource,
+    /ball\.rotation === 5[\s\S]*TEXTURES\.BALL\('hyper'\)/
+  );
+
+  assert.match(
+    menuRenderer,
+    /SDL_SetTextureScaleMode\(texture, SDL_SCALEMODE_NEAREST\)/
+  );
+});

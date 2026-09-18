@@ -22,6 +22,7 @@ typedef struct NativeAudio {
   SDL_AudioStream *sfx_streams[NATIVE_AUDIO_SFX_STREAM_COUNT];
   NativeAudioAsset assets[NATIVE_AUDIO_ASSET_COUNT];
   bool loaded;
+  bool backend_available;
   bool bgm_playing;
   bool muted;
   int next_sfx_stream;
