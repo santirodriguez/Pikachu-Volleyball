@@ -77,15 +77,15 @@ cmake --build "$LEVELDB_BUILD" --parallel 2 --target leveldb
 LEVELDB_STATIC="$LEVELDB_BUILD/libleveldb.a"
 test -s "$LEVELDB_STATIC"
 IMPORTER="$BUILD_ROOT/electron-preferences-importer"
-g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic \
+g++ $CXXFLAGS -std=c++17 -O2 -Wall -Wextra -Wpedantic \
   -I"$LEVELDB_SOURCE/include" "$ROOT/desktop/native/electron_preferences_importer.cc" \
-  "$LEVELDB_STATIC" -pthread -static-libstdc++ -static-libgcc -o "$IMPORTER"
+  "$LEVELDB_STATIC" -pthread -static-libstdc++ -static-libgcc -Wl,--build-id=none -o "$IMPORTER"
 strip --strip-unneeded "$IMPORTER"
 
 FIXTURE_WRITER="$BUILD_ROOT/electron-preferences-fixture"
-g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic \
+g++ $CXXFLAGS -std=c++17 -O2 -Wall -Wextra -Wpedantic \
   -I"$LEVELDB_SOURCE/include" "$ROOT/desktop/native/electron_preferences_fixture.cc" \
-  "$LEVELDB_STATIC" -pthread -static-libstdc++ -static-libgcc -o "$FIXTURE_WRITER"
+  "$LEVELDB_STATIC" -pthread -static-libstdc++ -static-libgcc -Wl,--build-id=none -o "$FIXTURE_WRITER"
 strip --strip-unneeded "$FIXTURE_WRITER"
 
 FIXTURE_ROOT="$BUILD_ROOT/legacy-electron-fixture"
@@ -129,7 +129,7 @@ cmake --install "$ACCESSKIT_BUILD"
 ACCESSKIT_STATIC="$ACCESSKIT_SOURCE/lib/linux/x86_64/static/libaccesskit.a"
 test -s "$ACCESSKIT_STATIC"
 
-cc -std=c11 -O2 -Wall -Wextra -Wpedantic -D_GNU_SOURCE \
+cc $CFLAGS -std=c11 -O2 -Wall -Wextra -Wpedantic -D_GNU_SOURCE \
   -I"$QUICKJS_SOURCE" -I"$ACCESSKIT_SOURCE/include" \
   $(pkg-config --cflags sdl3 sdl3-ttf libpng libmpg123) \
   "$ROOT/desktop/native/native_main.c" \
@@ -139,7 +139,7 @@ cc -std=c11 -O2 -Wall -Wextra -Wpedantic -D_GNU_SOURCE \
   "$ROOT/desktop/native/native_startup.c" \
   "$QUICKJS_SOURCE/libquickjs.a" "$ACCESSKIT_STATIC" -o "$BINARY" \
   $(pkg-config --libs sdl3 sdl3-ttf libpng libmpg123) \
-  -static-libgcc -lm -ldl -pthread -latomic -Wl,-rpath,'$ORIGIN/../lib'
+  -static-libgcc -lm -ldl -pthread -latomic -Wl,--build-id=none -Wl,-rpath,'$ORIGIN/../lib'
 strip --strip-unneeded "$BINARY"
 patchelf --set-rpath '$ORIGIN/../lib' "$BINARY"
 
@@ -490,6 +490,7 @@ printf '%s  %s\n' "$sha256" "$(basename "$OUTPUT")" \
   echo "accesskit_commit=$actual_accesskit_commit"
   echo "accesskit_static_bytes=$(stat -c%s "$ACCESSKIT_STATIC")"
   echo "accesskit_static_sha256=$(sha256sum "$ACCESSKIT_STATIC" | awk '{print $1}')"
+  echo "quickjs_static_sha256=$(sha256sum "$QUICKJS_SOURCE/libquickjs.a" | awk '{print $1}')"
   echo "render_trace_bytes=$render_trace_bytes"
   echo "render_trace_sha256=$render_trace_sha256"
   echo "framebuffer_bytes=$framebuffer_bytes"
