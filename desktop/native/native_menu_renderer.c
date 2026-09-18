@@ -68,6 +68,39 @@ static const char *locale_language_tag(const char *locale) {
   return "en";
 }
 
+typedef struct NativeMenuPalette {
+  SDL_Color overlay;
+  SDL_Color primary;
+  SDL_Color secondary;
+  SDL_Color item;
+  SDL_Color focus_fill;
+  SDL_Color focus_text;
+  SDL_Color modal;
+} NativeMenuPalette;
+
+static NativeMenuPalette menu_palette(bool dark) {
+  if (dark) {
+    return (NativeMenuPalette){
+        .overlay = {14, 16, 22, 235},
+        .primary = {250, 250, 250, 255},
+        .secondary = {190, 198, 210, 255},
+        .item = {245, 245, 245, 255},
+        .focus_fill = {238, 196, 54, 235},
+        .focus_text = {18, 18, 22, 255},
+        .modal = {35, 38, 48, 250},
+    };
+  }
+  return (NativeMenuPalette){
+      .overlay = {244, 244, 224, 240},
+      .primary = {18, 35, 46, 255},
+      .secondary = {62, 74, 82, 255},
+      .item = {24, 42, 50, 255},
+      .focus_fill = {238, 196, 54, 235},
+      .focus_text = {18, 18, 22, 255},
+      .modal = {226, 232, 214, 250},
+  };
+}
+
 static bool render_text(NativeMenuRenderer *menu, SDL_Renderer *renderer,
                         const char *text, float x, float y, int wrap_width,
                         SDL_Color color) {
@@ -102,8 +135,41 @@ static bool render_text(NativeMenuRenderer *menu, SDL_Renderer *renderer,
   return ok;
 }
 
+static bool render_centered_text(NativeMenuRenderer *menu,
+                                 SDL_Renderer *renderer,
+                                 const char *text,
+                                 float center_x,
+                                 float y,
+                                 int wrap_width,
+                                 SDL_Color color) {
+  if (!text || text[0] == '\0') return true;
+  TTF_Font *font = (TTF_Font *)menu->font;
+  SDL_Surface *surface =
+      TTF_RenderText_Blended_Wrapped(font, text, 0, color, wrap_width);
+  if (!surface) {
+    fprintf(stderr, "TTF centered text render failed: %s\n", SDL_GetError());
+    return false;
+  }
+  SDL_Texture *texture = SDL_CreateTextureFromSurface(renderer, surface);
+  if (!texture) {
+    SDL_DestroySurface(surface);
+    return false;
+  }
+  SDL_FRect destination = {
+      center_x - (float)surface->w / 2.0f,
+      y,
+      (float)surface->w,
+      (float)surface->h,
+  };
+  bool ok = SDL_RenderTexture(renderer, texture, NULL, &destination);
+  SDL_DestroyTexture(texture);
+  SDL_DestroySurface(surface);
+  return ok;
+}
+
 static bool render_item(NativeMenuRenderer *menu, SDL_Renderer *renderer,
-                        JSContext *context, JSValueConst item) {
+                        JSContext *context, JSValueConst item,
+                        const NativeMenuPalette *palette) {
   double x = 0;
   double y = 0;
   double width = 0;
@@ -127,16 +193,16 @@ static bool render_item(NativeMenuRenderer *menu, SDL_Renderer *renderer,
       (float)height,
   };
   if (focused) {
-    SDL_SetRenderDrawColor(renderer, 238, 196, 54, 235);
+    SDL_SetRenderDrawColor(renderer, palette->focus_fill.r,
+                          palette->focus_fill.g, palette->focus_fill.b,
+                          palette->focus_fill.a);
     if (!SDL_RenderFillRect(renderer, &bounds)) {
       free(label);
       return false;
     }
   }
 
-  SDL_Color color =
-      focused ? (SDL_Color){18, 18, 22, 255}
-              : (SDL_Color){245, 245, 245, 255};
+  SDL_Color color = focused ? palette->focus_text : palette->item;
   bool ok = render_text(menu, renderer, label, (float)x + 3.0f,
                         (float)y + 2.0f, (int)width - 6, color);
   free(label);
@@ -144,14 +210,15 @@ static bool render_item(NativeMenuRenderer *menu, SDL_Renderer *renderer,
 }
 
 static bool render_item_array(NativeMenuRenderer *menu, SDL_Renderer *renderer,
-                              JSContext *context, JSValueConst array) {
+                              JSContext *context, JSValueConst array,
+                              const NativeMenuPalette *palette) {
   uint32_t length = 0;
   if (!get_array_length(context, array, &length)) return false;
   for (uint32_t index = 0; index < length; index += 1) {
     JSValue item = JS_GetPropertyUint32(context, array, index);
     bool ok =
         !JS_IsException(item) &&
-        render_item(menu, renderer, context, item);
+        render_item(menu, renderer, context, item, palette);
     JS_FreeValue(context, item);
     if (!ok) return false;
   }
@@ -195,6 +262,41 @@ void native_menu_renderer_destroy(NativeMenuRenderer *menu) {
   TTF_Quit();
 }
 
+bool native_menu_renderer_render_quick_rematch(NativeMenuRenderer *menu,
+                                               SDL_Renderer *renderer,
+                                               JSContext *context,
+                                               JSValueConst frame) {
+  if (!menu || !menu->initialized) return false;
+
+  bool visible = false;
+  if (!get_bool(context, frame, "quickRematchVisible", &visible)) return false;
+  if (!visible) return true;
+
+  char *locale = get_string(context, frame, "locale");
+  char *text = get_string(context, frame, "quickRematchText");
+  if (!locale || !text) {
+    free(locale);
+    free(text);
+    return false;
+  }
+
+  TTF_Font *font = (TTF_Font *)menu->font;
+  bool ok = TTF_SetFontLanguage(font, locale_language_tag(locale));
+  if (ok) {
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 150);
+    SDL_FRect background = {24, 267, 384, 23};
+    ok = SDL_RenderFillRect(renderer, &background) &&
+         render_centered_text(menu, renderer, text, 216.0f, 273.0f, 372,
+                              (SDL_Color){255, 255, 255, 255});
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
+  }
+
+  free(locale);
+  free(text);
+  return ok;
+}
+
 bool native_menu_renderer_render(NativeMenuRenderer *menu,
                                  SDL_Renderer *renderer,
                                  JSContext *context,
@@ -206,24 +308,29 @@ bool native_menu_renderer_render(NativeMenuRenderer *menu,
   if (!visible) return true;
 
   char *locale = get_string(context, frame, "locale");
+  char *color_scheme = get_string(context, frame, "colorScheme");
   char *title = get_string(context, frame, "title");
   char *panel_title = get_string(context, frame, "panelTitle");
   char *panel_body = get_string(context, frame, "panelBody");
   char *status = get_string(context, frame, "status");
-  if (!locale || !title || !panel_title || !panel_body || !status) {
+  if (!locale || !color_scheme || !title || !panel_title || !panel_body ||
+      !status) {
     free(locale);
+    free(color_scheme);
     free(title);
     free(panel_title);
     free(panel_body);
     free(status);
     return false;
   }
+  NativeMenuPalette palette = menu_palette(strcmp(color_scheme, "dark") == 0);
 
   TTF_Font *font = (TTF_Font *)menu->font;
   if (!TTF_SetFontLanguage(font, locale_language_tag(locale))) {
     fprintf(stderr, "TTF_SetFontLanguage failed for %s: %s\n", locale,
             SDL_GetError());
     free(locale);
+    free(color_scheme);
     free(title);
     free(panel_title);
     free(panel_body);
@@ -232,10 +339,12 @@ bool native_menu_renderer_render(NativeMenuRenderer *menu,
   }
 
   SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-  SDL_SetRenderDrawColor(renderer, 14, 16, 22, 235);
+  SDL_SetRenderDrawColor(renderer, palette.overlay.r, palette.overlay.g,
+                         palette.overlay.b, palette.overlay.a);
   SDL_FRect overlay = {0, 0, 432, 304};
   if (!SDL_RenderFillRect(renderer, &overlay)) {
     free(locale);
+    free(color_scheme);
     free(title);
     free(panel_title);
     free(panel_body);
@@ -243,8 +352,8 @@ bool native_menu_renderer_render(NativeMenuRenderer *menu,
     return false;
   }
 
-  SDL_Color primary = {250, 250, 250, 255};
-  SDL_Color secondary = {190, 198, 210, 255};
+  SDL_Color primary = palette.primary;
+  SDL_Color secondary = palette.secondary;
   bool ok =
       render_text(menu, renderer, title, 12, 10, 0, primary) &&
       render_text(menu, renderer, panel_title, 154, 22, 260, primary) &&
@@ -255,8 +364,8 @@ bool native_menu_renderer_render(NativeMenuRenderer *menu,
   JSValue panel_items = JS_GetPropertyStr(context, frame, "panelItems");
   if (ok) {
     ok = !JS_IsException(nav_items) && !JS_IsException(panel_items) &&
-         render_item_array(menu, renderer, context, nav_items) &&
-         render_item_array(menu, renderer, context, panel_items);
+         render_item_array(menu, renderer, context, nav_items, &palette) &&
+         render_item_array(menu, renderer, context, panel_items, &palette);
   }
 
   JSValue modal = JS_GetPropertyStr(context, frame, "modal");
@@ -264,13 +373,14 @@ bool native_menu_renderer_render(NativeMenuRenderer *menu,
     char *modal_title = get_string(context, modal, "title");
     char *modal_message = get_string(context, modal, "message");
     JSValue items = JS_GetPropertyStr(context, modal, "items");
-    SDL_SetRenderDrawColor(renderer, 35, 38, 48, 250);
+    SDL_SetRenderDrawColor(renderer, palette.modal.r, palette.modal.g,
+                           palette.modal.b, palette.modal.a);
     SDL_FRect card = {92, 172, 248, 108};
     ok = modal_title && modal_message && !JS_IsException(items) &&
          SDL_RenderFillRect(renderer, &card) &&
          render_text(menu, renderer, modal_title, 106, 181, 220, primary) &&
          render_text(menu, renderer, modal_message, 106, 194, 220, secondary) &&
-         render_item_array(menu, renderer, context, items);
+         render_item_array(menu, renderer, context, items, &palette);
     free(modal_title);
     free(modal_message);
     JS_FreeValue(context, items);
@@ -280,6 +390,7 @@ bool native_menu_renderer_render(NativeMenuRenderer *menu,
   JS_FreeValue(context, nav_items);
   JS_FreeValue(context, panel_items);
   free(locale);
+  free(color_scheme);
   free(title);
   free(panel_title);
   free(panel_body);
