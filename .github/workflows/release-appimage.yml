@@ -37,15 +37,15 @@ jobs:
           }
 
           release_notes="docs/releases/v${package_version}.md"
+          test -s "$release_notes" || {
+            echo "Missing release notes: $release_notes" >&2
+            exit 1
+          }
           if [[ "${{ github.event_name }}" == "release" ]]; then
             expected_tag="v${package_version}"
             actual_tag="${{ github.event.release.tag_name }}"
             [[ "$actual_tag" == "$expected_tag" ]] || {
               echo "Release tag $actual_tag does not match package version $expected_tag" >&2
-              exit 1
-            }
-            test -s "$release_notes" || {
-              echo "Missing release notes: $release_notes" >&2
               exit 1
             }
           fi
