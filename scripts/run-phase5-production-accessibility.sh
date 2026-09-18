@@ -48,6 +48,9 @@ export NO_AT_BRIDGE=0
 export SDL_AUDIODRIVER=dummy
 export SDL_RENDER_DRIVER=software
 export LANG=en_US.UTF-8
+# Accessibility validates a clean native profile. Electron migration is
+# validated independently and must not leak its fixture into this scenario.
+unset PV_ELECTRON_USER_DATA_DIR
 export PV_NATIVE_A11Y_STATE_FILE="$STATE_FILE"
 export PV_NATIVE_PREFS_DIR="$BUILD_ROOT/production-a11y-preferences"
 rm -rf "$PV_NATIVE_PREFS_DIR"
