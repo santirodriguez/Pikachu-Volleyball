@@ -121,6 +121,7 @@ function createItem({
   meta = {},
 }) {
   return {
+    ...meta,
     nodeId,
     id,
     kind,
@@ -131,7 +132,6 @@ function createItem({
     y: layout.y + index * layout.height,
     width: layout.width,
     height: layout.height,
-    ...meta,
   };
 }
 

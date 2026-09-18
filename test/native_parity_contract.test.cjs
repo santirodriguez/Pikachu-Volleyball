@@ -230,6 +230,10 @@ test('native menu reuses production locale/control policy and exact link allowli
     /https:\/\/github\.com\/gorisanson\/pikachu-volleyball/
   );
   assert.doesNotMatch(source, /child_process|exec\(|spawn\(|shell:/);
+  assert.match(
+    source,
+    /return \{\s*\.\.\.meta,\s*nodeId,\s*id,\s*kind,\s*label,/s
+  );
 });
 
 test('native app exposes one menu state to keyboard pointer accessibility and platform host', () => {
