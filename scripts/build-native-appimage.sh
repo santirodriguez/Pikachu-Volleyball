@@ -16,6 +16,9 @@ rm -rf "$BUILD_ROOT"
 mkdir -p "$BUILD_ROOT" "$EVIDENCE_DIR"
 export SOURCE_DATE_EPOCH="$(git -C "$ROOT" show -s --format=%ct "$SOURCE_HEAD_SHA")"
 export PV_NATIVE_BUNDLE_DIR="$BUILD_ROOT"
+export CFLAGS="${CFLAGS:+$CFLAGS }-ffile-prefix-map=$ROOT=/src -fdebug-prefix-map=$ROOT=/src -ffile-prefix-map=$BUILD_ROOT=/build -fdebug-prefix-map=$BUILD_ROOT=/build"
+export CXXFLAGS="${CXXFLAGS:+$CXXFLAGS }-ffile-prefix-map=$ROOT=/src -fdebug-prefix-map=$ROOT=/src -ffile-prefix-map=$BUILD_ROOT=/build -fdebug-prefix-map=$BUILD_ROOT=/build"
+export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }--remap-path-prefix=$ROOT=/src --remap-path-prefix=$BUILD_ROOT=/build"
 
 npx webpack --config "$ROOT/webpack.native.js"
 if [[ ! -s "$BUNDLE" ]]; then
@@ -185,15 +188,18 @@ for library in "${linked_libraries[@]}"; do
     package="${package%%:*}"
     copyright="/usr/share/doc/$package/copyright"
     if [[ -n "$package" && -f "$copyright" ]]; then
-      package_version="$(dpkg-query -W -f='\${Version}' "$package" 2>/dev/null || true)"
-      printf '%s\t%s\t%s\t%s\n' "$name" "$package" "$package_version" "$(readlink -f "$library")" \
+      package_version="$(dpkg-query -W -f='${Version}' "$package" 2>/dev/null || true)"
+      system_path="$(readlink -f "$library")"
+      printf '%s\t%s\t%s\t%s\n' "$name" "$package" "$package_version" "$system_path" \
         >> "$EVIDENCE_DIR/runtime-packages.txt"
       install -m 0644 "$copyright" \
         "$APPDIR/usr/share/licenses/pikachu-volleyball-native/runtime/$package.copyright"
     fi
   fi
-  if [[ "$(readlink -f "$library")" == "$PREFIX/"* ]]; then
-    printf '%s\t%s\t%s\t%s\n' "$name" source-built pinned "$(readlink -f "$library")" \
+  resolved_library="$(readlink -f "$library")"
+  if [[ "$resolved_library" == "$PREFIX/"* ]]; then
+    normalized_library="toolchain-prefix/${resolved_library#"$PREFIX/"}"
+    printf '%s\t%s\t%s\t%s\n' "$name" source-built pinned "$normalized_library" \
       >> "$EVIDENCE_DIR/runtime-packages.txt"
   fi
 done
