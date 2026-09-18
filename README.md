@@ -56,7 +56,7 @@ This edition is simply my way of looking after a game I remember fondly. The ori
 2. Download the latest `.AppImage` for `x86_64` and `SHA256SUMS.txt`.
 3. Verify the checksum, allow the AppImage to run as a program and open it.
 
-See the concise [2.1.0 release notes](docs/releases/v2.1.0.md). Pre-release builds may also appear in the [Build Linux AppImage workflow](https://github.com/santirodriguez/pikachu-volleyball/actions/workflows/release-appimage.yml).
+See the concise [2.1.0 release notes](docs/releases/v2.1.0.md). Development release candidates are built by the [Release Candidate Readiness workflow](https://github.com/santirodriguez/pikachu-volleyball/actions/workflows/phase6-release-readiness.yml).
 
 ## Controls
 
@@ -88,7 +88,7 @@ These are the defaults. Player controls can be changed from the in-game **Contro
 
 The browser foundation comes from [Kyutae Lee’s JavaScript reverse-engineering reimplementation](https://github.com/gorisanson/pikachu-volleyball). This edition would not exist without that careful work.
 
-The Linux desktop edition, integrated interface, controls, localization and 2.x work are maintained by [Santiago Rodríguez](https://santiagorodriguez.com).
+The Linux desktop edition, integrated interface, controls, localization and current maintenance work are maintained by [Santiago Rodríguez](https://santiagorodriguez.com).
 
 <details>
 <summary><strong>Development and packaging</strong></summary>
