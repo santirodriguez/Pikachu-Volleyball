@@ -219,7 +219,7 @@ test('native menu reuses production locale/control policy and exact link allowli
   assert.match(source, /getIntegratedMenuStrings/);
   assert.match(source, /SUPPORTED_LOCALES/);
   assert.match(source, /CONTROL_BINDING_DEFINITIONS/);
-  assert.match(source, /validateControlBinding/);
+  assert.match(source, /previewControlBinding/);
   assert.match(source, /https:\/\/santiagorodriguez\.com/);
   assert.match(
     source,
