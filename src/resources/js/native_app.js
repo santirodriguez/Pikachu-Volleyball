@@ -358,7 +358,6 @@ export function resetControlBindingScope(scope) {
 }
 
 export function resetDefaults() {
-  const active = requireApplication();
   setPracticeMode(false);
   for (const [name, value] of Object.entries(DEFAULT_SETTINGS)) {
     setSetting(name, value);
