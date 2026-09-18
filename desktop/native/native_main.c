@@ -89,12 +89,19 @@ static bool path_exists(const char *path) {
   return access(path, F_OK) == 0;
 }
 
-static bool get_electron_user_data_path(char *output, size_t output_size) {
+static bool append_electron_leveldb_path(char *output, size_t output_size,
+                                         const char *user_data) {
+  char local_storage[PATH_MAX];
+  return join_directory_file(local_storage, sizeof(local_storage), user_data,
+                             "Local Storage") &&
+         join_directory_file(output, output_size, local_storage, "leveldb");
+}
+
+static bool get_electron_database_path(char *output, size_t output_size) {
   const char *override = getenv("PV_ELECTRON_USER_DATA_DIR");
   if (override && override[0] != '\0') {
-    if (strlen(override) >= output_size) return false;
-    strcpy(output, override);
-    return true;
+    return append_electron_leveldb_path(output, output_size, override) &&
+           path_exists(output);
   }
 
   const char *config = getenv("XDG_CONFIG_HOME");
@@ -106,8 +113,33 @@ static bool get_electron_user_data_path(char *output, size_t output_size) {
     if (written <= 0 || (size_t)written >= sizeof(fallback)) return false;
     config = fallback;
   }
-  return join_directory_file(output, output_size, config,
-                             "Pikachu Volleyball");
+
+  const char *names[] = {"Pikachu Volleyball", "pikachu-volleyball"};
+  char selected[PATH_MAX] = "";
+  int matches = 0;
+  for (size_t index = 0; index < sizeof(names) / sizeof(names[0]); index += 1) {
+    char user_data[PATH_MAX];
+    char database[PATH_MAX];
+    if (!join_directory_file(user_data, sizeof(user_data), config,
+                             names[index]) ||
+        !append_electron_leveldb_path(database, sizeof(database), user_data)) {
+      return false;
+    }
+    if (path_exists(database)) {
+      matches += 1;
+      if (strlen(database) >= sizeof(selected)) return false;
+      strcpy(selected, database);
+    }
+  }
+
+  if (matches > 1) {
+    fprintf(stderr,
+            "Multiple Electron preference profiles exist; refusing to guess which one to migrate.\n");
+    return false;
+  }
+  if (matches != 1 || strlen(selected) >= output_size) return false;
+  strcpy(output, selected);
+  return true;
 }
 
 static bool run_electron_importer(NativeRuntime *state,
@@ -150,21 +182,8 @@ static char *load_initial_preferences(NativeRuntime *state,
     return read_text_file(state->preferences_path, NULL);
   }
 
-  char electron_user_data[PATH_MAX];
-  if (!get_electron_user_data_path(electron_user_data,
-                                   sizeof(electron_user_data))) {
-    char *empty = malloc(3);
-    if (empty) memcpy(empty, "{}", 3);
-    return empty;
-  }
-
-  char local_storage[PATH_MAX];
   char database_path[PATH_MAX];
-  if (!join_directory_file(local_storage, sizeof(local_storage),
-                           electron_user_data, "Local Storage") ||
-      !join_directory_file(database_path, sizeof(database_path),
-                           local_storage, "leveldb") ||
-      !path_exists(database_path)) {
+  if (!get_electron_database_path(database_path, sizeof(database_path))) {
     char *empty = malloc(3);
     if (empty) memcpy(empty, "{}", 3);
     return empty;

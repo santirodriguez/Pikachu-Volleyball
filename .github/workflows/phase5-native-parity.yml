@@ -144,11 +144,13 @@ jobs:
           const fs = require('node:fs');
           const path = require('node:path');
           const report = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
-          if (report.name !== 'Pikachu Volleyball') throw new Error('Unexpected Electron app name');
+          if (!['Pikachu Volleyball', 'pikachu-volleyball'].includes(report.name)) {
+            throw new Error('Unexpected Electron app name: ' + report.name);
+          }
           if (report.userData !== path.join(report.appData, report.name)) {
             throw new Error('Electron userData is not appData/appName');
           }
-          console.log('electron_default_user_data=PASS');
+          console.log('electron_default_user_data=PASS name=' + report.name);
           NODE
 
       - name: Seed controlled Electron 2.1 preferences
