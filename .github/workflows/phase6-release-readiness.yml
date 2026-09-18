@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: phase6-release-readiness-\${{ github.event.pull_request.number || github.ref }}
+  group: phase6-release-readiness-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -21,7 +21,7 @@ jobs:
       - name: Check out exact task head
         uses: actions/checkout@v5
         with:
-          ref: \${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v5
@@ -54,7 +54,7 @@ jobs:
         run: node --test test/native_release_readiness.test.cjs
 
   native-build:
-    name: Native build \${{ matrix.variant }}
+    name: Native build ${{ matrix.variant }}
     runs-on: ubuntu-22.04
     timeout-minutes: 90
     strategy:
@@ -66,7 +66,7 @@ jobs:
       - name: Check out exact task head
         uses: actions/checkout@v5
         with:
-          ref: \${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v5
@@ -95,7 +95,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          root="$GITHUB_WORKSPACE/build/phase6/native-\${{ matrix.variant }}"
+          root="$GITHUB_WORKSPACE/build/phase6/native-${{ matrix.variant }}"
           echo "PV_NATIVE_RELEASE_ROOT=$root" >> "$GITHUB_ENV"
           PV_NATIVE_RELEASE_ROOT="$root" bash scripts/build-native-appimage.sh
 
@@ -204,12 +204,12 @@ jobs:
       - name: Upload native build evidence
         uses: actions/upload-artifact@v6
         with:
-          name: phase6-native-build-\${{ matrix.variant }}
+          name: phase6-native-build-${{ matrix.variant }}
           path: |
-            build/phase6/native-\${{ matrix.variant }}/*.AppImage
-            build/phase6/native-\${{ matrix.variant }}/SHA256SUMS.txt
-            build/phase6/native-\${{ matrix.variant }}/PikachuVolleyballNative.AppDir/provenance.json
-            build/phase6/native-\${{ matrix.variant }}/evidence/**
+            build/phase6/native-${{ matrix.variant }}/*.AppImage
+            build/phase6/native-${{ matrix.variant }}/SHA256SUMS.txt
+            build/phase6/native-${{ matrix.variant }}/PikachuVolleyballNative.AppDir/provenance.json
+            build/phase6/native-${{ matrix.variant }}/evidence/**
           if-no-files-found: error
           retention-days: 14
 
@@ -284,7 +284,7 @@ jobs:
       - name: Check out exact task head
         uses: actions/checkout@v5
         with:
-          ref: \${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v5
@@ -372,7 +372,7 @@ jobs:
           - label: opensuse-leap-16
             image: opensuse/leap:16.0
     container:
-      image: \${{ matrix.image }}
+      image: ${{ matrix.image }}
 
     steps:
       - name: Download exact reproducible candidate
@@ -422,14 +422,14 @@ jobs:
           grep -q '^native_graphics_bridge=PASS$' /tmp/native-self-test.txt
           grep -q '^native_audio_mixer=PASS$' /tmp/native-self-test.txt
           grep -q '^native_preferences_store=PASS$' /tmp/native-self-test.txt
-          printf 'linux_matrix=PASS\nmatrix_label=%s\n' "\${{ matrix.label }}" \
-            > "/tmp/\${{ matrix.label }}.txt"
+          printf 'linux_matrix=PASS\nmatrix_label=%s\n' "${{ matrix.label }}" \
+            > "/tmp/${{ matrix.label }}.txt"
 
       - name: Upload Linux matrix evidence
         uses: actions/upload-artifact@v6
         with:
-          name: phase6-linux-\${{ matrix.label }}
-          path: /tmp/\${{ matrix.label }}.txt
+          name: phase6-linux-${{ matrix.label }}
+          path: /tmp/${{ matrix.label }}.txt
           if-no-files-found: error
 
   release-ready:
@@ -445,7 +445,7 @@ jobs:
       - name: Check out exact task head
         uses: actions/checkout@v5
         with:
-          ref: \${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Download exact candidate evidence
         uses: actions/download-artifact@v6
