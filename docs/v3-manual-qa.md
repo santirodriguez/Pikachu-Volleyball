@@ -24,9 +24,10 @@ session_type=wayland|x11|other
 Verify the downloaded artifact first:
 
 ```bash
-sha256sum <candidate>.AppImage
-chmod +x <candidate>.AppImage
-./<candidate>.AppImage
+candidate="Pikachu-Volleyball-3.0.0-x86_64.AppImage"
+sha256sum "$candidate"
+chmod +x "$candidate"
+"./$candidate"
 ```
 
 ## Required manual checks
