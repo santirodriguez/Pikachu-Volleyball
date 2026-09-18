@@ -809,8 +809,12 @@ static const char *scancode_to_code(SDL_Scancode scancode, char *buffer,
     snprintf(buffer, buffer_size, "Digit%d", 1 + (scancode - SDL_SCANCODE_1));
     return buffer;
   }
-  if (scancode >= SDL_SCANCODE_F1 && scancode <= SDL_SCANCODE_F24) {
+  if (scancode >= SDL_SCANCODE_F1 && scancode <= SDL_SCANCODE_F12) {
     snprintf(buffer, buffer_size, "F%d", 1 + (scancode - SDL_SCANCODE_F1));
+    return buffer;
+  }
+  if (scancode >= SDL_SCANCODE_F13 && scancode <= SDL_SCANCODE_F24) {
+    snprintf(buffer, buffer_size, "F%d", 13 + (scancode - SDL_SCANCODE_F13));
     return buffer;
   }
   if (scancode >= SDL_SCANCODE_KP_1 && scancode <= SDL_SCANCODE_KP_9) {
