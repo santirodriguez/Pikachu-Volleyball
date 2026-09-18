@@ -6,48 +6,26 @@ import inputFrameModule from './input_frame.cjs';
 import controlBindingsModule from './control_bindings.cjs';
 import settingsStoreModule from './settings_store.cjs';
 import gameSettingsModule from './game_settings.cjs';
+import nativeAudioModule from './native_audio_state.cjs';
+import nativePreferencesModule from './native_preferences.cjs';
 import { createNativeRenderState } from './native_render_state.js';
 
 const { INPUT_ACTIONS, InputActionState } = inputActionsModule;
 const { createFrameInputFromActionSnapshot } = inputFrameModule;
 const {
-  CONTROL_BINDING_STORAGE_KEY,
-  parseControlBindings,
+  validateControlBinding,
+  resetControlBindings,
   getPlayerKeyboardConfig,
 } = controlBindingsModule;
-const {
-  STORAGE_KEYS,
-  DEFAULT_SETTINGS,
-  sanitizeSetting,
-  normalizeSystemColorScheme,
-} = settingsStoreModule;
+const { DEFAULT_SETTINGS, sanitizeSetting } = settingsStoreModule;
 const { FPS_BY_SPEED } = gameSettingsModule;
+const { createNativeAudioState } = nativeAudioModule;
+const {
+  normalizeNativePreferences,
+  serializeNativePreferences,
+} = nativePreferencesModule;
 
 let application = null;
-
-function parsePreferences(serialized) {
-  if (typeof serialized !== 'string' || serialized.length === 0) return {};
-  try {
-    const parsed = JSON.parse(serialized);
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
-      ? parsed
-      : {};
-  } catch {
-    return {};
-  }
-}
-
-function normalizeSettings(preferences) {
-  const settings = {};
-  for (const [name, defaultValue] of Object.entries(DEFAULT_SETTINGS)) {
-    settings[name] =
-      sanitizeSetting(name, preferences[STORAGE_KEYS[name]]) || defaultValue;
-  }
-  settings.colorScheme =
-    sanitizeSetting('colorScheme', preferences[STORAGE_KEYS.colorScheme]) ||
-    normalizeSystemColorScheme(preferences.systemColorScheme);
-  return settings;
-}
 
 function createPlayerActionState(controlBindings, player) {
   const bindings = getPlayerKeyboardConfig(controlBindings, player);
@@ -74,12 +52,11 @@ function requireApplication() {
 }
 
 export function initialize(serializedPreferences = '{}') {
-  const preferences = parsePreferences(serializedPreferences);
-  const settings = normalizeSettings(preferences);
-  const controlBindings = parseControlBindings(
-    preferences[CONTROL_BINDING_STORAGE_KEY]
-  );
+  const normalized = normalizeNativePreferences(serializedPreferences);
+  const settings = normalized.settings;
+  const controlBindings = normalized.controlBindings;
   const renderState = createNativeRenderState(settings.graphic);
+  const audioState = createNativeAudioState(settings);
   const core = createGameCore();
   core.normalFPS = FPS_BY_SPEED[settings.speed];
   core.winningScore = Number(settings.winningScore);
@@ -88,6 +65,7 @@ export function initialize(serializedPreferences = '{}') {
   application = {
     core,
     renderState,
+    audioState,
     settings,
     controlBindings,
     actionStates: [
@@ -146,6 +124,7 @@ export function step() {
 
   active.lastResult = active.core.step({ players: frameInputs });
   active.renderState.applyEffects(active.lastResult.effects);
+  active.audioState.applyEffects(active.lastResult.effects);
   return active.lastResult;
 }
 
@@ -158,6 +137,7 @@ export function getState() {
   return {
     settings: { ...active.settings },
     controlBindings: { ...active.controlBindings },
+    audio: active.audioState.getState(),
     core: active.core.getSnapshot(),
     lastEffects: active.lastResult.effects.map((effect) => [...effect]),
   };
@@ -188,4 +168,93 @@ export function getRenderFrame() {
 
 export function getRenderFrameJson() {
   return JSON.stringify(getRenderFrame());
+}
+
+
+function rebuildActionStates(active) {
+  active.actionStates = [
+    createPlayerActionState(active.controlBindings, 1),
+    createPlayerActionState(active.controlBindings, 2),
+  ];
+  active.fixedDownCodes.clear();
+}
+
+export function drainAudioCommands() {
+  return requireApplication().audioState.drain();
+}
+
+export function getPersistedPreferencesJson() {
+  const active = requireApplication();
+  return serializeNativePreferences(active.settings, active.controlBindings);
+}
+
+export function setSetting(name, value) {
+  const active = requireApplication();
+  const sanitized = sanitizeSetting(name, value);
+  if (sanitized === null) return false;
+
+  if (name === 'winningScore') {
+    const numeric = Number(sanitized);
+    if (active.core.isPracticeMode) return false;
+    if (
+      active.core.isMatchInProgress() &&
+      active.core.scores.some((score) => score >= numeric)
+    ) {
+      return false;
+    }
+    active.core.winningScore = numeric;
+  } else if (name === 'speed') {
+    active.core.normalFPS = FPS_BY_SPEED[sanitized];
+  } else if (name === 'sfx') {
+    active.core.isStereoSound = sanitized === 'stereo';
+  } else if (name === 'graphic') {
+    active.renderState.setGraphicMode(sanitized);
+  }
+
+  active.settings = { ...active.settings, [name]: sanitized };
+  if (name === 'bgm' || name === 'sfx') {
+    active.audioState.updateSettings(active.settings);
+  }
+  return true;
+}
+
+export function setControlBinding(bindingId, code) {
+  const active = requireApplication();
+  const result = validateControlBinding(
+    active.controlBindings,
+    bindingId,
+    code
+  );
+  if (!result.ok) return result;
+  active.controlBindings = result.bindings;
+  rebuildActionStates(active);
+  return {
+    ok: true,
+    bindingId,
+    code,
+    bindings: { ...active.controlBindings },
+  };
+}
+
+export function resetControlBindingScope(scope) {
+  const active = requireApplication();
+  active.controlBindings = resetControlBindings(
+    active.controlBindings,
+    scope
+  );
+  rebuildActionStates(active);
+  return {
+    ok: true,
+    scope,
+    bindings: { ...active.controlBindings },
+  };
+}
+
+export function resetDefaults() {
+  const active = requireApplication();
+  active.core.setPracticeMode(false);
+  for (const [name, value] of Object.entries(DEFAULT_SETTINGS)) {
+    setSetting(name, value);
+  }
+  return true;
 }
