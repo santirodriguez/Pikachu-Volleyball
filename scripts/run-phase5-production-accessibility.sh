@@ -134,10 +134,60 @@ for attempt in $(seq 1 100); do
   sleep 0.1
 done
 
+PRE_STATE_FILE="$EVIDENCE_DIR/production-atspi-preenabled-state.txt"
+PRE_VALIDATION_FILE="$EVIDENCE_DIR/production-atspi-preenabled-validation.txt"
+PRE_RUNTIME_LOG="$EVIDENCE_DIR/production-atspi-preenabled-runtime.log"
+rm -f "$PRE_STATE_FILE" "$PRE_VALIDATION_FILE" "$PRE_RUNTIME_LOG"
+
+export PV_NATIVE_A11Y_STATE_FILE="$PRE_STATE_FILE"
+export PV_NATIVE_PREFS_DIR="$BUILD_ROOT/production-a11y-preferences-preenabled"
+rm -rf "$PV_NATIVE_PREFS_DIR"
+mkdir -p "$PV_NATIVE_PREFS_DIR"
+
+"$APP_RUN" --a11y-test > "$PRE_RUNTIME_LOG" 2>&1 &
+app_pid=$!
+
+for attempt in $(seq 1 100); do
+  if [[ -s "$PRE_STATE_FILE" ]]; then break; fi
+  if ! kill -0 "$app_pid" 2>/dev/null; then
+    cat "$PRE_RUNTIME_LOG" >&2
+    echo 'Pre-enabled accessibility host exited before publishing state.' >&2
+    exit 1
+  fi
+  if [[ "$attempt" -eq 100 ]]; then
+    cat "$PRE_RUNTIME_LOG" >&2
+    echo 'Pre-enabled accessibility host did not publish state.' >&2
+    exit 1
+  fi
+  sleep 0.1
+done
+
+/usr/bin/python3 "$ROOT/scripts/validate-phase5-production-accessibility.py" \
+  | tee "$PRE_VALIDATION_FILE"
+grep -q '^production_accesskit_atspi=PASS$' "$PRE_VALIDATION_FILE"
+
+for attempt in $(seq 1 100); do
+  if ! kill -0 "$app_pid" 2>/dev/null; then
+    wait "$app_pid"
+    app_pid=''
+    break
+  fi
+  if [[ "$attempt" -eq 100 ]]; then
+    cat "$PRE_RUNTIME_LOG" >&2
+    echo 'Native Quit did not terminate the pre-enabled accessibility host.' >&2
+    exit 1
+  fi
+  sleep 0.1
+done
+
 {
+  echo 'production_atspi_dynamic_gate=PASS'
+  echo 'production_atspi_preenabled_gate=PASS'
   echo 'production_atspi_gate=PASS'
   echo "state_sha256=$(sha256sum "$STATE_FILE" | awk '{print $1}')"
   echo "validation_sha256=$(sha256sum "$VALIDATION_FILE" | awk '{print $1}')"
+  echo "preenabled_state_sha256=$(sha256sum "$PRE_STATE_FILE" | awk '{print $1}')"
+  echo "preenabled_validation_sha256=$(sha256sum "$PRE_VALIDATION_FILE" | awk '{print $1}')"
   echo "status_sha256=$(sha256sum "$STATUS_LOG" | awk '{print $1}')"
   echo 'native_quit_process_exit=PASS'
 } | tee "$EVIDENCE_DIR/production-atspi-summary.txt"

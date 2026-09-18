@@ -100,3 +100,57 @@ If accessibility or migration cannot be proven with a bounded implementation, Ph
 - runner capability limitations are reported separately from product failures.
 
 Passing this gate still does not authorize Electron removal or release work.
+
+
+## Implemented production result
+
+The Phase 5 implementation keeps the Phase 4 JavaScript gameplay authority unchanged while replacing desktop platform responsibilities with a production SDL3 + QuickJS host.
+
+The implemented ownership is:
+
+- `native_app.js`: production QuickJS composition around the accepted shared core, semantic input, settings, controls, audio commands, presentation commands and native menu state;
+- `desktop/native/native_main.c`: SDL event loop, QuickJS calls, render execution, persistent-file I/O, exact external-link execution and native quit;
+- `native_render_state.js` + `presentation_math.cjs`: shared presentation state/formulas, with C limited to executing serializable render commands;
+- `native_audio_state.cjs` + `native_audio.c`: accepted BGM/SFX policy plus fixed-channel SDL/mpg123 PCM playback;
+- `native_preferences.cjs`: shared validation/serialization for the atomic native preference store;
+- `electron_preferences_importer.cc`: bounded first-run import from the measured Chromium LevelDB backend, using a source copy and a statically linked pinned LevelDB reader;
+- `native_menu_state.js` + `native_menu_renderer.c`: one JavaScript menu/focus model rendered with SDL3_ttf and bundled Unifont;
+- `native_accessibility.c`: statically linked AccessKit adapter generated from the same JavaScript menu snapshot. AccessKit callbacks consume only copied C state and send focus/click requests back to the SDL main thread; they do not call QuickJS or SDL directly;
+- `native_startup.c`: native startup checkpoints and fatal startup messages for all five supported locales.
+
+### 5.4 validated checkpoint
+
+The last dedicated 5.4 exact-head run before native UI integration proved audio, controls, persistence and migration together:
+
+- native AppImage: `8,653,304` bytes (about `8.25 MiB`);
+- native AppImage SHA-256: `bdb0c0d763665edcbfa7de1b0dc473593075733e596bb8f0d5a098aef64849a8`;
+- native bundle: `132,462` bytes, SHA-256 `81771824dcf2662281459b24caa8fd5c3550df430de97ec457811fc968937230`;
+- native host: `997,624` bytes, SHA-256 `c3905c1792aa19e1f559e863e062a34854691ff3af544101a913fcff76f62e94`;
+- statically linked Electron preference importer: `1,461,352` bytes, SHA-256 `7ed3f379bfa980eec1c18fc03cd196df549bfc6bba380cd36ecbae3ba4af4056`;
+- native audio mixer, atomic preference store, Electron migration, direct AppImage, extract-and-run and extracted AppRun smoke checks passed.
+
+### 5.5 production UI/accessibility contract
+
+The production native UI now covers:
+
+- Continue, Restart, Match, Controls, Audio/Graphics, Language, About and Quit flows;
+- keyboard and pointer navigation, setting changes, control capture/confirmation and reset flows;
+- production strings and Unicode rendering for `en`, `es-ar`, `ca`, `ko` and `zh`;
+- exact About-link allowlisting, negative security vectors and direct native Quit;
+- AccessKit/AT-SPI roles, labels, focus, click actions, modal confirmation and live status driven by the same JavaScript focus model as the visual menu;
+- AT-SPI validation both when accessibility becomes enabled after startup and when it is already enabled before the production application starts;
+- localized fatal startup reporting plus observable startup checkpoints.
+
+### 5.6 exact-head closure
+
+The Phase 5 workflow closes `NATIVE_PARITY` only when the same task head proves all independent evidence sets:
+
+1. production native host/AppImage, migration, menu, startup, security and production AT-SPI behavior;
+2. the accepted Phase 4 gameplay trace remains byte-identical under Node.js and pinned QuickJS;
+3. the validated Electron `44.4.1` fallback can still be rebuilt from the current application head with the fail-closed sandbox policy and packaged startup smoke;
+4. repository Quality/Web/PWA checks pass for that exact head;
+5. the native AppImage remains at or below the `30 MiB` architecture limit and exact hashes are recorded.
+
+The final dynamic task-head SHA, workflow run identifiers and artifact hashes belong in PR #89 / continuity state rather than this tracked document: changing this document merely to embed its own containing commit would create a new unvalidated head.
+
+Passing `NATIVE_PARITY` still does not authorize merging PR #89, removing Electron, starting Phase 6, promoting to `main`, changing the version, tagging, releasing or publishing.

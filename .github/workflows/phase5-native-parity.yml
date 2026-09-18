@@ -605,6 +605,8 @@ jobs:
             'native_quit_path=PASS'
             'native_startup_localization=PASS'
             'native_startup_error_locales=PASS'
+            'production_atspi_dynamic_gate=PASS'
+            'production_atspi_preenabled_gate=PASS'
             'production_atspi_gate=PASS'
             'native_quit_process_exit=PASS'
           )
