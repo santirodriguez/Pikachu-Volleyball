@@ -81,6 +81,8 @@ cmake --build "$BUILD_ROOT/sdl-ttf-build" --parallel 2
 cmake --install "$BUILD_ROOT/sdl-ttf-build"
 
 make -C "$SOURCE_DIR/quickjs" -j2 libquickjs.a
+strip --strip-debug "$SOURCE_DIR/quickjs/libquickjs.a"
+quickjs_static_sha256="$(sha256sum "$SOURCE_DIR/quickjs/libquickjs.a" | awk '{print $1}')"
 
 {
   echo 'native_toolchain=PASS'
@@ -92,6 +94,7 @@ make -C "$SOURCE_DIR/quickjs" -j2 libquickjs.a
   echo "sdl_ttf_sha256=$SDL_TTF_SHA256"
   echo "quickjs=$QUICKJS_VERSION"
   echo "quickjs_sha256=$QUICKJS_SHA256"
+  echo "quickjs_static_sha256=$quickjs_static_sha256"
   echo "unifont=$UNIFONT_VERSION"
   echo "unifont_sha256=$UNIFONT_SHA256"
   echo "appimagetool=$APPIMAGETOOL_VERSION"
