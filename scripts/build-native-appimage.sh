@@ -170,6 +170,7 @@ mapfile -t linked_libraries < <(
   awk '/=> \/[^ ]+/ {print $3} /^\/[[:graph:]]+/ {print $1}' \
     "$EVIDENCE_DIR/build-ldd.txt" | sort -u
 )
+: > "$EVIDENCE_DIR/runtime-packages.txt"
 for library in "${linked_libraries[@]}"; do
   name="$(basename "$library")"
   case "$name" in
@@ -184,11 +185,19 @@ for library in "${linked_libraries[@]}"; do
     package="${package%%:*}"
     copyright="/usr/share/doc/$package/copyright"
     if [[ -n "$package" && -f "$copyright" ]]; then
+      package_version="$(dpkg-query -W -f='\${Version}' "$package" 2>/dev/null || true)"
+      printf '%s\t%s\t%s\t%s\n' "$name" "$package" "$package_version" "$(readlink -f "$library")" \
+        >> "$EVIDENCE_DIR/runtime-packages.txt"
       install -m 0644 "$copyright" \
         "$APPDIR/usr/share/licenses/pikachu-volleyball-native/runtime/$package.copyright"
     fi
   fi
+  if [[ "$(readlink -f "$library")" == "$PREFIX/"* ]]; then
+    printf '%s\t%s\t%s\t%s\n' "$name" source-built pinned "$(readlink -f "$library")" \
+      >> "$EVIDENCE_DIR/runtime-packages.txt"
+  fi
 done
+sort -o "$EVIDENCE_DIR/runtime-packages.txt" "$EVIDENCE_DIR/runtime-packages.txt"
 
 install -m 0755 "$BINARY" "$APPDIR/usr/bin/pikachu-volleyball-native"
 install -m 0755 "$IMPORTER" "$APPDIR/usr/bin/electron-preferences-importer"
@@ -205,10 +214,35 @@ for wav in WAVE140_1.wav WAVE141_1.wav WAVE142_1.wav WAVE143_1.wav WAVE144_1.wav
 done
 install -m 0644 "$ROOT/src/resources/assets/sounds/bgm.mp3" "$APPDIR/usr/bin/assets/bgm.mp3"
 
+{
+  echo "runner_image_os=\${ImageOS:-unknown}"
+  echo "runner_image_version=\${ImageVersion:-unknown}"
+  echo "cc=$(cc --version | head -1)"
+  echo "gxx=$(g++ --version | head -1)"
+  echo "cmake=$(cmake --version | head -1)"
+  echo "ninja=$(ninja --version)"
+  echo "rustc=$(rustc --version)"
+  echo "cargo=$(cargo --version)"
+  echo "node=$(node --version)"
+  echo "npm=$(npm --version)"
+  echo "patchelf=$(patchelf --version | head -1)"
+} > "$EVIDENCE_DIR/build-environment.txt"
+
+build_environment_sha256="$(sha256sum "$EVIDENCE_DIR/build-environment.txt" | awk '{print $1}')"
+runtime_packages_sha256="$(sha256sum "$EVIDENCE_DIR/runtime-packages.txt" | awk '{print $1}')"
+
 node - "$APPDIR/provenance.json" "$SOURCE_HEAD_SHA" "$SOURCE_DATE_EPOCH" \
-  "$TOOLCHAIN_ROOT/evidence/summary.txt" <<'NODE'
+  "$TOOLCHAIN_ROOT/evidence/summary.txt" "$build_environment_sha256" \
+  "$runtime_packages_sha256" <<'NODE'
 const fs = require('node:fs');
-const [output, sourceHead, sourceDateEpoch, toolchainSummary] = process.argv.slice(2);
+const [
+  output,
+  sourceHead,
+  sourceDateEpoch,
+  toolchainSummary,
+  buildEnvironmentSha256,
+  runtimePackagesSha256,
+] = process.argv.slice(2);
 const pins = Object.fromEntries(
   fs.readFileSync(toolchainSummary, 'utf8')
     .trim()
@@ -222,6 +256,8 @@ fs.writeFileSync(output, JSON.stringify({
   architecture: 'x86_64',
   package: 'AppImage',
   compression: 'zstd',
+  buildEnvironmentSha256,
+  runtimePackagesSha256,
   pins,
 }, null, 2) + '\n');
 NODE
@@ -455,6 +491,8 @@ printf '%s  %s\n' "$sha256" "$(basename "$OUTPUT")" \
   echo "provenance_sha256=$provenance_sha256"
   echo "appdir_inventory_sha256=$appdir_inventory_sha256"
   echo "appdir_content_sha256=$appdir_content_sha256"
+  echo "build_environment_sha256=$build_environment_sha256"
+  echo "runtime_packages_sha256=$runtime_packages_sha256"
   echo "source_date_epoch=$SOURCE_DATE_EPOCH"
   echo "direct_appimage_self_test=$direct_result"
   echo 'extract_run_self_test=PASS'
