@@ -234,7 +234,12 @@ export function setPracticeMode(enabled) {
 }
 
 export function getRenderFrame() {
-  return requireApplication().renderState.getRenderFrame();
+  const active = requireApplication();
+  return {
+    ...active.renderState.getRenderFrame(),
+    locale: active.menuState.getLocale(),
+    quickRematchText: active.menuState.getQuickRematchHint(),
+  };
 }
 
 export function getRenderFrameJson() {
