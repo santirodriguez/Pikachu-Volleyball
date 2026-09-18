@@ -779,6 +779,11 @@ static bool process_audio_commands(NativeRuntime *state) {
                              loop);
     } else if (ok && strcmp(type, "stop") == 0) {
       ok = native_audio_stop(&state->audio, sound);
+    } else if (ok && strcmp(type, "gain") == 0) {
+      double volume = 0;
+      ok = strcmp(sound, "bgm") == 0 &&
+           js_object_get_double(state->context, command, "volume", &volume) &&
+           native_audio_set_bgm_gain(&state->audio, (float)volume);
     } else if (ok) {
       fprintf(stderr, "Unknown native audio command: %s\n", type);
       ok = false;
