@@ -59,6 +59,13 @@ test('native audio enforces mono and off settings without changing core effects'
   assert.deepEqual(audio.drain(), [
     {
       type: 'play',
+      sound: 'bgm',
+      volume: 0,
+      pan: 0,
+      loop: true,
+    },
+    {
+      type: 'play',
       sound: 'pika',
       volume: SFX_VOLUME,
       pan: 0,
@@ -69,11 +76,9 @@ test('native audio enforces mono and off settings without changing core effects'
   audio.updateSettings({ bgm: 'on', sfx: 'off' });
   assert.deepEqual(audio.drain(), [
     {
-      type: 'play',
+      type: 'gain',
       sound: 'bgm',
       volume: BGM_VOLUME,
-      pan: 0,
-      loop: true,
     },
   ]);
 
@@ -81,22 +86,26 @@ test('native audio enforces mono and off settings without changing core effects'
   assert.deepEqual(audio.drain(), []);
 });
 
-test('native audio stops and resumes desired BGM when its setting changes', () => {
+test('native audio preserves desired BGM position when its setting changes', () => {
   const audio = createNativeAudioState({ bgm: 'on', sfx: 'stereo' });
   audio.applyEffect(['audio.play', 'bgm', 0]);
   audio.drain();
 
   audio.updateSettings({ bgm: 'off', sfx: 'stereo' });
-  assert.deepEqual(audio.drain(), [{ type: 'stop', sound: 'bgm' }]);
+  assert.deepEqual(audio.drain(), [
+    {
+      type: 'gain',
+      sound: 'bgm',
+      volume: 0,
+    },
+  ]);
 
   audio.updateSettings({ bgm: 'on', sfx: 'stereo' });
   assert.deepEqual(audio.drain(), [
     {
-      type: 'play',
+      type: 'gain',
       sound: 'bgm',
       volume: BGM_VOLUME,
-      pan: 0,
-      loop: true,
     },
   ]);
 
