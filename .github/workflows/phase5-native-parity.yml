@@ -1,0 +1,669 @@
+name: Phase 5 Native Parity
+
+on:
+  pull_request:
+    branches:
+      - v3-restart
+    paths:
+      - '.github/workflows/phase5-native-parity.yml'
+      - 'desktop/native/**'
+      - 'src/resources/assets/sounds/**'
+      - 'scripts/build-phase5-accessibility-probe.sh'
+      - 'scripts/build-phase5-native-host.sh'
+      - 'scripts/run-phase5-accessibility-probe.sh'
+      - 'scripts/validate-phase5-accessibility.py'
+      - 'scripts/run-phase5-production-accessibility.sh'
+      - 'scripts/validate-phase5-production-accessibility.py'
+      - 'scripts/seed-electron-migration-fixture.cjs'
+      - 'scripts/report-electron-user-data.cjs'
+      - 'scripts/inspect-electron-migration-fixture.cjs'
+      - 'scripts/validate-electron-migration-fixture.cjs'
+      - 'scripts/validate-electron-preferences-import.cjs'
+      - 'src/resources/js/input_frame.cjs'
+      - 'src/resources/js/keyboard.js'
+      - 'src/resources/js/native_app.js'
+      - 'src/resources/js/native_menu_state.js'
+      - 'src/resources/js/native_audio_state.cjs'
+      - 'src/resources/js/native_preferences.cjs'
+      - 'src/resources/js/native_render_state.js'
+      - 'src/resources/js/presentation_math.cjs'
+      - 'src/resources/js/view.js'
+      - 'src/resources/js/cloud_and_wave.js'
+      - 'src/resources/assets/images/sprite_sheet.json'
+      - 'src/resources/assets/images/sprite_sheet.png'
+      - 'src/resources/js/settings_store.cjs'
+      - 'src/resources/js/control_bindings.cjs'
+      - 'src/resources/js/utils/local_storage_wrapper.js'
+      - 'test/input_frame.test.cjs'
+      - 'test/native_parity_contract.test.cjs'
+      - 'test/native_audio_state.test.cjs'
+      - 'test/native_preferences.test.cjs'
+      - 'test/presentation_math.test.cjs'
+      - 'webpack.native.js'
+      - 'package.json'
+      - 'package-lock.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase5-native-parity-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  accessibility-feasibility:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Install native and AT-SPI dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake ninja-build pkg-config curl xz-utils git \
+            xvfb x11-utils dbus-x11 at-spi2-core python3-pyatspi \
+            libasound2-dev libpulse-dev \
+            libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev \
+            libxfixes-dev libxss-dev libxtst-dev libxkbcommon-dev \
+            libwayland-dev libdrm-dev libgbm-dev \
+            libegl1-mesa-dev libgl1-mesa-dev
+
+      - name: Build pinned SDL3 and AccessKit probe
+        shell: bash
+        run: bash scripts/build-phase5-accessibility-probe.sh
+
+      - name: Exercise semantic tree through AT-SPI
+        shell: bash
+        run: dbus-run-session -- bash scripts/run-phase5-accessibility-probe.sh
+
+      - name: Report accessibility evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo '## Phase 5 accessibility feasibility'
+            echo ''
+            for file in \
+              build/phase5/accessibility/evidence/build-summary.txt \
+              build/phase5/accessibility/evidence/runtime-summary.txt \
+              build/phase5/accessibility/evidence/runtime-state.txt; do
+              if [[ -s "$file" ]]; then
+                echo "### $(basename "$file")"
+                echo '```text'
+                cat "$file"
+                echo '```'
+              fi
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload accessibility evidence
+        uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: phase5-accessibility-feasibility
+          path: build/phase5/accessibility/evidence/**
+          if-no-files-found: warn
+          retention-days: 14
+
+  electron-migration-layout:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Install migration probe dependency
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libleveldb-dev
+
+      - name: Install web dependencies
+        run: npm ci
+
+      - name: Build production web payload
+        run: npm run build:web
+
+      - name: Characterize default Electron user-data path
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/pv-electron-default-path"
+          report="build/phase5/migration/default-user-data.json"
+          mkdir -p "$root/config" "$(dirname "$report")"
+          XDG_CONFIG_HOME="$root/config" \
+          PV_ELECTRON_PATH_REPORT="$report" \
+            xvfb-run -a npx electron --no-sandbox scripts/report-electron-user-data.cjs
+          node - "$report" <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const report = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+          if (report.userData !== path.join(report.appData, report.name)) {
+            throw new Error('Electron userData is not appData/appName');
+          }
+          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          const candidates = [pkg.name, pkg.build?.productName].filter(Boolean);
+          if (!candidates.includes('pikachu-volleyball') ||
+              !candidates.includes('Pikachu Volleyball')) {
+            throw new Error('Expected product profile names are not owned by package metadata');
+          }
+          console.log(
+            'electron_default_user_data=PASS harness=' + report.name +
+            ' product_candidates=' + candidates.join(',')
+          );
+          NODE
+
+      - name: Seed controlled Electron 2.1 preferences
+        shell: bash
+        run: |
+          set -euo pipefail
+          user_data="$RUNNER_TEMP/pv-electron-user-data"
+          report="$RUNNER_TEMP/pv-electron-seed.json"
+          rm -rf "$user_data"
+          mkdir -p "$user_data"
+          PV_MIGRATION_USER_DATA="$user_data" \
+          PV_MIGRATION_REPORT="$report" \
+            xvfb-run -a npx electron --no-sandbox scripts/seed-electron-migration-fixture.cjs
+          test -s "$report"
+          echo "PV_MIGRATION_USER_DATA=$user_data" >> "$GITHUB_ENV"
+          echo "PV_MIGRATION_REPORT=$report" >> "$GITHUB_ENV"
+
+      - name: Inspect actual Chromium localStorage layout
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence='build/phase5/migration'
+          mkdir -p "$evidence"
+          local_storage="$PV_MIGRATION_USER_DATA/Local Storage"
+          test -d "$local_storage"
+          cp "$PV_MIGRATION_REPORT" "$evidence/seed-report.json"
+          node scripts/inspect-electron-migration-fixture.cjs "$local_storage" \
+            > "$evidence/storage-inspection.json"
+          node scripts/validate-electron-migration-fixture.cjs \
+            "$evidence/seed-report.json" \
+            "$evidence/storage-inspection.json" \
+            | tee "$evidence/layout-validation.json"
+
+      - name: Prove bounded LevelDB preference import
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence='build/phase5/migration'
+          database="$PV_MIGRATION_USER_DATA/Local Storage/leveldb"
+          database_copy="$RUNNER_TEMP/pv-electron-leveldb-copy"
+          rm -rf "$database_copy"
+          cp -a "$database" "$database_copy"
+          g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic \
+            desktop/native/electron_preferences_importer.cc \
+            -o "$evidence/electron-preferences-importer" \
+            -lleveldb -lpthread
+          ldd "$evidence/electron-preferences-importer" \
+            | tee "$evidence/importer-ldd.txt"
+          if grep -q 'not found' "$evidence/importer-ldd.txt"; then
+            echo 'Electron preference importer has unresolved libraries.' >&2
+            exit 1
+          fi
+          "$evidence/electron-preferences-importer" \
+            "$database_copy" "$evidence/imported-preferences.json" \
+            | tee "$evidence/importer-runtime.txt"
+          node scripts/validate-electron-preferences-import.cjs \
+            "$evidence/seed-report.json" \
+            "$evidence/imported-preferences.json" \
+            | tee "$evidence/import-validation.json"
+          {
+            echo "importer_bytes=$(stat -c%s "$evidence/electron-preferences-importer")"
+            echo "importer_sha256=$(sha256sum "$evidence/electron-preferences-importer" | awk '{print $1}')"
+            echo "imported_preferences_sha256=$(sha256sum "$evidence/imported-preferences.json" | awk '{print $1}')"
+          } | tee "$evidence/importer-summary.txt"
+
+      - name: Report migration evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo '## Phase 5 Electron preference migration layout'
+            echo ''
+            for file in \
+              build/phase5/migration/layout-validation.json \
+              build/phase5/migration/import-validation.json \
+              build/phase5/migration/importer-summary.txt \
+              build/phase5/migration/storage-inspection.json; do
+              if [[ -s "$file" ]]; then
+                echo "### $(basename "$file")"
+                echo '```text'
+                cat "$file"
+                echo '```'
+              fi
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload migration evidence
+        uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: phase5-electron-migration-layout
+          path: build/phase5/migration/**
+          if-no-files-found: warn
+          retention-days: 14
+
+  native-host-core-bridge:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Install web dependencies
+        run: npm ci
+
+      - name: Seed Electron migration fixture for production host
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run build:web
+          user_data="$RUNNER_TEMP/pv-native-electron-user-data"
+          report="$RUNNER_TEMP/pv-native-electron-seed.json"
+          rm -rf "$user_data"
+          mkdir -p "$user_data"
+          PV_MIGRATION_USER_DATA="$user_data" \
+          PV_MIGRATION_REPORT="$report" \
+            xvfb-run -a npx electron --no-sandbox scripts/seed-electron-migration-fixture.cjs
+          test -s "$report"
+          echo "PV_ELECTRON_USER_DATA_DIR=$user_data" >> "$GITHUB_ENV"
+
+      - name: Install native build dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake ninja-build pkg-config curl xz-utils patchelf xvfb git \
+            x11-utils dbus-x11 at-spi2-core python3-pyatspi \
+            libpng-dev libmpg123-dev libfreetype6-dev libharfbuzz-dev \
+            libasound2-dev libpulse-dev \
+            libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev \
+            libxfixes-dev libxss-dev libxtst-dev libxkbcommon-dev \
+            libwayland-dev libdrm-dev libgbm-dev \
+            libegl1-mesa-dev libgl1-mesa-dev
+
+      - name: Build and validate production native core bridge
+        shell: bash
+        run: bash scripts/build-phase5-native-host.sh
+
+      - name: Exercise production native accessibility through AT-SPI
+        shell: bash
+        run: dbus-run-session -- bash scripts/run-phase5-production-accessibility.sh
+
+      - name: Report native host evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          summary='build/phase5/native-host/evidence/summary.txt'
+          if [[ -s "$summary" ]]; then
+            {
+              echo '## Phase 5 production native host bridge'
+              echo ''
+              echo '```text'
+              cat "$summary"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'Phase 5.2 did not reach final native-host evidence generation.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload native host evidence
+        uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: phase5-native-host-core-bridge
+          path: |
+            build/phase5/native-host/*.AppImage
+            build/phase5/native-host/SHA256SUMS.txt
+            build/phase5/native-host/evidence/**
+          if-no-files-found: warn
+          retention-days: 14
+
+  core-parity-regression:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22.12.0
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build shared-core parity bundle
+        run: npx webpack --config webpack.core-parity.js
+
+      - name: Run accepted trace under Node
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence='build/phase5/core-parity'
+          mkdir -p "$evidence"
+          node build/phase4/core-parity.bundle.js > "$evidence/node-trace.json"
+
+      - name: Build pinned QuickJS
+        shell: bash
+        run: |
+          set -euo pipefail
+          version='2026-06-04'
+          sha256='b376e839b322978313d929fd20663b11ba58b75df5a46c126dd19ea2fa70ad2a'
+          root='build/phase5/core-parity'
+          archive="$root/quickjs-$version.tar.xz"
+          source="$root/quickjs"
+          curl --fail --location --retry 3 --retry-all-errors --silent --show-error \
+            "https://bellard.org/quickjs/quickjs-$version.tar.xz" \
+            --output "$archive"
+          printf '%s  %s\n' "$sha256" "$archive" | sha256sum --check --status
+          mkdir -p "$source"
+          tar -xJf "$archive" --strip-components=1 -C "$source"
+          make -C "$source" -j2 qjs
+
+      - name: Prove exact Phase 4 trace under QuickJS
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence='build/phase5/core-parity'
+          wrapper="$evidence/quickjs-runner.js"
+          {
+            echo 'globalThis.console = {'
+            echo '  log(value) { std.puts(String(value) + "\n"); }'
+            echo '};'
+            cat build/phase4/core-parity.bundle.js
+          } > "$wrapper"
+          "$evidence/quickjs/qjs" --std "$wrapper" > "$evidence/quickjs-trace.json"
+
+          expected='1f8cf2eff81d0fcacd671882cb96e5c39b33fc05462e2b61b8937e059d70efb1'
+          cmp "$evidence/node-trace.json" "$evidence/quickjs-trace.json"
+          actual="$(sha256sum "$evidence/node-trace.json" | awk '{print $1}')"
+          [[ "$actual" == "$expected" ]] || {
+            echo "Shared-core trace changed: expected $expected, got $actual" >&2
+            exit 1
+          }
+          source_head_sha="$(git rev-parse HEAD)"
+          {
+            echo 'core_parity_regression=PASS'
+            echo "source_head_sha=$source_head_sha"
+            echo "trace_sha256=$actual"
+            echo "expected_trace_sha256=$expected"
+            echo "bundle_sha256=$(sha256sum build/phase4/core-parity.bundle.js | awk '{print $1}')"
+          } | tee "$evidence/summary.txt"
+
+      - name: Upload core parity closure evidence
+        uses: actions/upload-artifact@v6
+        with:
+          name: phase5-core-parity-regression
+          path: |
+            build/phase5/core-parity/summary.txt
+            build/phase5/core-parity/node-trace.json
+            build/phase5/core-parity/quickjs-trace.json
+          if-no-files-found: error
+          retention-days: 14
+
+  electron44-fallback-regression:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22.12.0
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build current Web/PWA payload
+        run: npm run build:web
+
+      - name: Preserve fail-closed AppImage launcher
+        run: node scripts/patch-appimage-launcher.cjs
+
+      - name: Build Electron 44 fallback from exact head
+        shell: bash
+        run: |
+          set -euo pipefail
+          root='build/phase5/electron44'
+          evidence="$root/evidence"
+          mkdir -p "$root" "$evidence"
+          node - "$root/electron-builder.json" <<'NODE'
+          const fs = require('node:fs');
+          const output = process.argv[2];
+          const pkg = require('./package.json');
+          const config = {
+            ...pkg.build,
+            electronVersion: '44.4.1',
+            directories: {
+              ...pkg.build.directories,
+              output: 'build/phase5/electron44/output',
+            },
+          };
+          fs.writeFileSync(output, JSON.stringify(config, null, 2) + '\n');
+          NODE
+          npx electron-builder --linux AppImage \
+            --config "$root/electron-builder.json" --publish=never
+
+      - name: Validate Electron 44 fallback package and startup
+        shell: bash
+        run: |
+          set -euo pipefail
+          root='build/phase5/electron44'
+          output="$root/output"
+          evidence="$root/evidence"
+          mapfile -t appimages < <(find "$output" -maxdepth 1 -type f -name '*.AppImage' | sort)
+          [[ "${#appimages[@]}" -eq 1 ]] || {
+            echo "Expected one Electron fallback AppImage, found ${#appimages[@]}" >&2
+            exit 1
+          }
+          appimage="${appimages[0]}"
+          chmod +x "$appimage"
+          bytes="$(stat -c%s "$appimage")"
+          sha256="$(sha256sum "$appimage" | awk '{print $1}')"
+
+          app_dir="$output/linux-unpacked"
+          test -d "$app_dir"
+          executable="$app_dir/pikachu-volleyball"
+          if [[ ! -x "$executable" ]]; then
+            executable="$app_dir/Pikachu Volleyball"
+          fi
+          test -x "$executable"
+
+          version="$(timeout 10 env ELECTRON_RUN_AS_NODE=1 \
+            "$executable" -p "process.versions.electron" | tr -d '\r\n')"
+          [[ "$version" == '44.4.1' ]] || {
+            echo "Expected Electron 44.4.1, got $version" >&2
+            exit 1
+          }
+
+          mapfile -t locale_paks < <(find "$app_dir/locales" -maxdepth 1 -type f -name '*.pak' | sort)
+          [[ "${#locale_paks[@]}" -eq 1 && "$(basename "${locale_paks[0]}")" == 'en-US.pak' ]]
+
+          asar="$app_dir/resources/app.asar"
+          test -s "$asar"
+          npx --no-install asar list "$asar" > "$evidence/asar-list.txt"
+          ! grep -q '^/node_modules/' "$evidence/asar-list.txt"
+
+          extract="$root/extracted"
+          rm -rf "$extract"
+          mkdir -p "$extract"
+          (cd "$extract" && "$GITHUB_WORKSPACE/$appimage" --appimage-extract >/dev/null)
+          apprun="$extract/squashfs-root/AppRun"
+          bash -n "$apprun"
+          grep -Fq 'ERROR: sandbox-disabling Chromium switch is disabled by this AppImage security policy:' "$apprun"
+          grep -Fq 'ERROR: Chromium sandbox prerequisites are unavailable; refusing to launch unsandboxed.' "$apprun"
+          set +e
+          rejection="$("$apprun" --no-sandbox 2>&1)"
+          rejection_status=$?
+          set -e
+          [[ "$rejection_status" -eq 1 ]]
+          grep -Fq 'sandbox-disabling Chromium switch is disabled' <<<"$rejection"
+
+          sudo chown root:root "$app_dir/chrome-sandbox"
+          sudo chmod 4755 "$app_dir/chrome-sandbox"
+          mkdir -p release
+          rm -rf release/linux-unpacked
+          ln -s "$GITHUB_WORKSPACE/$app_dir" release/linux-unpacked
+          PV_LINUX_UNPACKED_EXECUTABLE="$executable" \
+            timeout 30 xvfb-run -a node scripts/measure-startup.cjs \
+              "$evidence/startup.json"
+
+          source_head_sha="$(git rev-parse HEAD)"
+          {
+            echo 'electron44_fallback=PASS'
+            echo "source_head_sha=$source_head_sha"
+            echo "electron_version=$version"
+            echo "appimage_bytes=$bytes"
+            echo "appimage_sha256=$sha256"
+            echo "app_asar_sha256=$(sha256sum "$asar" | awk '{print $1}')"
+            echo 'sandbox_policy=PASS'
+            echo 'packaged_startup=PASS'
+          } | tee "$evidence/summary.txt"
+
+      - name: Upload Electron fallback evidence
+        uses: actions/upload-artifact@v6
+        with:
+          name: phase5-electron44-fallback
+          path: |
+            build/phase5/electron44/evidence/**
+          if-no-files-found: error
+          retention-days: 14
+
+  native-parity-closure:
+    needs:
+      - accessibility-feasibility
+      - electron-migration-layout
+      - native-host-core-bridge
+      - core-parity-regression
+      - electron44-fallback-regression
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Download native host evidence
+        uses: actions/download-artifact@v6
+        with:
+          name: phase5-native-host-core-bridge
+          path: build/phase5/closure/native
+
+      - name: Download core parity evidence
+        uses: actions/download-artifact@v6
+        with:
+          name: phase5-core-parity-regression
+          path: build/phase5/closure/core
+
+      - name: Download Electron fallback evidence
+        uses: actions/download-artifact@v6
+        with:
+          name: phase5-electron44-fallback
+          path: build/phase5/closure/electron
+
+      - name: Close exact-head NATIVE_PARITY gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          native="$(find build/phase5/closure/native -type f -name summary.txt -print -quit)"
+          core="$(find build/phase5/closure/core -type f -name summary.txt -print -quit)"
+          electron="$(find build/phase5/closure/electron -type f -name summary.txt -print -quit)"
+          test -s "$native"
+          test -s "$core"
+          test -s "$electron"
+
+          expected_head="$(git rev-parse HEAD)"
+          for summary in "$native" "$core" "$electron"; do
+            grep -Fxq "source_head_sha=$expected_head" "$summary" || {
+              echo "Evidence was not produced from exact task head $expected_head: $summary" >&2
+              exit 1
+            }
+          done
+
+          required_native=(
+            'size_gate=PASS'
+            'shared_core_bridge=PASS'
+            'semantic_input_bridge=PASS'
+            'focus_reset_bridge=PASS'
+            'native_graphics_bridge=PASS'
+            'native_audio_mixer=PASS'
+            'native_preferences_store=PASS'
+            'electron_migration_runtime=PASS'
+            'native_pointer_menu=PASS'
+            'native_locale_menu=PASS'
+            'native_external_url_allowlist=PASS'
+            'native_quit_path=PASS'
+            'native_startup_localization=PASS'
+            'native_startup_error_locales=PASS'
+            'production_atspi_dynamic_gate=PASS'
+            'production_atspi_preenabled_gate=PASS'
+            'production_atspi_gate=PASS'
+            'native_quit_process_exit=PASS'
+          )
+          for marker in "${required_native[@]}"; do
+            grep -Fxq "$marker" "$native" || {
+              echo "Missing native parity marker: $marker" >&2
+              exit 1
+            }
+          done
+          grep -Fxq 'core_parity_regression=PASS' "$core"
+          grep -Fxq 'electron44_fallback=PASS' "$electron"
+
+          bytes="$(sed -n 's/^bytes=//p' "$native" | head -1)"
+          limit="$(sed -n 's/^limit_bytes=//p' "$native" | head -1)"
+          [[ "$bytes" =~ ^[0-9]+$ && "$limit" =~ ^[0-9]+$ && "$bytes" -le "$limit" ]]
+
+          mkdir -p build/phase5/closure/final
+          {
+            echo 'NATIVE_PARITY=PASS'
+            echo "head_sha=$expected_head"
+            echo "native_appimage_bytes=$bytes"
+            echo "native_appimage_sha256=$(sed -n 's/^sha256=//p' "$native" | head -1)"
+            echo "native_bundle_sha256=$(sed -n 's/^native_bundle_sha256=//p' "$native" | head -1)"
+            echo "core_trace_sha256=$(sed -n 's/^trace_sha256=//p' "$core" | head -1)"
+            echo "electron44_appimage_sha256=$(sed -n 's/^appimage_sha256=//p' "$electron" | head -1)"
+          } | tee build/phase5/closure/final/summary.txt
+
+      - name: Upload NATIVE_PARITY gate evidence
+        uses: actions/upload-artifact@v6
+        with:
+          name: phase5-native-parity-closure
+          path: build/phase5/closure/final/summary.txt
+          if-no-files-found: error
+          retention-days: 14

@@ -266,6 +266,25 @@ Required parity includes graphics, audio, controls/remapping, menus, all five lo
 
 Gate: `NATIVE_PARITY` with the full functional matrix passing while web/PWA validation remains green.
 
+### Phase 5 implementation result
+
+The production candidate is SDL3 + QuickJS with the accepted Phase 4 JavaScript gameplay core remaining authoritative. Platform work is isolated behind serializable input/render/audio/menu/preference boundaries; gameplay rules were not rewritten in C.
+
+The Phase 5 branch includes:
+
+- production sprite-atlas rendering and shared presentation formulas;
+- native audio mixing with accepted BGM/SFX semantics;
+- semantic keyboard input, remapping and focus-loss cleanup;
+- atomic native settings/control persistence and bounded Electron preference migration;
+- a JavaScript-owned native pause/menu model rendered through SDL3_ttf with all five locales;
+- AccessKit/AT-SPI integration from the same menu/focus snapshot, including assistive focus/actions, modal state and live status;
+- localized startup failures, exact external-link allowlisting and direct native Quit;
+- exact-head regression jobs for the Phase 4 core fingerprint and Electron 44 fallback.
+
+The gate is intentionally emitted only by the exact-head Phase 5 closure workflow after all independent jobs pass. Dynamic run IDs and final artifact hashes are recorded with PR #89 rather than embedded into a tracked file that would itself create a new head.
+
+Passing this gate does not authorize Electron retirement or any Phase 6/release action.
+
 ## Phase 6 — AppImage & release readiness
 
 Objective: turn the selected architecture into a reproducible release candidate.
