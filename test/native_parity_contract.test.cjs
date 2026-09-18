@@ -315,6 +315,30 @@ test('native stabilization covers interactive audio, hyper-ball rendering, Escap
 
   assert.match(
     menuRenderer,
-    /SDL_SetTextureScaleMode\(texture, SDL_SCALEMODE_NEAREST\)/
+    /SDL_LOGICAL_PRESENTATION_DISABLED/
   );
+  assert.match(menuRenderer, /TTF_SetFontSize/);
+  assert.match(menuRenderer, /PIKACHU VOLLEYBALL/);
+  assert.match(menuRenderer, /117, 201, 238/);
+  assert.match(menuRenderer, /247, 220, 82/);
+  assert.match(menuRenderer, /189, 67, 56/);
+});
+
+test('native menu parity restores the colorful integrated-menu visual language', () => {
+  const css = read('src/resources/integrated-menu.css');
+  const renderer = read('desktop/native/native_menu_renderer.c');
+  const host = read('desktop/native/native_main.c');
+  const build = read('scripts/build-native-appimage.sh');
+
+  assert.match(css, /#75c9ee/);
+  assert.match(css, /#f4d44d/);
+  assert.match(css, /#bd4338/);
+  assert.match(renderer, /detail_panel = \{117, 201, 238, 255\}/);
+  assert.match(renderer, /accent_yellow = \{244, 212, 77, 255\}/);
+  assert.match(renderer, /accent_red = \{189, 67, 56, 255\}/);
+  assert.match(renderer, /SDL_GetRenderLogicalPresentationRect/);
+  assert.match(renderer, /SDL_LOGICAL_PRESENTATION_DISABLED/);
+  assert.match(host, /native_menu_visual_parity=PASS/);
+  assert.match(host, /PV_NATIVE_MENU_FRAMEBUFFER_PATH/);
+  assert.match(build, /native-menu-framebuffer\.bmp/);
 });

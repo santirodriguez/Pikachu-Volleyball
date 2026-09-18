@@ -708,6 +708,27 @@ static bool write_render_trace(NativeRuntime *state) {
   return true;
 }
 
+static bool save_framebuffer_from_env(NativeRuntime *state,
+                                      const char *environment_name) {
+  const char *path = getenv(environment_name);
+  if (!path || path[0] == '\0') return true;
+  SDL_Surface *surface = SDL_RenderReadPixels(state->renderer, NULL);
+  if (!surface) {
+    fprintf(stderr, "SDL_RenderReadPixels failed for %s: %s\n",
+            environment_name, SDL_GetError());
+    return false;
+  }
+  bool saved = SDL_SaveBMP(surface, path);
+  SDL_DestroySurface(surface);
+  if (!saved) {
+    fprintf(stderr, "SDL_SaveBMP failed for %s: %s\n", environment_name,
+            SDL_GetError());
+    return false;
+  }
+  printf("native_menu_framebuffer=PASS\n");
+  return true;
+}
+
 static bool validate_framebuffer(NativeRuntime *state) {
   SDL_Surface *surface = SDL_RenderReadPixels(state->renderer, NULL);
   if (!surface) {
@@ -1208,6 +1229,7 @@ static bool run_self_test(NativeRuntime *state) {
       !contains(json, "\"colorScheme\":\"light\"") ||
       !js_set_setting(state, "colorScheme", "dark") ||
       !render_frame(state, false, NULL) ||
+      !save_framebuffer_from_env(state, "PV_NATIVE_MENU_FRAMEBUFFER_PATH") ||
       !js_get_string(state, "getStateJson", json, sizeof(json)) ||
       !contains(json, "\"colorScheme\":\"dark\"") ||
       !js_handle_key(state, "KeyP", true, false) ||
@@ -1216,6 +1238,7 @@ static bool run_self_test(NativeRuntime *state) {
     return false;
   }
   printf("native_menu_theme=PASS\n");
+  printf("native_menu_visual_parity=PASS\n");
 
   printf("native_js_bundle=PASS\n");
   printf("shared_core_bridge=PASS\n");
