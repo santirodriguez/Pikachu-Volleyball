@@ -104,6 +104,22 @@ test('emits one Player 2 Power Hit edge for Enter or ControlLeft', () => {
   }
 });
 
+test('preserves a short Player 2 Power Hit tap between snapshots', () => {
+  const state = createPlayerTwoState();
+
+  assert.equal(state.handleKeyDown(PLAYER_TWO_PRIMARY_POWER_HIT_KEY), true);
+  assert.equal(state.handleKeyUp(PLAYER_TWO_PRIMARY_POWER_HIT_KEY), true);
+
+  let snapshot = state.createSnapshot();
+  assert.equal(snapshot.down[INPUT_ACTIONS.POWER_HIT], false);
+  assert.equal(snapshot.pressed[INPUT_ACTIONS.POWER_HIT], true);
+  assert.equal(snapshot.pressed[INPUT_ACTIONS.CONFIRM], true);
+
+  snapshot = state.createSnapshot();
+  assert.equal(snapshot.pressed[INPUT_ACTIONS.POWER_HIT], false);
+  assert.equal(snapshot.pressed[INPUT_ACTIONS.CONFIRM], false);
+});
+
 test('does not duplicate Power Hit when both bindings are held', () => {
   const state = createPlayerTwoState();
   state.handleKeyDown(PLAYER_TWO_PRIMARY_POWER_HIT_KEY);
