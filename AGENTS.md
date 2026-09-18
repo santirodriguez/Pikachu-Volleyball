@@ -48,8 +48,10 @@ These rules apply to all future work in this repository.
 ## Web and desktop boundaries
 
 - Keep the web build and static locale outputs working.
-- Keep desktop-only code under `desktop/` while Electron remains the active desktop implementation, and expose only narrow, secure APIs to the renderer.
-- Keep `contextIsolation`, sandboxing, and external-navigation restrictions enabled while Electron remains in use.
+- The selected desktop architecture is SDL3 + QuickJS. Keep production native platform code under `desktop/native/`; `desktop/native-spike/` is feasibility provenance and must not become a production build dependency.
+- Keep gameplay rules in the accepted shared JavaScript core. Native C owns only platform responsibilities such as windowing, rendering execution, audio, event translation, persistence, accessibility, external-link opening, startup/error handling and Quit.
+- Keep native external-link handling fail-closed with an exact allowlist and no shell interpolation.
+- The bounded Electron preference importer is legacy-upgrade compatibility only; it does not make Electron an active or supported desktop runtime.
 - Linux packaging remains AppImage-only unless an approved v3 phase explicitly changes the packaging requirement.
 
 ## Validation
