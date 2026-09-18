@@ -528,5 +528,4 @@ printf '%s  %s\n' "$sha256" "$(basename "$OUTPUT")" \
   fi
 } | tee "$EVIDENCE_DIR/summary.txt"
 
-grep -q '^runtime_license_inventory=PASS
- "$EVIDENCE_DIR/summary.txt"
+grep -Fxq 'runtime_license_inventory=PASS' "$EVIDENCE_DIR/summary.txt"
