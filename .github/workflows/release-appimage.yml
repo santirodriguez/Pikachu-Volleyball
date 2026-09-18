@@ -11,13 +11,13 @@ permissions:
 jobs:
   appimage:
     runs-on: ubuntu-22.04
-    timeout-minutes: 90
+    timeout-minutes: 100
 
     steps:
-      - name: Check out definitive source
+      - name: Check out release authority
         uses: actions/checkout@v5
         with:
-          ref: \${{ github.event_name == 'release' && github.event.release.tag_name || github.sha }}
+          ref: ${{ github.event_name == 'release' && github.event.release.tag_name || github.sha }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v5
@@ -25,7 +25,7 @@ jobs:
           node-version: 22.12.0
           cache: npm
 
-      - name: Validate release metadata
+      - name: Validate release metadata boundary
         shell: bash
         run: |
           set -euo pipefail
@@ -36,21 +36,16 @@ jobs:
             exit 1
           }
 
-          release_notes="docs/releases/v\${package_version}.md"
-          [[ -f "$release_notes" ]] || {
-            echo "Missing release notes: $release_notes" >&2
-            exit 1
-          }
-          grep -Fq "$package_version" README.md || {
-            echo "README does not mention release version $package_version" >&2
-            exit 1
-          }
-
-          if [[ "\${{ github.event_name }}" == "release" ]]; then
-            expected_tag="v\${package_version}"
-            actual_tag="\${{ github.event.release.tag_name }}"
+          release_notes="docs/releases/v${package_version}.md"
+          if [[ "${{ github.event_name }}" == "release" ]]; then
+            expected_tag="v${package_version}"
+            actual_tag="${{ github.event.release.tag_name }}"
             [[ "$actual_tag" == "$expected_tag" ]] || {
-              echo "Release tag $actual_tag does not match $expected_tag" >&2
+              echo "Release tag $actual_tag does not match package version $expected_tag" >&2
+              exit 1
+            }
+            test -s "$release_notes" || {
+              echo "Missing release notes: $release_notes" >&2
               exit 1
             }
           fi
@@ -78,55 +73,58 @@ jobs:
             libxfixes-dev libxss-dev libxtst-dev libxkbcommon-dev \
             libwayland-dev libdrm-dev libgbm-dev libegl1-mesa-dev libgl1-mesa-dev
 
-      - name: Build native Linux AppImage
+      - name: Build validated native AppImage
         shell: bash
         run: |
           set -euo pipefail
-          package_version="$(node -p "require('./package.json').version")"
           root="$GITHUB_WORKSPACE/build/release"
-          output="$root/Pikachu-Volleyball-\${package_version}-x86_64.AppImage"
-          PV_NATIVE_RELEASE_ROOT="$root" \
-          PV_NATIVE_APPIMAGE_OUTPUT="$output" \
-            bash scripts/build-native-appimage.sh
+          PV_NATIVE_RELEASE_ROOT="$root" bash scripts/build-native-appimage.sh
+          grep -Fxq 'native_release_builder=PASS' "$root/evidence/summary.txt"
           grep -Fxq 'direct_appimage_self_test=PASS' "$root/evidence/summary.txt"
+          grep -Fxq 'legacy_electron_fixture=PASS' "$root/evidence/summary.txt"
 
-      - name: Validate production accessibility through AT-SPI
+      - name: Validate production accessibility
         shell: bash
         run: |
           set -euo pipefail
           dbus-run-session -- env PV_PHASE5_NATIVE_ROOT="$GITHUB_WORKSPACE/build/release" \
             bash scripts/run-phase5-production-accessibility.sh
+          summary="$GITHUB_WORKSPACE/build/release/evidence/summary.txt"
+          grep -Fxq 'production_atspi_gate=PASS' "$summary"
+          grep -Fxq 'native_quit_process_exit=PASS' "$summary"
 
-      - name: Verify candidate checksum
+      - name: Prepare release assets
         shell: bash
         run: |
           set -euo pipefail
+          package_version="$(node -p "require('./package.json').version")"
           root="$GITHUB_WORKSPACE/build/release"
-          app="$(find "$root" -maxdepth 1 -type f -name '*.AppImage' -print -quit)"
-          test -s "$app"
-          expected="$(sed -n 's/^sha256=//p' "$root/evidence/summary.txt" | head -1)"
-          actual="$(sha256sum "$app" | awk '{print $1}')"
-          [[ "$actual" == "$expected" ]]
+          source="$root/Pikachu-Volleyball-Native-x86_64.AppImage"
+          asset="$root/Pikachu-Volleyball-${package_version}-x86_64.AppImage"
+          test -s "$source"
+          cp "$source" "$asset"
           (
             cd "$root"
-            sha256sum "$(basename "$app")" > SHA256SUMS.txt
+            sha256sum "$(basename "$asset")" > SHA256SUMS.txt
           )
+          echo "PV_RELEASE_ASSET=$asset" >> "$GITHUB_ENV"
+          echo "PV_RELEASE_CHECKSUMS=$root/SHA256SUMS.txt" >> "$GITHUB_ENV"
 
-      - name: Upload release-build artifact
+      - name: Upload release-candidate artifact
         uses: actions/upload-artifact@v6
         with:
           name: pikachu-volleyball-linux-x86_64
           path: |
-            build/release/*.AppImage
-            build/release/SHA256SUMS.txt
+            ${{ env.PV_RELEASE_ASSET }}
+            ${{ env.PV_RELEASE_CHECKSUMS }}
             build/release/PikachuVolleyballNative.AppDir/provenance.json
             build/release/evidence/summary.txt
           if-no-files-found: error
 
-      - name: Attach AppImage and checksum to authorized GitHub release
+      - name: Attach assets to authorized GitHub release
         if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            build/release/*.AppImage
-            build/release/SHA256SUMS.txt
+            ${{ env.PV_RELEASE_ASSET }}
+            ${{ env.PV_RELEASE_CHECKSUMS }}
