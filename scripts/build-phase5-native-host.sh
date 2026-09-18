@@ -10,6 +10,7 @@ BINARY="$BUILD_ROOT/pikachu-volleyball-native"
 APPDIR="$BUILD_ROOT/PikachuVolleyballNative.AppDir"
 OUTPUT="$BUILD_ROOT/Pikachu-Volleyball-Native-x86_64.AppImage"
 MAX_APPIMAGE_BYTES=$((30 * 1024 * 1024))
+SOURCE_HEAD_SHA="$(git -C "$ROOT" rev-parse HEAD)"
 
 rm -rf "$BUILD_ROOT"
 mkdir -p "$BUILD_ROOT" "$EVIDENCE_DIR"
@@ -258,6 +259,7 @@ base_sha256="$(sha256sum "$BASE_APPIMAGE" | awk '{print $1}')"
 if (( bytes > MAX_APPIMAGE_BYTES )); then
   {
     echo 'size_gate=FAIL'
+    echo "source_head_sha=$SOURCE_HEAD_SHA"
     echo "bytes=$bytes"
     echo "mib=$mib"
     echo "limit_bytes=$MAX_APPIMAGE_BYTES"
@@ -342,6 +344,7 @@ printf '%s  %s\n' "$sha256" "$(basename "$OUTPUT")" \
 
 {
   echo 'size_gate=PASS'
+  echo "source_head_sha=$SOURCE_HEAD_SHA"
   echo "bytes=$bytes"
   echo "mib=$mib"
   echo "limit_bytes=$MAX_APPIMAGE_BYTES"

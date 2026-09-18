@@ -59,6 +59,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Install native and AT-SPI dependencies
         shell: bash
@@ -119,6 +121,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Install migration probe dependency
         shell: bash
@@ -263,6 +267,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Install web dependencies
         run: npm ci
@@ -342,6 +348,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v5
@@ -401,8 +409,10 @@ jobs:
             echo "Shared-core trace changed: expected $expected, got $actual" >&2
             exit 1
           }
+          source_head_sha="$(git rev-parse HEAD)"
           {
             echo 'core_parity_regression=PASS'
+            echo "source_head_sha=$source_head_sha"
             echo "trace_sha256=$actual"
             echo "expected_trace_sha256=$expected"
             echo "bundle_sha256=$(sha256sum build/phase4/core-parity.bundle.js | awk '{print $1}')"
@@ -426,6 +436,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v5
@@ -530,8 +542,10 @@ jobs:
             timeout 30 xvfb-run -a node scripts/measure-startup.cjs \
               "$evidence/startup.json"
 
+          source_head_sha="$(git rev-parse HEAD)"
           {
             echo 'electron44_fallback=PASS'
+            echo "source_head_sha=$source_head_sha"
             echo "electron_version=$version"
             echo "appimage_bytes=$bytes"
             echo "appimage_sha256=$sha256"
@@ -562,6 +576,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Download native host evidence
         uses: actions/download-artifact@v6
@@ -591,6 +607,14 @@ jobs:
           test -s "$native"
           test -s "$core"
           test -s "$electron"
+
+          expected_head="$(git rev-parse HEAD)"
+          for summary in "$native" "$core" "$electron"; do
+            grep -Fxq "source_head_sha=$expected_head" "$summary" || {
+              echo "Evidence was not produced from exact task head $expected_head: $summary" >&2
+              exit 1
+            }
+          done
 
           required_native=(
             'size_gate=PASS'
@@ -628,7 +652,7 @@ jobs:
           mkdir -p build/phase5/closure/final
           {
             echo 'NATIVE_PARITY=PASS'
-            echo "head_sha=$GITHUB_SHA"
+            echo "head_sha=$expected_head"
             echo "native_appimage_bytes=$bytes"
             echo "native_appimage_sha256=$(sed -n 's/^sha256=//p' "$native" | head -1)"
             echo "native_bundle_sha256=$(sed -n 's/^native_bundle_sha256=//p' "$native" | head -1)"
