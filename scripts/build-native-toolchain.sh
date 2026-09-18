@@ -7,6 +7,9 @@ DOWNLOAD_DIR="$BUILD_ROOT/downloads"
 SOURCE_DIR="$BUILD_ROOT/sources"
 PREFIX="$BUILD_ROOT/prefix"
 EVIDENCE_DIR="$BUILD_ROOT/evidence"
+SOURCE_HEAD_SHA="$(git -C "$ROOT" rev-parse HEAD)"
+SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH:-$(git -C "$ROOT" show -s --format=%ct "$SOURCE_HEAD_SHA")}"
+export SOURCE_DATE_EPOCH
 
 SDL_VERSION="3.4.16"
 SDL_SHA256="7322236cd12090c3eb40b9728be4d49c76f66ad17d04369584d4ecad5cf77c68"
@@ -81,6 +84,8 @@ make -C "$SOURCE_DIR/quickjs" -j2 libquickjs.a
 
 {
   echo 'native_toolchain=PASS'
+  echo "source_head_sha=$SOURCE_HEAD_SHA"
+  echo "source_date_epoch=$SOURCE_DATE_EPOCH"
   echo "sdl=$SDL_VERSION"
   echo "sdl_sha256=$SDL_SHA256"
   echo "sdl_ttf=$SDL_TTF_VERSION"
