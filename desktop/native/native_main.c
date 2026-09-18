@@ -809,7 +809,7 @@ static const char *scancode_to_code(SDL_Scancode scancode, char *buffer,
     snprintf(buffer, buffer_size, "Digit%d", 1 + (scancode - SDL_SCANCODE_1));
     return buffer;
   }
-  if (scancode >= SDL_SCANCODE_F1 && scancode <= SDL_SCANCODE_F12) {
+  if (scancode >= SDL_SCANCODE_F1 && scancode <= SDL_SCANCODE_F24) {
     snprintf(buffer, buffer_size, "F%d", 1 + (scancode - SDL_SCANCODE_F1));
     return buffer;
   }
@@ -842,6 +842,22 @@ static const char *scancode_to_code(SDL_Scancode scancode, char *buffer,
       return "BracketRight";
     case SDL_SCANCODE_BACKSLASH:
       return "Backslash";
+    case SDL_SCANCODE_NONUSBACKSLASH:
+      return "IntlBackslash";
+    case SDL_SCANCODE_INTERNATIONAL1:
+      return "IntlRo";
+    case SDL_SCANCODE_INTERNATIONAL3:
+      return "IntlYen";
+    case SDL_SCANCODE_LANG1:
+      return "Lang1";
+    case SDL_SCANCODE_LANG2:
+      return "Lang2";
+    case SDL_SCANCODE_LANG3:
+      return "Lang3";
+    case SDL_SCANCODE_LANG4:
+      return "Lang4";
+    case SDL_SCANCODE_LANG5:
+      return "Lang5";
     case SDL_SCANCODE_SEMICOLON:
       return "Semicolon";
     case SDL_SCANCODE_APOSTROPHE:
@@ -856,6 +872,14 @@ static const char *scancode_to_code(SDL_Scancode scancode, char *buffer,
       return "Slash";
     case SDL_SCANCODE_CAPSLOCK:
       return "CapsLock";
+    case SDL_SCANCODE_PRINTSCREEN:
+      return "PrintScreen";
+    case SDL_SCANCODE_SCROLLLOCK:
+      return "ScrollLock";
+    case SDL_SCANCODE_PAUSE:
+      return "Pause";
+    case SDL_SCANCODE_APPLICATION:
+      return "ContextMenu";
     case SDL_SCANCODE_RIGHT:
       return "ArrowRight";
     case SDL_SCANCODE_LEFT:
@@ -894,6 +918,12 @@ static const char *scancode_to_code(SDL_Scancode scancode, char *buffer,
       return "NumpadMultiply";
     case SDL_SCANCODE_KP_DIVIDE:
       return "NumpadDivide";
+    case SDL_SCANCODE_KP_EQUALS:
+      return "NumpadEqual";
+    case SDL_SCANCODE_KP_COMMA:
+      return "NumpadComma";
+    case SDL_SCANCODE_NUMLOCKCLEAR:
+      return "NumLock";
     case SDL_SCANCODE_DELETE:
       return "Delete";
     case SDL_SCANCODE_INSERT:
@@ -906,6 +936,44 @@ static const char *scancode_to_code(SDL_Scancode scancode, char *buffer,
       return "PageUp";
     case SDL_SCANCODE_PAGEDOWN:
       return "PageDown";
+    case SDL_SCANCODE_MUTE:
+      return "AudioVolumeMute";
+    case SDL_SCANCODE_VOLUMEUP:
+      return "AudioVolumeUp";
+    case SDL_SCANCODE_VOLUMEDOWN:
+      return "AudioVolumeDown";
+    case SDL_SCANCODE_AUDIONEXT:
+      return "MediaTrackNext";
+    case SDL_SCANCODE_AUDIOPREV:
+      return "MediaTrackPrevious";
+    case SDL_SCANCODE_AUDIOSTOP:
+      return "MediaStop";
+    case SDL_SCANCODE_AUDIOPLAY:
+      return "MediaPlayPause";
+    case SDL_SCANCODE_MEDIASELECT:
+      return "MediaSelect";
+    case SDL_SCANCODE_MAIL:
+      return "LaunchMail";
+    case SDL_SCANCODE_CALCULATOR:
+      return "LaunchApp2";
+    case SDL_SCANCODE_AC_SEARCH:
+      return "BrowserSearch";
+    case SDL_SCANCODE_AC_HOME:
+      return "BrowserHome";
+    case SDL_SCANCODE_AC_BACK:
+      return "BrowserBack";
+    case SDL_SCANCODE_AC_FORWARD:
+      return "BrowserForward";
+    case SDL_SCANCODE_AC_STOP:
+      return "BrowserStop";
+    case SDL_SCANCODE_AC_REFRESH:
+      return "BrowserRefresh";
+    case SDL_SCANCODE_AC_BOOKMARKS:
+      return "BrowserFavorites";
+    case SDL_SCANCODE_EJECT:
+      return "Eject";
+    case SDL_SCANCODE_SLEEP:
+      return "Sleep";
     default:
       return NULL;
   }
@@ -924,12 +992,41 @@ static bool contains(const char *text, const char *needle) {
   return strstr(text, needle) != NULL;
 }
 
+static bool validate_scancode_mapping(void) {
+  struct MappingCase {
+    SDL_Scancode scancode;
+    const char *code;
+  };
+  static const struct MappingCase cases[] = {
+      {SDL_SCANCODE_F13, "F13"},
+      {SDL_SCANCODE_F24, "F24"},
+      {SDL_SCANCODE_NONUSBACKSLASH, "IntlBackslash"},
+      {SDL_SCANCODE_KP_EQUALS, "NumpadEqual"},
+      {SDL_SCANCODE_INTERNATIONAL1, "IntlRo"},
+      {SDL_SCANCODE_INTERNATIONAL3, "IntlYen"},
+  };
+
+  char buffer[32];
+  for (size_t index = 0; index < sizeof(cases) / sizeof(cases[0]); index += 1) {
+    const char *code =
+        scancode_to_code(cases[index].scancode, buffer, sizeof(buffer));
+    if (!code || strcmp(code, cases[index].code) != 0) return false;
+  }
+  return true;
+}
+
 static bool run_self_test(NativeRuntime *state) {
   int target_fps = 0;
   char json[16384];
 
   bool expect_migration =
       getenv("PV_NATIVE_EXPECT_MIGRATION") != NULL;
+  if (!validate_scancode_mapping()) {
+    fprintf(stderr, "Native remap scancode coverage failed\n");
+    return false;
+  }
+  printf("native_remap_scancode_coverage=PASS\n");
+
   if (!js_get_int(state, "getTargetFps", &target_fps) ||
       target_fps != (expect_migration ? 30 : 25) ||
       !js_get_string(state, "getStateJson", json, sizeof(json)) ||
@@ -972,6 +1069,30 @@ static bool run_self_test(NativeRuntime *state) {
     return false;
   }
   printf("native_render_commands=PASS count=%d\n", render_command_count);
+
+  if (!js_get_string(state, "getRenderFrameJson", json, sizeof(json)) ||
+      !contains(json, "\"quickRematchVisible\":false") ||
+      !contains(json, "\"quickRematchText\":")) {
+    fprintf(stderr, "Native quick-rematch render-frame contract failed\n");
+    return false;
+  }
+  const char *rematch_fixture =
+      "{\"quickRematchVisible\":true,\"locale\":\"en\","
+      "\"quickRematchText\":\"Press Power Hit for a quick rematch\"}";
+  JSValue rematch_frame =
+      JS_ParseJSON(state->context, rematch_fixture, strlen(rematch_fixture),
+                   "<quick-rematch-self-test>");
+  bool rematch_ok =
+      !JS_IsException(rematch_frame) &&
+      native_menu_renderer_render_quick_rematch(
+          &state->menu_renderer, state->renderer, state->context,
+          rematch_frame);
+  JS_FreeValue(state->context, rematch_frame);
+  if (!rematch_ok) {
+    fprintf(stderr, "Native quick-rematch hint renderer failed\n");
+    return false;
+  }
+  printf("native_quick_rematch_hint=PASS\n");
 
   if (!js_handle_key(state, "KeyP", true, false) ||
       !js_get_string(state, "getStateJson", json, sizeof(json)) ||
@@ -1017,6 +1138,23 @@ static bool run_self_test(NativeRuntime *state) {
     fprintf(stderr, "Focus-loss input reset contract failed\n");
     return false;
   }
+
+  if (!js_set_setting(state, "colorScheme", "light") ||
+      !js_handle_key(state, "KeyP", true, false) ||
+      !js_handle_key(state, "KeyP", false, false) ||
+      !render_frame(state, false, NULL) ||
+      !js_get_string(state, "getStateJson", json, sizeof(json)) ||
+      !contains(json, "\"colorScheme\":\"light\"") ||
+      !js_set_setting(state, "colorScheme", "dark") ||
+      !render_frame(state, false, NULL) ||
+      !js_get_string(state, "getStateJson", json, sizeof(json)) ||
+      !contains(json, "\"colorScheme\":\"dark\"") ||
+      !js_handle_key(state, "KeyP", true, false) ||
+      !js_handle_key(state, "KeyP", false, false)) {
+    fprintf(stderr, "Native menu theme rendering contract failed\n");
+    return false;
+  }
+  printf("native_menu_theme=PASS\n");
 
   printf("native_js_bundle=PASS\n");
   printf("shared_core_bridge=PASS\n");
@@ -1237,6 +1375,13 @@ static bool render_frame(NativeRuntime *state, bool validate_pixels,
   }
 
   SDL_SetTextureAlphaMod(state->sprite_texture, 255);
+
+  if (!native_menu_renderer_render_quick_rematch(
+          &state->menu_renderer, state->renderer, state->context, frame)) {
+    JS_FreeValue(state->context, commands);
+    JS_FreeValue(state->context, frame);
+    return false;
+  }
 
   JSValue menu_frame;
   if (!call_api(state, "getMenuFrame", 0, NULL, &menu_frame)) {
