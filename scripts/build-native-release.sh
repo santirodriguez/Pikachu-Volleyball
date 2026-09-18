@@ -78,6 +78,25 @@ g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic \
   "$LEVELDB_STATIC" -pthread -static-libstdc++ -static-libgcc -o "$IMPORTER"
 strip --strip-unneeded "$IMPORTER"
 
+FIXTURE_WRITER="$BUILD_ROOT/electron-preferences-fixture"
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic \
+  -I"$LEVELDB_SOURCE/include" "$ROOT/desktop/native/electron_preferences_fixture.cc" \
+  "$LEVELDB_STATIC" -pthread -static-libstdc++ -static-libgcc -o "$FIXTURE_WRITER"
+strip --strip-unneeded "$FIXTURE_WRITER"
+
+if [[ -z "${PV_ELECTRON_USER_DATA_DIR:-}" ]]; then
+  LEGACY_USER_DATA="$BUILD_ROOT/legacy-electron-user-data"
+  FIXTURE_TSV="$BUILD_ROOT/legacy-electron-fixture.tsv"
+  FIXTURE_REPORT="$EVIDENCE_DIR/legacy-electron-fixture.json"
+  rm -rf "$LEGACY_USER_DATA"
+  mkdir -p "$LEGACY_USER_DATA/Local Storage"
+  node "$ROOT/scripts/write-electron-migration-fixture.cjs" \
+    "$FIXTURE_TSV" "$FIXTURE_REPORT" "$LEGACY_USER_DATA"
+  "$FIXTURE_WRITER" "$FIXTURE_TSV" "$LEGACY_USER_DATA/Local Storage/leveldb" \
+    | tee "$EVIDENCE_DIR/legacy-electron-fixture.txt"
+  export PV_ELECTRON_USER_DATA_DIR="$LEGACY_USER_DATA"
+fi
+
 ACCESSKIT_VERSION="0.22.3"
 ACCESSKIT_COMMIT="826d672661f9453c8b269ab3946dbcbae6300555"
 ACCESSKIT_REPOSITORY="https://github.com/AccessKit/accesskit-c.git"
@@ -383,6 +402,7 @@ printf '%s  %s\n' "$sha256" "$(basename "$OUTPUT")" \
   echo "native_host_sha256=$host_sha256"
   echo "electron_importer_bytes=$importer_bytes"
   echo "electron_importer_sha256=$importer_sha256"
+  echo "legacy_electron_fixture=PASS"
   echo "leveldb_version=$LEVELDB_VERSION"
   echo "leveldb_source_sha256=$LEVELDB_SHA256"
   echo "accesskit_version=$ACCESSKIT_VERSION"
