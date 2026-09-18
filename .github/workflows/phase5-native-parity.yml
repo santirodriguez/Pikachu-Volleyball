@@ -491,9 +491,10 @@ jobs:
           fi
           test -x "$executable"
 
-          version="$(xvfb-run -a "$executable" --version | tr -d '\r\n')"
-          [[ "$version" == 'v44.4.1' ]] || {
-            echo "Expected Electron v44.4.1, got $version" >&2
+          version="$(timeout 10 env ELECTRON_RUN_AS_NODE=1 \
+            "$executable" -p "process.versions.electron" | tr -d '\r\n')"
+          [[ "$version" == '44.4.1' ]] || {
+            echo "Expected Electron 44.4.1, got $version" >&2
             exit 1
           }
 
@@ -526,7 +527,8 @@ jobs:
           rm -rf release/linux-unpacked
           ln -s "$GITHUB_WORKSPACE/$app_dir" release/linux-unpacked
           PV_LINUX_UNPACKED_EXECUTABLE="$executable" \
-            xvfb-run -a node scripts/measure-startup.cjs "$evidence/startup.json"
+            timeout 30 xvfb-run -a node scripts/measure-startup.cjs \
+              "$evidence/startup.json"
 
           {
             echo 'electron44_fallback=PASS'
