@@ -56,7 +56,7 @@ This edition is simply my way of looking after a game I remember fondly. The ori
 2. Download the latest `.AppImage` for `x86_64` and `SHA256SUMS.txt`.
 3. Verify the checksum, allow the AppImage to run as a program and open it.
 
-See the concise [3.0.0 release notes](docs/releases/v3.0.0.md). Development release candidates are built by the [Release Candidate Readiness workflow](https://github.com/santirodriguez/pikachu-volleyball/actions/workflows/phase6-release-readiness.yml).
+See the concise [3.0.0 release notes](docs/releases/v3.0.0.md). Development release candidates are built by the [Release Candidate Readiness workflow](https://github.com/santirodriguez/pikachu-volleyball/actions/workflows/release-candidate-readiness.yml).
 
 ## Controls
 
