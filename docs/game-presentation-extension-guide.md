@@ -46,34 +46,59 @@ Responsibilities:
 - performs deferred audio warm-up;
 - starts the game and render loop.
 
-Use this file to connect runtime components. Keep presentation-specific state in the controller or view rather than adding it to the runtime bootstrap.
+Use this file to connect runtime components. Keep deterministic gameplay state in the shared core and presentation-specific state in the view or host adapter rather than adding either to the runtime bootstrap.
 
-### Game state flow
+### Shared gameplay core
+
+Primary ownership:
+
+- `src/resources/js/game_core.cjs`;
+- `src/resources/js/shared_core.js`;
+- `src/resources/js/physics.js`;
+- `src/resources/js/rand.js`.
+
+`game_core.cjs` is the host-neutral authority for deterministic lifecycle, scoring, timing, slow motion, practice/reset, quick-rematch and ordered gameplay effects. `shared_core.js` constructs that core around the existing reverse-engineered `PikaPhysics` implementation.
+
+The shared core must remain independent of DOM, PixiJS, localStorage, Electron and SDL/native APIs. Physics, AI decisions, RNG ordering, scoring and frame timing must not be duplicated in a host adapter.
+
+`physics.js` continues to contain the reverse-engineered simulation/AI behavior. Presentation work must consume its state through the shared-core boundary rather than mutate simulation state for visual convenience.
+
+### Browser/Electron gameplay adapter
 
 `src/resources/js/pikavolley.js`
 
-The controller stores the current state as a function reference in `this.state`. Important presentation states include:
+`PikachuVolleyball` remains the web application's public controller facade, but it is now an adapter over the shared `GameCore` rather than the owner of a separate lifecycle/scoring implementation.
+
+Responsibilities:
+
+- translates browser keyboard state into serializable frame input;
+- maps ordered core effects to the existing Pixi view and audio adapters;
+- preserves the existing public command/settings surface expected by the integrated menu;
+- owns host-only DOM details such as the quick-rematch hint and the practice-reset key event;
+- keeps the current state handler function surface compatible with the browser render loop.
+
+The deterministic state IDs remain:
 
 - `intro`;
 - `menu`;
-- `afterMenuSelection`;
-- `beforeStartOfNewGame`;
-- `startOfNewGame`;
+- `after-menu-selection`;
+- `before-start-of-new-game`;
+- `start-of-new-game`;
 - `round`;
-- `afterEndOfRound`;
-- `beforeStartOfNextRound`.
+- `after-end-of-round`;
+- `before-start-of-next-round`.
 
-Each state uses `frameCounter` and values in `frameTotal` to preserve original timing. A future title-screen redesign should be introduced as a dedicated state or as a replacement view for an existing presentation state. It should not be implemented by changing physics timing or by adding unrelated conditions to `round`.
+Frame counters and transition rules belong to `GameCore`. A future title-screen redesign should change presentation or an explicitly approved core state transition; it should not reintroduce timing/scoring rules into `pikavolley.js`.
 
 Safe procedure for a new presentation state:
 
-1. Add a dedicated view container in `view.js`.
-2. Register the container in the `PikachuVolleyball` constructor.
-3. Add an explicit controller state method.
-4. Reset `frameCounter` when entering and leaving the state.
+1. Characterize the accepted transition and frame behavior first.
+2. Add a dedicated view container in `view.js` when new canvas presentation is required.
+3. Add or change the explicit host-neutral lifecycle state in the shared core only when the feature genuinely changes lifecycle ownership.
+4. Keep the `PikachuVolleyball` adapter mapping narrow and free of duplicate gameplay rules.
 5. Use semantic input edges from `keyboard.js` for confirmation.
-6. Keep the transition to the existing menu or match states explicit.
-7. Add a regression test or documented AppImage check for the transition.
+6. Keep transitions explicit and serializable.
+7. Add regression evidence for both shared-core behavior and visible host presentation.
 
 ### Rendering and visual composition
 
@@ -86,7 +111,7 @@ Responsibilities:
 - renders the intro, game menu, players, ball, scoreboards and messages;
 - applies presentation-only animation.
 
-Future changes to the title presentation, backgrounds, scoreboards, messages or decorative details should normally be made here. Rendering changes must consume state from the controller or physics model without mutating simulation values.
+Future changes to the title presentation, backgrounds, scoreboards, messages or decorative details should normally be made here. Rendering changes must consume shared-core presentation snapshots/effects without mutating simulation values.
 
 ### Graphical assets
 
@@ -117,11 +142,12 @@ This file contains reverse-engineered gameplay behavior. Presentation work shoul
 - player or ball positions used by the engine;
 - collision rules;
 - velocities or acceleration;
-- scoring detection;
+- scoring-relevant collision state;
 - AI decisions;
+- RNG ordering;
 - frame-rate assumptions.
 
-A visual effect may read simulation state, but it should not write to physics fields unless the feature is explicitly a gameplay change with its own preservation review.
+A visual effect may read simulation state through the core's presentation snapshot, but it should not write to physics fields unless the feature is explicitly a gameplay change with its own preservation review.
 
 ### Integrated application interface
 
@@ -136,7 +162,7 @@ Primary ownership:
 
 The integrated menu is the game page's DOM UI authority and is mounted as an HTML overlay above the canvas. It is intentionally separate from the PixiJS game presentation. Future game-screen redesigns may change the canvas content without rebuilding application commands.
 
-Use `game_commands.js` for restart, pause, options, locale changes, control changes and desktop quit. Persist supported application settings through the settings store. Do not reconnect operations through hidden legacy buttons, checkboxes or simulated clicks.
+Use `game_commands.js` for restart, pause, options, locale changes, control changes and desktop quit. Commands that affect deterministic gameplay should cross the existing `PikachuVolleyball`/`GameCore` boundary rather than reimplement the rule in the menu layer. Persist supported application settings through the settings store. Do not reconnect operations through hidden legacy buttons, checkboxes or simulated clicks.
 
 ### Desktop boundary
 
@@ -156,7 +182,7 @@ Do not use `executeJavaScript` to control the renderer.
 3. Build the new view without changing physics.
 4. Keep keyboard confirmation compatible with both players.
 5. Test intro timeout, manual confirmation and AI-versus-AI fallback.
-6. Validate web and AppImage builds.
+6. Validate shared-core characterization, web output and AppImage behavior.
 7. Compare the final transition timing with the preservation matrix.
 
 ### Graphical-detail update
@@ -165,7 +191,7 @@ Do not use `executeJavaScript` to control the renderer.
 2. Update the smallest owning layer.
 3. Verify Sharp and Soft rendering.
 4. Check 800×600 minimum desktop size and maximized windows.
-5. Check Firefox, Chromium and packaged Electron rendering.
+5. Check Firefox, Chromium and packaged Electron rendering while Electron remains the fallback.
 6. Record screenshots and affected preservation-matrix rows in the PR.
 
 ## Required checks
@@ -173,15 +199,16 @@ Do not use `executeJavaScript` to control the renderer.
 For any future presentation change:
 
 - `npm run quality:check`;
+- shared-core characterization for affected lifecycle/gameplay boundaries;
 - locale-output validation;
-- AppImage packaging;
+- AppImage packaging when desktop behavior or packaging is affected;
 - title/menu transition smoke test;
 - Player 1 and Player 2 confirmation controls;
 - `P` pause behavior;
 - focus-loss input cleanup;
 - no packaged native menu regression;
-- no changes to physics or game timing unless explicitly approved.
+- no changes to physics, RNG ordering or game timing unless explicitly approved.
 
 ## Decision record
 
-The project intentionally modernizes the application shell without coupling those changes to the reverse-engineered gameplay model. Future visual work should build on the documented bootstrap, runtime, menu and rendering boundaries above rather than reconnecting legacy DOM controls or mixing desktop packaging concerns into game-state code.
+The project intentionally modernizes the application shell without coupling those changes to the reverse-engineered gameplay model. Phase 4 established one host-neutral deterministic gameplay authority in `GameCore`, with `pikavolley.js` as the browser/Electron adapter and `game_runtime.js` as the composition root. Future visual work should build on those boundaries rather than putting scoring/timing/physics rules back into host adapters, reconnecting legacy DOM controls, or mixing desktop packaging concerns into gameplay state.

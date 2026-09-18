@@ -1,0 +1,522 @@
+name: Release Candidate Readiness
+
+on:
+  pull_request:
+    branches:
+      - v3-restart
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase6-release-readiness-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out exact task head
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22.12.0
+          cache: npm
+
+      - name: Verify release-candidate metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          package_version="$(node -p "require('./package.json').version")"
+          lock_version="$(node -p "require('./package-lock.json').version")"
+          [[ "$package_version" == "$lock_version" ]] || {
+            echo "package.json and package-lock.json versions differ." >&2
+            exit 1
+          }
+          release_notes="docs/releases/v${package_version}.md"
+          test -s "$release_notes" || {
+            echo "Missing release notes for package version: $release_notes" >&2
+            exit 1
+          }
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=critical
+
+      - name: Run repository quality checks
+        run: npm run quality:check
+
+      - name: Verify Electron retirement contract
+        run: node --test test/native_release_readiness.test.cjs
+
+  native-build:
+    name: Native build ${{ matrix.variant }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [a, b]
+
+    steps:
+      - name: Check out exact task head
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22.12.0
+          cache: npm
+
+      - name: Install JavaScript dependencies
+        run: npm ci
+
+      - name: Install native build and validation dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake ninja-build pkg-config curl xz-utils patchelf \
+            binutils file libfuse2 xvfb x11-utils dbus-x11 at-spi2-core \
+            python3-pyatspi libpng-dev libmpg123-dev libfreetype6-dev \
+            libharfbuzz-dev libasound2-dev libpulse-dev \
+            libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev \
+            libxfixes-dev libxss-dev libxtst-dev libxkbcommon-dev \
+            libwayland-dev libdrm-dev libgbm-dev libegl1-mesa-dev libgl1-mesa-dev
+
+      - name: Build production native AppImage
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$GITHUB_WORKSPACE/build/phase6/native-${{ matrix.variant }}"
+          echo "PV_NATIVE_RELEASE_ROOT=$root" >> "$GITHUB_ENV"
+          PV_NATIVE_RELEASE_ROOT="$root" bash scripts/build-native-appimage.sh
+
+      - name: Require real direct AppImage execution
+        if: matrix.variant == 'a'
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fxq 'direct_appimage_self_test=PASS' \
+            "$PV_NATIVE_RELEASE_ROOT/evidence/summary.txt"
+
+      - name: Validate production accessibility through AT-SPI
+        if: matrix.variant == 'a'
+        shell: bash
+        run: |
+          set -euo pipefail
+          dbus-run-session -- env PV_PHASE5_NATIVE_ROOT="$PV_NATIVE_RELEASE_ROOT" \
+            bash scripts/run-phase5-production-accessibility.sh
+
+      - name: Measure native startup to ready checkpoint
+        if: matrix.variant == 'a'
+        shell: bash
+        run: |
+          set -euo pipefail
+          log="$PV_NATIVE_RELEASE_ROOT/evidence/startup-observation.txt"
+          prefs="$PV_NATIVE_RELEASE_ROOT/startup-preferences"
+          rm -rf "$prefs"
+          mkdir -p "$prefs"
+          start_ms="$(date +%s%3N)"
+          set +e
+          timeout 12 xvfb-run -a env \
+            SDL_AUDIODRIVER=dummy SDL_RENDER_DRIVER=software \
+            PV_NATIVE_PREFS_DIR="$prefs" \
+            stdbuf -oL "$PV_NATIVE_RELEASE_ROOT/PikachuVolleyballNative.AppDir/AppRun" \
+            > "$log" 2>&1 &
+          pid=$!
+          ready_ms=''
+          for _ in $(seq 1 120); do
+            if grep -q '^native_startup_checkpoint=ready$' "$log" 2>/dev/null; then
+              ready_ms="$(date +%s%3N)"
+              break
+            fi
+            if ! kill -0 "$pid" 2>/dev/null; then
+              break
+            fi
+            sleep 0.1
+          done
+          kill "$pid" 2>/dev/null || true
+          wait "$pid" 2>/dev/null || true
+          set -e
+          [[ -n "$ready_ms" ]] || {
+            cat "$log" >&2
+            echo "Native startup did not reach ready checkpoint." >&2
+            exit 1
+          }
+          elapsed=$((ready_ms - start_ms))
+          echo "startup_ready_ms=$elapsed" \
+            | tee -a "$PV_NATIVE_RELEASE_ROOT/evidence/summary.txt"
+
+      - name: Close dependency, security and license inventory
+        if: matrix.variant == 'a'
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$PV_NATIVE_RELEASE_ROOT/verify/squashfs-root"
+          evidence="$PV_NATIVE_RELEASE_ROOT/evidence"
+          host="$root/usr/bin/pikachu-volleyball-native"
+          importer="$root/usr/bin/electron-preferences-importer"
+          test -x "$host"
+          test -x "$importer"
+
+          find "$root" -printf '%P\t%y\t%s\n' | sort > "$evidence/release-file-inventory.tsv"
+          readelf -d "$host" > "$evidence/native-host-dynamic.txt"
+          readelf -d "$importer" > "$evidence/importer-dynamic.txt"
+          {
+            objdump -T "$host"
+            find "$root/usr/lib" -type f -maxdepth 1 -print0 \
+              | sort -z | xargs -0 -r -n1 objdump -T
+          } 2>/dev/null \
+            | grep -Eo 'GLIBC(X|)_[0-9]+(\.[0-9]+)*' \
+            | sort -Vu > "$evidence/glibc-symbol-versions.txt" || true
+
+          ! find "$root" -type f \( \
+            -name 'chrome-sandbox' -o -name 'app.asar' -o \
+            -name 'electron' -o -name 'node' -o -iname '*chromium*' -o \
+            -iname '*webkitgtk*' -o -iname '*gstreamer*' \
+          \) -print -quit | grep -q .
+
+          for required in \
+            SDL3-LICENSE.txt SDL3_ttf-LICENSE.txt QuickJS-LICENSE.txt \
+            Unifont-NOTICE.txt leveldb/LICENSE accesskit/LICENSE-APACHE \
+            accesskit/LICENSE-MIT; do
+            test -s "$root/usr/share/licenses/pikachu-volleyball-native/$required"
+          done
+          find "$root/usr/share/licenses/pikachu-volleyball-native/runtime" \
+            -type f -name '*.copyright' -print -quit | grep -q .
+
+          {
+            echo 'release_dependency_inventory=PASS'
+            echo 'release_security_inventory=PASS'
+            echo 'release_license_inventory=PASS'
+            echo "release_file_inventory_sha256=$(sha256sum "$evidence/release-file-inventory.tsv" | awk '{print $1}')"
+            echo "glibc_symbol_inventory_sha256=$(sha256sum "$evidence/glibc-symbol-versions.txt" | awk '{print $1}')"
+          } | tee -a "$evidence/summary.txt"
+
+      - name: Upload native build evidence
+        uses: actions/upload-artifact@v6
+        with:
+          name: phase6-native-build-${{ matrix.variant }}
+          path: |
+            build/phase6/native-${{ matrix.variant }}/*.AppImage
+            build/phase6/native-${{ matrix.variant }}/SHA256SUMS.txt
+            build/phase6/native-${{ matrix.variant }}/PikachuVolleyballNative.AppDir/provenance.json
+            build/phase6/native-${{ matrix.variant }}/evidence/**
+          if-no-files-found: error
+          retention-days: 14
+
+  reproducibility:
+    needs: native-build
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - name: Download build A
+        uses: actions/download-artifact@v6
+        with:
+          name: phase6-native-build-a
+          path: build/a
+
+      - name: Download build B
+        uses: actions/download-artifact@v6
+        with:
+          name: phase6-native-build-b
+          path: build/b
+
+      - name: Require byte-identical independent builds
+        shell: bash
+        run: |
+          set -euo pipefail
+          app_a="$(find build/a -type f -name '*.AppImage' -print -quit)"
+          app_b="$(find build/b -type f -name '*.AppImage' -print -quit)"
+          summary_a="$(find build/a -type f -path '*/evidence/summary.txt' -print -quit)"
+          summary_b="$(find build/b -type f -path '*/evidence/summary.txt' -print -quit)"
+          test -s "$app_a"
+          test -s "$app_b"
+          test -s "$summary_a"
+          test -s "$summary_b"
+          cmp "$app_a" "$app_b"
+
+          value() {
+            local key="$1"
+            local file="$2"
+            sed -n "s/^$key=//p" "$file" | head -1
+          }
+          for key in \
+            sha256 native_bundle_sha256 native_host_sha256 \
+            electron_importer_sha256 provenance_sha256 \
+            appdir_inventory_sha256 appdir_content_sha256; do
+            [[ "$(value "$key" "$summary_a")" == "$(value "$key" "$summary_b")" ]] || {
+              echo "Reproducibility mismatch for $key" >&2
+              exit 1
+            }
+          done
+
+          mkdir -p build/reproducibility
+          {
+            echo 'native_reproducibility=PASS'
+            echo "source_head_sha=$(value source_head_sha "$summary_a")"
+            echo "appimage_sha256=$(sha256sum "$app_a" | awk '{print $1}')"
+            echo "appimage_bytes=$(stat -c%s "$app_a")"
+            echo "native_bundle_sha256=$(value native_bundle_sha256 "$summary_a")"
+            echo "native_host_sha256=$(value native_host_sha256 "$summary_a")"
+            echo "provenance_sha256=$(value provenance_sha256 "$summary_a")"
+          } | tee build/reproducibility/summary.txt
+
+      - name: Upload reproducibility evidence
+        uses: actions/upload-artifact@v6
+        with:
+          name: phase6-reproducibility
+          path: build/reproducibility/summary.txt
+          if-no-files-found: error
+
+  core-parity:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    steps:
+      - name: Check out exact task head
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22.12.0
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build shared-core parity bundle
+        run: npx webpack --config webpack.core-parity.js
+
+      - name: Run accepted trace under Node
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence='build/phase6/core-parity'
+          mkdir -p "$evidence"
+          node build/phase4/core-parity.bundle.js > "$evidence/node-trace.json"
+
+      - name: Build pinned QuickJS
+        shell: bash
+        run: |
+          set -euo pipefail
+          version='2026-06-04'
+          sha256='b376e839b322978313d929fd20663b11ba58b75df5a46c126dd19ea2fa70ad2a'
+          root='build/phase6/core-parity'
+          archive="$root/quickjs-$version.tar.xz"
+          source="$root/quickjs"
+          curl --fail --location --retry 3 --retry-all-errors --silent --show-error \
+            "https://bellard.org/quickjs/quickjs-$version.tar.xz" --output "$archive"
+          printf '%s  %s\n' "$sha256" "$archive" | sha256sum --check --status
+          mkdir -p "$source"
+          tar -xJf "$archive" --strip-components=1 -C "$source"
+          make -C "$source" -j2 qjs
+
+      - name: Prove exact accepted core trace
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence='build/phase6/core-parity'
+          wrapper="$evidence/quickjs-runner.js"
+          {
+            echo 'globalThis.console = {'
+            echo '  log(value) { std.puts(String(value) + "\n"); }'
+            echo '};'
+            cat build/phase4/core-parity.bundle.js
+          } > "$wrapper"
+          "$evidence/quickjs/qjs" --std "$wrapper" > "$evidence/quickjs-trace.json"
+          cmp "$evidence/node-trace.json" "$evidence/quickjs-trace.json"
+          expected='1f8cf2eff81d0fcacd671882cb96e5c39b33fc05462e2b61b8937e059d70efb1'
+          actual="$(sha256sum "$evidence/node-trace.json" | awk '{print $1}')"
+          [[ "$actual" == "$expected" ]]
+          {
+            echo 'core_parity_regression=PASS'
+            echo "source_head_sha=$(git rev-parse HEAD)"
+            echo "trace_sha256=$actual"
+          } | tee "$evidence/summary.txt"
+
+      - name: Upload core parity evidence
+        uses: actions/upload-artifact@v6
+        with:
+          name: phase6-core-parity
+          path: build/phase6/core-parity/summary.txt
+          if-no-files-found: error
+
+  linux-matrix:
+    needs:
+      - reproducibility
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: debian-12
+            image: debian:12
+          - label: ubuntu-22.04
+            image: ubuntu:22.04
+          - label: ubuntu-24.04
+            image: ubuntu:24.04
+          - label: fedora-44
+            image: fedora:44
+          - label: opensuse-leap-16
+            image: opensuse/leap:16.0
+    container:
+      image: ${{ matrix.image }}
+
+    steps:
+      - name: Download exact reproducible candidate
+        uses: actions/download-artifact@v6
+        with:
+          name: phase6-native-build-a
+          path: candidate
+
+      - name: Install runtime smoke dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          . /etc/os-release
+          case "$ID" in
+            debian|ubuntu)
+              apt-get update
+              DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+                xvfb ca-certificates
+              ;;
+            fedora)
+              dnf install -y xorg-x11-server-Xvfb ca-certificates
+              ;;
+            opensuse-leap|opensuse-tumbleweed)
+              zypper --non-interactive install xorg-x11-server-Xvfb ca-certificates
+              ;;
+            *)
+              echo "Unsupported matrix image: $ID" >&2
+              exit 1
+              ;;
+          esac
+
+      - name: Exercise exact candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          app="candidate/Pikachu-Volleyball-Native-x86_64.AppImage"
+          test -s "$app"
+          chmod 0755 "$app"
+          Xvfb :99 -screen 0 1024x768x24 -nolisten tcp > /tmp/xvfb.log 2>&1 &
+          xvfb_pid=$!
+          trap 'kill "$xvfb_pid" 2>/dev/null || true' EXIT
+          sleep 1
+          APPIMAGE_EXTRACT_AND_RUN=1 timeout 45 env \
+            DISPLAY=:99 SDL_AUDIODRIVER=dummy SDL_RENDER_DRIVER=software \
+            "$app" --self-test | tee /tmp/native-self-test.txt
+          grep -q '^native_host_self_test=PASS$' /tmp/native-self-test.txt
+          grep -q '^native_graphics_bridge=PASS$' /tmp/native-self-test.txt
+          grep -q '^native_audio_mixer=PASS$' /tmp/native-self-test.txt
+          grep -q '^native_preferences_store=PASS$' /tmp/native-self-test.txt
+          printf 'linux_matrix=PASS\nmatrix_label=%s\n' "${{ matrix.label }}" \
+            > "/tmp/${{ matrix.label }}.txt"
+
+      - name: Upload Linux matrix evidence
+        uses: actions/upload-artifact@v6
+        with:
+          name: phase6-linux-${{ matrix.label }}
+          path: /tmp/${{ matrix.label }}.txt
+          if-no-files-found: error
+
+  release-ready:
+    needs:
+      - quality
+      - native-build
+      - reproducibility
+      - core-parity
+      - linux-matrix
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact task head
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Download exact candidate evidence
+        uses: actions/download-artifact@v6
+        with:
+          name: phase6-native-build-a
+          path: build/native
+
+      - name: Download reproducibility evidence
+        uses: actions/download-artifact@v6
+        with:
+          name: phase6-reproducibility
+          path: build/repro
+
+      - name: Download core parity evidence
+        uses: actions/download-artifact@v6
+        with:
+          name: phase6-core-parity
+          path: build/core
+
+      - name: Close exact-head RELEASE_READY gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          native="$(find build/native -type f -path '*/evidence/summary.txt' -print -quit)"
+          repro="$(find build/repro -type f -name summary.txt -print -quit)"
+          core="$(find build/core -type f -name summary.txt -print -quit)"
+          test -s "$native"
+          test -s "$repro"
+          test -s "$core"
+
+          expected_head="$(git rev-parse HEAD)"
+          grep -Fxq "source_head_sha=$expected_head" "$native"
+          grep -Fxq "source_head_sha=$expected_head" "$repro"
+          grep -Fxq "source_head_sha=$expected_head" "$core"
+
+          for marker in \
+            size_gate=PASS native_release_builder=PASS \
+            phase3_build_primitive_dependency=NONE legacy_electron_fixture=PASS \
+            runtime_license_inventory=PASS release_dependency_inventory=PASS \
+            release_security_inventory=PASS release_license_inventory=PASS \
+            production_atspi_dynamic_gate=PASS production_atspi_preenabled_gate=PASS \
+            production_atspi_gate=PASS native_quit_process_exit=PASS; do
+            grep -Fxq "$marker" "$native"
+          done
+          grep -Fxq 'native_reproducibility=PASS' "$repro"
+          grep -Fxq 'core_parity_regression=PASS' "$core"
+
+          bytes="$(sed -n 's/^bytes=//p' "$native" | head -1)"
+          limit="$(sed -n 's/^limit_bytes=//p' "$native" | head -1)"
+          [[ "$bytes" =~ ^[0-9]+$ && "$limit" =~ ^[0-9]+$ && "$bytes" -le "$limit" ]]
+
+          mkdir -p build/phase6/closure
+          {
+            echo 'RELEASE_READY=PASS'
+            echo "head_sha=$expected_head"
+            echo "appimage_bytes=$bytes"
+            echo "appimage_sha256=$(sed -n 's/^sha256=//p' "$native" | head -1)"
+            echo "native_bundle_sha256=$(sed -n 's/^native_bundle_sha256=//p' "$native" | head -1)"
+            echo "native_host_sha256=$(sed -n 's/^native_host_sha256=//p' "$native" | head -1)"
+            echo "provenance_sha256=$(sed -n 's/^provenance_sha256=//p' "$native" | head -1)"
+            echo "core_trace_sha256=$(sed -n 's/^trace_sha256=//p' "$core" | head -1)"
+            echo "startup_ready_ms=$(sed -n 's/^startup_ready_ms=//p' "$native" | head -1)"
+          } | tee build/phase6/closure/summary.txt
+
+      - name: Upload RELEASE_READY evidence
+        uses: actions/upload-artifact@v6
+        with:
+          name: phase6-release-ready
+          path: build/phase6/closure/summary.txt
+          if-no-files-found: error

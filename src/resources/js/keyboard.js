@@ -4,6 +4,7 @@
 'use strict';
 import { PikaUserInput } from './physics.js';
 import inputActionsModule from './input_actions.cjs';
+import inputFrameModule from './input_frame.cjs';
 
 const {
   INPUT_ACTIONS,
@@ -14,6 +15,7 @@ const {
   InputActionState,
   getPowerHitKeyCodes,
 } = inputActionsModule;
+const { createFrameInputFromActionSnapshot } = inputFrameModule;
 
 export {
   INPUT_ACTIONS,
@@ -86,31 +88,14 @@ export class PikaKeyboard extends PikaUserInput {
    */
   getInput() {
     this.actionSnapshot = this.actionState.createSnapshot();
-    const down = this.actionSnapshot.down;
-    const pressed = this.actionSnapshot.pressed;
-    const downRight = down[INPUT_ACTIONS.MOVE_DOWN_RIGHT];
-
-    if (down[INPUT_ACTIONS.MOVE_LEFT]) {
-      this.xDirection = -1;
-    } else if (down[INPUT_ACTIONS.MOVE_RIGHT] || downRight) {
-      this.xDirection = 1;
-    } else {
-      this.xDirection = 0;
-    }
-
-    if (down[INPUT_ACTIONS.MOVE_UP]) {
-      this.yDirection = -1;
-    } else if (down[INPUT_ACTIONS.MOVE_DOWN] || downRight) {
-      this.yDirection = 1;
-    } else {
-      this.yDirection = 0;
-    }
-
-    this.powerHit = pressed[INPUT_ACTIONS.POWER_HIT] ? 1 : 0;
-    this.confirm = pressed[INPUT_ACTIONS.CONFIRM] ? 1 : 0;
-    this.back = pressed[INPUT_ACTIONS.BACK] ? 1 : 0;
-    this.pause = pressed[INPUT_ACTIONS.PAUSE] ? 1 : 0;
-    this.practiceReset = pressed[INPUT_ACTIONS.PRACTICE_RESET] ? 1 : 0;
+    const frameInput = createFrameInputFromActionSnapshot(this.actionSnapshot);
+    this.xDirection = frameInput.xDirection;
+    this.yDirection = frameInput.yDirection;
+    this.powerHit = frameInput.powerHit;
+    this.confirm = frameInput.confirm;
+    this.back = frameInput.back;
+    this.pause = frameInput.pause;
+    this.practiceReset = frameInput.practiceReset;
   }
 
   /**

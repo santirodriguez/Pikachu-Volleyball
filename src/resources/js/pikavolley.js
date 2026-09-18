@@ -1,35 +1,26 @@
 /**
- * The Controller part in MVC pattern
+ * Browser/Pixi adapter for the host-neutral gameplay core.
+ *
+ * This file intentionally preserves the existing PikachuVolleyball public
+ * surface while moving deterministic gameplay ownership into GameCore.
  */
 'use strict';
-import { GROUND_HALF_WIDTH, PikaPhysics } from './physics.js';
+
 import { MenuView, GameView, FadeInOut, IntroView } from './view.js';
 import { PikaKeyboard } from './keyboard.js';
 import { PikaAudio } from './audio.js';
 import gameLifecycleModule from './game_lifecycle.cjs';
-import gamePresentationModule from './game_presentation.cjs';
+import { createGameCore } from './shared_core.js';
 
-const {
-  GAME_STATE_IDS,
-  getGameStateHandlerName,
-  isMatchInProgress: isGameMatchInProgress,
-} = gameLifecycleModule;
-const { createGamePresentationState, advancePunchEffect } =
-  gamePresentationModule;
-
-/** @typedef {import('@pixi/display').Container} Container */
-/** @typedef {import('@pixi/loaders').LoaderResource} LoaderResource */
-
-/** @typedef GameState @type {function():void} */
+const { GAME_STATE_IDS, getGameStateHandlerName } = gameLifecycleModule;
 
 /**
- * Class representing Pikachu Volleyball game
+ * Class representing Pikachu Volleyball in browser/Electron hosts.
  */
 export class PikachuVolleyball {
   /**
-   * Create a Pikachu Volleyball game which includes physics, view, audio
-   * @param {Container} stage container which is rendered by PIXI.Renderer or PIXI.CanvasRenderer
-   * @param {Object.<string,LoaderResource>} resources resources property of the PIXI.Loader object which is used for loading the game resources
+   * @param {import('@pixi/display').Container} stage
+   * @param {Object} resources
    */
   constructor(stage, resources) {
     this.view = {
@@ -48,10 +39,11 @@ export class PikachuVolleyball {
     this.view.fadeInOut.visible = false;
 
     this.audio = new PikaAudio();
-    this.physics = new PikaPhysics(true, true);
+    this.core = createGameCore();
+    this.physics = this.core.physics;
     this.keyboardArray = [
-      new PikaKeyboard('KeyD', 'KeyG', 'KeyR', 'KeyV', 'KeyZ', 'KeyF'), // for player1
-      new PikaKeyboard( // for player2
+      new PikaKeyboard('KeyD', 'KeyG', 'KeyR', 'KeyV', 'KeyZ', 'KeyF'),
+      new PikaKeyboard(
         'ArrowLeft',
         'ArrowRight',
         'ArrowUp',
@@ -60,64 +52,6 @@ export class PikachuVolleyball {
       ),
     ];
 
-    /** @type {number} game fps */
-    this.normalFPS = 25;
-    /** @type {number} fps for slow motion */
-    this.slowMotionFPS = 5;
-
-    /** @constant @type {number} number of frames for slow motion */
-    this.SLOW_MOTION_FRAMES_NUM = 6;
-    /** @type {number} number of frames left for slow motion */
-    this.slowMotionFramesLeft = 0;
-    /** @type {number} number of elapsed normal fps frames for rendering slow motion */
-    this.slowMotionNumOfSkippedFrames = 0;
-
-    /** @type {number} 0: with computer, 1: with friend */
-    this.selectedWithWho = 0;
-
-    /** @type {number[]} [0] for player 1 score, [1] for player 2 score */
-    this.scores = [0, 0];
-    /** @type {number} winning score: if either one of the players reaches this score, game ends */
-    this.winningScore = 15;
-
-    /** @type {boolean} Is the game ended? */
-    this.gameEnded = false;
-    /** @type {boolean} Is the round ended? */
-    this.roundEnded = false;
-    /** @type {boolean} Will player 2 serve? */
-    this.isPlayer2Serve = false;
-
-    /** @type {number} frame counter */
-    this.frameCounter = 0;
-    /** @type {Object.<string,number>} total number of frames for each game state */
-    this.frameTotal = {
-      intro: 165,
-      afterMenuSelection: 15,
-      beforeStartOfNewGame: 15,
-      startOfNewGame: 71,
-      afterEndOfRound: 5,
-      beforeStartOfNextRound: 30,
-      gameEnd: 211,
-    };
-
-    /** @type {number} counter for frames while there is no input from keyboard */
-    this.noInputFrameCounter = 0;
-    /** @type {Object.<string,number>} total number of frames to be rendered while there is no input */
-    this.noInputFrameTotal = {
-      menu: 225,
-    };
-
-    /** @type {boolean} true: paused, false: not paused */
-    this.paused = false;
-
-    /** @type {boolean} true: stereo, false: mono */
-    this.isStereoSound = true;
-
-    /** @type {boolean} true: practice mode on, false: practice mode off */
-    this._isPracticeMode = false;
-    /** @type {boolean} */
-    this.ballResetRequested = false;
-    /** @type {string} */
     this.ballResetKeyCode = 'KeyB';
     this.ballResetKeyDownListener = this.onBallResetKeyDown.bind(this);
     window.addEventListener('keydown', this.ballResetKeyDownListener);
@@ -126,461 +60,91 @@ export class PikachuVolleyball {
     this.setQuickRematchHintVisibility(false);
   }
 
-  /**
-   * Game loop
-   * This function should be called at regular intervals ( interval = (1 / FPS) second )
-   */
   gameLoop() {
-    if (this.paused === true) {
-      return;
-    }
-    if (this.currentStateId !== GAME_STATE_IDS.ROUND) {
-      this.ballResetRequested = false;
-    }
-    if (this.slowMotionFramesLeft > 0) {
-      this.slowMotionNumOfSkippedFrames++;
-      if (
-        this.slowMotionNumOfSkippedFrames %
-          Math.round(this.normalFPS / this.slowMotionFPS) !==
-        0
-      ) {
-        return;
-      }
-      this.slowMotionFramesLeft--;
-      this.slowMotionNumOfSkippedFrames = 0;
-    }
-    // catch keyboard input and freeze it
+    if (!this.core.beginFrame()) return;
     this.keyboardArray[0].getInput();
     this.keyboardArray[1].getInput();
     this.state();
   }
 
-  /**
-   * Move the game to one explicit lifecycle state.
-   * @param {string} stateId
-   */
   transitionTo(stateId) {
     const handlerName = getGameStateHandlerName(stateId);
     if (handlerName === null || typeof this[handlerName] !== 'function') {
       throw new Error(`Unknown game state: ${stateId}`);
     }
-    this.currentStateId = stateId;
+    this.core.transitionTo(stateId);
     this.state = this[handlerName];
   }
 
-  /** @return {string} */
   getCurrentStateId() {
-    return this.currentStateId;
+    return this.core.getCurrentStateId();
   }
 
-  /**
-   * @param {boolean} paused
-   * @return {boolean}
-   */
   setPaused(paused) {
-    this.paused = Boolean(paused);
-    return this.paused;
+    return this.core.setPaused(paused);
   }
 
-  /** @return {boolean} */
   isPaused() {
-    return this.paused;
+    return this.core.isPaused();
   }
 
-  /** @return {boolean} */
   isMatchInProgress() {
-    return isGameMatchInProgress(this.currentStateId);
+    return this.core.isMatchInProgress();
   }
 
-  /**
-   * Intro: a man with a brief case
-   * @type {GameState}
-   */
   intro() {
-    if (this.frameCounter === 0) {
-      this.view.intro.visible = true;
-      this.view.fadeInOut.setBlackAlphaTo(0);
-      this.audio.sounds.bgm.stop();
-    }
-    this.view.intro.drawMark(this.frameCounter);
-    this.frameCounter++;
-
-    if (
-      this.keyboardArray[0].powerHit === 1 ||
-      this.keyboardArray[1].powerHit === 1
-    ) {
-      this.frameCounter = 0;
-      this.view.intro.visible = false;
-      this.transitionTo(GAME_STATE_IDS.MENU);
-    }
-
-    if (this.frameCounter >= this.frameTotal.intro) {
-      this.frameCounter = 0;
-      this.view.intro.visible = false;
-      this.transitionTo(GAME_STATE_IDS.MENU);
-    }
+    this.runCoreState(GAME_STATE_IDS.INTRO);
   }
 
-  /**
-   * Menu: select who do you want to play. With computer? With friend?
-   * @type {GameState}
-   */
   menu() {
-    if (this.frameCounter === 0) {
-      this.view.menu.visible = true;
-      this.view.fadeInOut.setBlackAlphaTo(0);
-      this.selectedWithWho = 0;
-      this.view.menu.selectWithWho(this.selectedWithWho);
-      this.setQuickRematchHintVisibility(false);
-    }
-    this.view.menu.drawFightMessage(this.frameCounter);
-    this.view.menu.drawSachisoft(this.frameCounter);
-    this.view.menu.drawSittingPikachuTiles(this.frameCounter);
-    this.view.menu.drawPikachuVolleyballMessage(this.frameCounter);
-    this.view.menu.drawPokemonMessage(this.frameCounter);
-    this.view.menu.drawWithWhoMessages(this.frameCounter);
-    this.frameCounter++;
-
-    if (
-      this.frameCounter < 71 &&
-      (this.keyboardArray[0].powerHit === 1 ||
-        this.keyboardArray[1].powerHit === 1)
-    ) {
-      this.frameCounter = 71;
-      return;
-    }
-
-    if (this.frameCounter <= 71) {
-      return;
-    }
-
-    if (
-      (this.keyboardArray[0].yDirection === -1 ||
-        this.keyboardArray[1].yDirection === -1) &&
-      this.selectedWithWho === 1
-    ) {
-      this.noInputFrameCounter = 0;
-      this.selectedWithWho = 0;
-      this.view.menu.selectWithWho(this.selectedWithWho);
-      this.audio.sounds.pi.play();
-    } else if (
-      (this.keyboardArray[0].yDirection === 1 ||
-        this.keyboardArray[1].yDirection === 1) &&
-      this.selectedWithWho === 0
-    ) {
-      this.noInputFrameCounter = 0;
-      this.selectedWithWho = 1;
-      this.view.menu.selectWithWho(this.selectedWithWho);
-      this.audio.sounds.pi.play();
-    } else {
-      this.noInputFrameCounter++;
-    }
-
-    if (
-      this.keyboardArray[0].powerHit === 1 ||
-      this.keyboardArray[1].powerHit === 1
-    ) {
-      if (this.selectedWithWho === 1) {
-        this.physics.player1.isComputer = false;
-        this.physics.player2.isComputer = false;
-      } else {
-        if (this.keyboardArray[0].powerHit === 1) {
-          this.physics.player1.isComputer = false;
-          this.physics.player2.isComputer = true;
-        } else if (this.keyboardArray[1].powerHit === 1) {
-          this.physics.player1.isComputer = true;
-          this.physics.player2.isComputer = false;
-        }
-      }
-      this.audio.sounds.pikachu.play();
-      this.frameCounter = 0;
-      this.noInputFrameCounter = 0;
-      this.transitionTo(GAME_STATE_IDS.AFTER_MENU_SELECTION);
-      return;
-    }
-
-    if (this.noInputFrameCounter >= this.noInputFrameTotal.menu) {
-      this.physics.player1.isComputer = true;
-      this.physics.player2.isComputer = true;
-      this.frameCounter = 0;
-      this.noInputFrameCounter = 0;
-      this.transitionTo(GAME_STATE_IDS.AFTER_MENU_SELECTION);
-    }
+    this.runCoreState(GAME_STATE_IDS.MENU);
   }
 
-  /**
-   * Fade out after menu selection
-   * @type {GameState}
-   */
   afterMenuSelection() {
-    this.view.fadeInOut.changeBlackAlphaBy(1 / 16);
-    this.frameCounter++;
-    if (this.frameCounter >= this.frameTotal.afterMenuSelection) {
-      this.frameCounter = 0;
-      this.transitionTo(GAME_STATE_IDS.BEFORE_START_OF_NEW_GAME);
-    }
+    this.runCoreState(GAME_STATE_IDS.AFTER_MENU_SELECTION);
   }
 
-  /**
-   * Delay before start of new game (This is for the delay that exist in the original game)
-   * @type {GameState}
-   */
   beforeStartOfNewGame() {
-    this.frameCounter++;
-    if (this.frameCounter >= this.frameTotal.beforeStartOfNewGame) {
-      this.frameCounter = 0;
-      this.view.menu.visible = false;
-      this.transitionTo(GAME_STATE_IDS.START_OF_NEW_GAME);
-    }
+    this.runCoreState(GAME_STATE_IDS.BEFORE_START_OF_NEW_GAME);
   }
 
-  /**
-   * Start of new game: Initialize ball and players and print game start message
-   * @type {GameState}
-   */
   startOfNewGame() {
-    if (this.frameCounter === 0) {
-      this.view.game.visible = true;
-      this.gameEnded = false;
-      this.roundEnded = false;
-      this.isPlayer2Serve = false;
-      this.physics.player1.gameEnded = false;
-      this.physics.player1.isWinner = false;
-      this.physics.player2.gameEnded = false;
-      this.physics.player2.isWinner = false;
-
-      this.scores[0] = 0;
-      this.scores[1] = 0;
-      this.view.game.drawScoresToScoreBoards(this.scores);
-
-      this.physics.player1.initializeForNewRound();
-      this.physics.player2.initializeForNewRound();
-      this.physics.ball.initializeForNewRound(this.isPlayer2Serve);
-      this.drawPlayersAndBall();
-
-      this.view.fadeInOut.setBlackAlphaTo(1); // set black screen
-      this.audio.sounds.bgm.play();
-      this.setQuickRematchHintVisibility(false);
-    }
-
-    this.view.game.drawGameStartMessage(
-      this.frameCounter,
-      this.frameTotal.startOfNewGame
-    );
-    this.view.game.drawCloudsAndWave();
-    this.view.fadeInOut.changeBlackAlphaBy(-(1 / 17)); // fade in
-    this.frameCounter++;
-
-    if (this.frameCounter >= this.frameTotal.startOfNewGame) {
-      this.frameCounter = 0;
-      this.view.fadeInOut.setBlackAlphaTo(0);
-      this.transitionTo(GAME_STATE_IDS.ROUND);
-    }
+    this.runCoreState(GAME_STATE_IDS.START_OF_NEW_GAME);
   }
 
-  /**
-   * Round: the players play volleyball in this game state
-   * @type {GameState}
-   */
   round() {
-    const ballResetRequested = this.consumeBallResetRequest();
-    if (this._isPracticeMode === true && ballResetRequested === true) {
-      this.resetBallForPractice();
-      return;
-    }
-
-    const pressedPowerHit =
-      this.keyboardArray[0].powerHit === 1 ||
-      this.keyboardArray[1].powerHit === 1;
-
-    if (
-      this.physics.player1.isComputer === true &&
-      this.physics.player2.isComputer === true &&
-      pressedPowerHit
-    ) {
-      this.frameCounter = 0;
-      this.view.game.visible = false;
-      this.transitionTo(GAME_STATE_IDS.INTRO);
-      return;
-    }
-
-    const isBallTouchingGround = this.physics.runEngineForNextFrame(
-      this.keyboardArray
-    );
-
-    this.playSoundEffect();
-    this.drawPlayersAndBall();
-    this.view.game.drawCloudsAndWave();
-
-    if (this.gameEnded === true) {
-      this.view.game.drawGameEndMessage(this.frameCounter);
-      this.frameCounter++;
-      this.setQuickRematchHintVisibility(this.frameCounter >= 70);
-      if (this.frameCounter >= 70 && pressedPowerHit) {
-        this.startQuickRematch();
-        return;
-      }
-      if (this.frameCounter >= this.frameTotal.gameEnd) {
-        this.frameCounter = 0;
-        this.view.game.visible = false;
-        this.setQuickRematchHintVisibility(false);
-        this.transitionTo(GAME_STATE_IDS.INTRO);
-      }
-      return;
-    }
-
-    if (
-      isBallTouchingGround &&
-      this._isPracticeMode === false &&
-      this.roundEnded === false &&
-      this.gameEnded === false
-    ) {
-      if (this.physics.ball.punchEffectX < GROUND_HALF_WIDTH) {
-        this.isPlayer2Serve = true;
-        this.scores[1] += 1;
-        if (this.scores[1] >= this.winningScore) {
-          this.gameEnded = true;
-          this.physics.player1.isWinner = false;
-          this.physics.player2.isWinner = true;
-          this.physics.player1.gameEnded = true;
-          this.physics.player2.gameEnded = true;
-        }
-      } else {
-        this.isPlayer2Serve = false;
-        this.scores[0] += 1;
-        if (this.scores[0] >= this.winningScore) {
-          this.gameEnded = true;
-          this.physics.player1.isWinner = true;
-          this.physics.player2.isWinner = false;
-          this.physics.player1.gameEnded = true;
-          this.physics.player2.gameEnded = true;
-        }
-      }
-      this.view.game.drawScoresToScoreBoards(this.scores);
-      if (this.roundEnded === false && this.gameEnded === false) {
-        this.slowMotionFramesLeft = this.SLOW_MOTION_FRAMES_NUM;
-      }
-      this.roundEnded = true;
-    }
-
-    if (this.roundEnded === true && this.gameEnded === false) {
-      // if this is the last frame of this round, begin fade out
-      if (this.slowMotionFramesLeft === 0) {
-        this.view.fadeInOut.changeBlackAlphaBy(1 / 16); // fade out
-        this.transitionTo(GAME_STATE_IDS.AFTER_END_OF_ROUND);
-      }
-    }
+    this.runCoreState(GAME_STATE_IDS.ROUND);
   }
 
-  /**
-   * Fade out after end of round
-   * @type {GameState}
-   */
   afterEndOfRound() {
-    this.view.fadeInOut.changeBlackAlphaBy(1 / 16);
-    this.frameCounter++;
-    if (this.frameCounter >= this.frameTotal.afterEndOfRound) {
-      this.frameCounter = 0;
-      this.transitionTo(GAME_STATE_IDS.BEFORE_START_OF_NEXT_ROUND);
-    }
+    this.runCoreState(GAME_STATE_IDS.AFTER_END_OF_ROUND);
   }
 
-  /**
-   * Before start of next round, initialize ball and players, and print ready message
-   * @type {GameState}
-   */
   beforeStartOfNextRound() {
-    if (this.frameCounter === 0) {
-      this.view.fadeInOut.setBlackAlphaTo(1);
-      this.view.game.drawReadyMessage(false);
-
-      this.physics.player1.initializeForNewRound();
-      this.physics.player2.initializeForNewRound();
-      this.physics.ball.initializeForNewRound(this.isPlayer2Serve);
-      this.drawPlayersAndBall();
-    }
-
-    this.view.game.drawCloudsAndWave();
-    this.view.fadeInOut.changeBlackAlphaBy(-(1 / 16));
-
-    this.frameCounter++;
-    if (this.frameCounter % 5 === 0) {
-      this.view.game.toggleReadyMessage();
-    }
-
-    if (this.frameCounter >= this.frameTotal.beforeStartOfNextRound) {
-      this.frameCounter = 0;
-      this.view.game.drawReadyMessage(false);
-      this.view.fadeInOut.setBlackAlphaTo(0);
-      this.roundEnded = false;
-      this.transitionTo(GAME_STATE_IDS.ROUND);
-    }
+    this.runCoreState(GAME_STATE_IDS.BEFORE_START_OF_NEXT_ROUND);
   }
 
-  /**
-   * Start a fresh match immediately using current players and settings
-   */
   startQuickRematch() {
-    this.frameCounter = 0;
-    this.roundEnded = false;
-    this.gameEnded = false;
-    this.isPlayer2Serve = false;
-    this.slowMotionFramesLeft = 0;
-    this.slowMotionNumOfSkippedFrames = 0;
-    this.view.game.visible = false;
-    this.setQuickRematchHintVisibility(false);
-    this.transitionTo(GAME_STATE_IDS.START_OF_NEW_GAME);
+    this.applyCoreResult(this.core.startQuickRematch());
   }
 
-  /**
-   * @param {KeyboardEvent} event
-   */
   onBallResetKeyDown(event) {
-    if (event.code !== this.ballResetKeyCode || event.repeat) {
-      return;
-    }
-    this.ballResetRequested = true;
+    if (event.code !== this.ballResetKeyCode || event.repeat) return;
+    this.core.requestPracticeReset();
     event.preventDefault();
   }
 
-  /**
-   * @return {boolean}
-   */
   consumeBallResetRequest() {
-    const wasRequested = this.ballResetRequested;
-    this.ballResetRequested = false;
-    return wasRequested;
+    return this.core.consumePracticeResetRequest();
   }
 
-  /**
-   * Reset ball state during practice mode for quick drills.
-   */
   resetBallForPractice() {
-    this.physics.ball.initializeForNewRound(this.isPlayer2Serve);
-    this.drawPlayersAndBall();
-    this.view.game.drawCloudsAndWave();
+    this.applyCoreResult(this.core.resetBallForPractice());
   }
 
-  /**
-   * Draw the current gameplay model through a detached presentation snapshot.
-   */
-  drawPlayersAndBall() {
-    const punchEffectRadius = advancePunchEffect(this.physics.ball);
-    const presentationState = createGamePresentationState(this.physics, {
-      punchEffectRadius,
-    });
-    this.view.game.drawPlayersAndBall(presentationState);
-  }
-
-  /**
-   * Show or hide the quick rematch hint on the game screen
-   * @param {boolean} visible
-   */
   setQuickRematchHintVisibility(visible) {
     const quickRematchHint = document.getElementById('quick-rematch-hint');
-    if (quickRematchHint === null) {
-      return;
-    }
+    if (quickRematchHint === null) return;
     if (visible) {
       quickRematchHint.classList.remove('hidden');
     } else {
@@ -588,75 +152,285 @@ export class PikachuVolleyball {
     }
   }
 
-  /**
-   * Play sound effect on {@link round}
-   */
-  playSoundEffect() {
-    const audio = this.audio;
-    for (let i = 0; i < 2; i++) {
-      const player = this.physics[`player${i + 1}`];
-      const sound = player.sound;
-      let leftOrCenterOrRight = 0;
-      if (this.isStereoSound) {
-        leftOrCenterOrRight = i === 0 ? -1 : 1;
-      }
-      if (sound.pipikachu === true) {
-        audio.sounds.pipikachu.play(leftOrCenterOrRight);
-        sound.pipikachu = false;
-      }
-      if (sound.pika === true) {
-        audio.sounds.pika.play(leftOrCenterOrRight);
-        sound.pika = false;
-      }
-      if (sound.chu === true) {
-        audio.sounds.chu.play(leftOrCenterOrRight);
-        sound.chu = false;
-      }
-    }
-    const ball = this.physics.ball;
-    const sound = ball.sound;
-    let leftOrCenterOrRight = 0;
-    if (this.isStereoSound) {
-      if (ball.punchEffectX < GROUND_HALF_WIDTH) {
-        leftOrCenterOrRight = -1;
-      } else if (ball.punchEffectX > GROUND_HALF_WIDTH) {
-        leftOrCenterOrRight = 1;
-      }
-    }
-    if (sound.powerHit === true) {
-      audio.sounds.powerHit.play(leftOrCenterOrRight);
-      sound.powerHit = false;
-    }
-    if (sound.ballTouchesGround === true) {
-      audio.sounds.ballTouchesGround.play(leftOrCenterOrRight);
-      sound.ballTouchesGround = false;
-    }
-  }
-
-  /**
-   * Called if restart button clicked
-   */
   restart() {
-    this.frameCounter = 0;
-    this.noInputFrameCounter = 0;
-    this.slowMotionFramesLeft = 0;
-    this.slowMotionNumOfSkippedFrames = 0;
-    this.view.menu.visible = false;
-    this.view.game.visible = false;
-    this.transitionTo(GAME_STATE_IDS.INTRO);
+    this.applyCoreResult(this.core.restart());
   }
 
-  /** @return {boolean} */
+  runCoreState(stateId) {
+    const result = this.core.runState(stateId, this.createFrameInput());
+    this.applyCoreResult(result);
+  }
+
+  createFrameInput() {
+    return {
+      players: this.keyboardArray.map((keyboard) => ({
+        xDirection: keyboard.xDirection,
+        yDirection: keyboard.yDirection,
+        powerHit: keyboard.powerHit,
+      })),
+    };
+  }
+
+  applyCoreResult(result) {
+    this.syncFrameInputs(result.snapshot.lastFrameInputs);
+    for (const effect of result.effects) this.applyCoreEffect(effect);
+    this.syncStateHandler();
+    return result;
+  }
+
+  syncFrameInputs(frameInputs) {
+    if (!Array.isArray(frameInputs)) return;
+    for (let index = 0; index < 2; index += 1) {
+      const input = frameInputs[index];
+      if (!input) continue;
+      this.keyboardArray[index].xDirection = input.xDirection;
+      this.keyboardArray[index].yDirection = input.yDirection;
+      this.keyboardArray[index].powerHit = input.powerHit;
+    }
+  }
+
+  syncStateHandler() {
+    const handlerName = getGameStateHandlerName(this.core.getCurrentStateId());
+    if (handlerName === null || typeof this[handlerName] !== 'function') {
+      throw new Error(`Unknown game state: ${this.core.getCurrentStateId()}`);
+    }
+    this.state = this[handlerName];
+  }
+
+  applyCoreEffect(effect) {
+    const [type, ...args] = effect;
+    switch (type) {
+      case 'intro.visible':
+        this.view.intro.visible = args[0];
+        return;
+      case 'menu.visible':
+        this.view.menu.visible = args[0];
+        return;
+      case 'game.visible':
+        this.view.game.visible = args[0];
+        return;
+      case 'fade.set':
+        this.view.fadeInOut.setBlackAlphaTo(args[0]);
+        return;
+      case 'fade.change':
+        this.view.fadeInOut.changeBlackAlphaBy(args[0]);
+        return;
+      case 'intro.drawMark':
+        this.view.intro.drawMark(args[0]);
+        return;
+      case 'menu.selectWithWho':
+        this.view.menu.selectWithWho(args[0]);
+        return;
+      case 'menu.drawFightMessage':
+        this.view.menu.drawFightMessage(args[0]);
+        return;
+      case 'menu.drawSachisoft':
+        this.view.menu.drawSachisoft(args[0]);
+        return;
+      case 'menu.drawSittingPikachuTiles':
+        this.view.menu.drawSittingPikachuTiles(args[0]);
+        return;
+      case 'menu.drawPikachuVolleyballMessage':
+        this.view.menu.drawPikachuVolleyballMessage(args[0]);
+        return;
+      case 'menu.drawPokemonMessage':
+        this.view.menu.drawPokemonMessage(args[0]);
+        return;
+      case 'menu.drawWithWhoMessages':
+        this.view.menu.drawWithWhoMessages(args[0]);
+        return;
+      case 'audio.play':
+        this.audio.sounds[args[0]].play(args[1]);
+        return;
+      case 'audio.stop':
+        this.audio.sounds[args[0]].stop();
+        return;
+      case 'game.drawScores':
+        this.view.game.drawScoresToScoreBoards(args);
+        return;
+      case 'game.drawStart':
+        this.view.game.drawGameStartMessage(args[0], args[1]);
+        return;
+      case 'game.drawCloudsAndWave':
+        this.view.game.drawCloudsAndWave();
+        return;
+      case 'game.drawEnd':
+        this.view.game.drawGameEndMessage(args[0]);
+        return;
+      case 'game.drawReady':
+        this.view.game.drawReadyMessage(args[0]);
+        return;
+      case 'game.toggleReady':
+        this.view.game.toggleReadyMessage();
+        return;
+      case 'game.drawPlayersAndBall':
+        this.view.game.drawPlayersAndBall(args[0]);
+        return;
+      case 'quickRematch.visible':
+        this.setQuickRematchHintVisibility(args[0]);
+        return;
+      case 'game.scoreboards.visible':
+        this.view.game.scoreBoards[0].visible = args[0];
+        this.view.game.scoreBoards[1].visible = args[0];
+        return;
+      default:
+        throw new Error(`Unknown gameplay effect: ${type}`);
+    }
+  }
+
+  get currentStateId() {
+    return this.core.currentStateId;
+  }
+
+  set currentStateId(value) {
+    this.core.currentStateId = value;
+  }
+
+  get normalFPS() {
+    return this.core.normalFPS;
+  }
+
+  set normalFPS(value) {
+    this.core.normalFPS = value;
+  }
+
+  get slowMotionFPS() {
+    return this.core.slowMotionFPS;
+  }
+
+  set slowMotionFPS(value) {
+    this.core.slowMotionFPS = value;
+  }
+
+  get SLOW_MOTION_FRAMES_NUM() {
+    return this.core.SLOW_MOTION_FRAMES_NUM;
+  }
+
+  get slowMotionFramesLeft() {
+    return this.core.slowMotionFramesLeft;
+  }
+
+  set slowMotionFramesLeft(value) {
+    this.core.slowMotionFramesLeft = value;
+  }
+
+  get slowMotionNumOfSkippedFrames() {
+    return this.core.slowMotionNumOfSkippedFrames;
+  }
+
+  set slowMotionNumOfSkippedFrames(value) {
+    this.core.slowMotionNumOfSkippedFrames = value;
+  }
+
+  get selectedWithWho() {
+    return this.core.selectedWithWho;
+  }
+
+  set selectedWithWho(value) {
+    this.core.selectedWithWho = value;
+  }
+
+  get scores() {
+    return this.core.scores;
+  }
+
+  set scores(value) {
+    this.core.scores = value;
+  }
+
+  get winningScore() {
+    return this.core.winningScore;
+  }
+
+  set winningScore(value) {
+    this.core.winningScore = value;
+  }
+
+  get gameEnded() {
+    return this.core.gameEnded;
+  }
+
+  set gameEnded(value) {
+    this.core.gameEnded = value;
+  }
+
+  get roundEnded() {
+    return this.core.roundEnded;
+  }
+
+  set roundEnded(value) {
+    this.core.roundEnded = value;
+  }
+
+  get isPlayer2Serve() {
+    return this.core.isPlayer2Serve;
+  }
+
+  set isPlayer2Serve(value) {
+    this.core.isPlayer2Serve = value;
+  }
+
+  get frameCounter() {
+    return this.core.frameCounter;
+  }
+
+  set frameCounter(value) {
+    this.core.frameCounter = value;
+  }
+
+  get frameTotal() {
+    return this.core.frameTotal;
+  }
+
+  get noInputFrameCounter() {
+    return this.core.noInputFrameCounter;
+  }
+
+  set noInputFrameCounter(value) {
+    this.core.noInputFrameCounter = value;
+  }
+
+  get noInputFrameTotal() {
+    return this.core.noInputFrameTotal;
+  }
+
+  get paused() {
+    return this.core.paused;
+  }
+
+  set paused(value) {
+    this.core.paused = Boolean(value);
+  }
+
+  get isStereoSound() {
+    return this.core.isStereoSound;
+  }
+
+  set isStereoSound(value) {
+    this.core.isStereoSound = Boolean(value);
+  }
+
+  get ballResetRequested() {
+    return this.core.practiceResetRequested;
+  }
+
+  set ballResetRequested(value) {
+    this.core.practiceResetRequested = Boolean(value);
+  }
+
+  get _isPracticeMode() {
+    return this.core.isPracticeMode;
+  }
+
+  set _isPracticeMode(value) {
+    this.core.isPracticeMode = Boolean(value);
+  }
+
   get isPracticeMode() {
-    return this._isPracticeMode;
+    return this.core.isPracticeMode;
   }
 
-  /**
-   * @param {boolean} bool true: turn on practice mode, false: turn off practice mode
-   */
-  set isPracticeMode(bool) {
-    this._isPracticeMode = bool;
-    this.view.game.scoreBoards[0].visible = !bool;
-    this.view.game.scoreBoards[1].visible = !bool;
+  set isPracticeMode(value) {
+    this.applyCoreResult(this.core.setPracticeMode(value));
   }
 }

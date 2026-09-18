@@ -604,6 +604,14 @@ const THEME_COPY = Object.freeze({
   zh: { label: '界面主题', light: '浅色', dark: '深色' },
 });
 
+const QUICK_REMATCH_COPY = Object.freeze({
+  en: 'Press Power Hit for a quick rematch',
+  'es-ar': 'Pulsa Power Hit para revancha rápida',
+  ca: 'Press Power Hit for a quick rematch',
+  ko: '파워 히트 버튼을 누르면 바로 다시 경기할 수 있습니다',
+  zh: '按下強力擊球鍵可快速再戰一場',
+});
+
 const BASE_STRINGS = Object.freeze({ en: EN, 'es-ar': ES, ko: KO, zh: ZH });
 
 function composeMenuStrings(locale, baseStrings) {
@@ -629,5 +637,6 @@ export function getIntegratedMenuStrings(locale) {
   return {
     ...composeMenuStrings(locale, baseStrings),
     theme: THEME_COPY[locale] || THEME_COPY.en,
+    quickRematchHint: QUICK_REMATCH_COPY[locale] || QUICK_REMATCH_COPY.en,
   };
 }
