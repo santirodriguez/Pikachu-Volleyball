@@ -6,6 +6,7 @@ const {
   CONTROL_BINDING_DEFINITIONS,
   DEFAULT_CONTROL_BINDINGS,
   RESERVED_CONTROL_CODES,
+  SUPPORTED_CONTROL_CODES,
   cloneDefaultControlBindings,
   sanitizeControlBindings,
   validateControlBinding,
@@ -122,4 +123,22 @@ test('formats KeyboardEvent.code values for the menu', () => {
   assert.equal(formatKeyboardCode('ControlLeft'), 'LEFT CTRL');
   assert.equal(formatKeyboardCode('ArrowUp'), 'UP');
   assert.equal(formatKeyboardCode('Numpad7'), 'NUM 7');
+});
+
+
+test('accepts persisted codes that the native host can translate and rejects unsupported codes', () => {
+  for (const code of ['F13', 'F24', 'IntlBackslash', 'IntlRo', 'IntlYen', 'NumpadEqual']) {
+    assert.equal(SUPPORTED_CONTROL_CODES.includes(code), true);
+    const bindings = cloneDefaultControlBindings();
+    bindings['p1.left'] = code;
+    assert.equal(sanitizeControlBindings(bindings)['p1.left'], code);
+  }
+
+  const unsupported = cloneDefaultControlBindings();
+  unsupported['p1.left'] = 'SomeFutureKeyboardCode';
+  assert.equal(sanitizeControlBindings(unsupported)['p1.left'], 'KeyD');
+  assert.deepEqual(
+    validateControlBinding(DEFAULT_CONTROL_BINDINGS, 'p1.left', 'SomeFutureKeyboardCode'),
+    { ok: false, reason: 'invalid-key' }
+  );
 });
