@@ -1,4 +1,4 @@
-name: Phase 6 Release Readiness
+name: Release Candidate Readiness
 
 on:
   pull_request:
@@ -29,15 +29,19 @@ jobs:
           node-version: 22.12.0
           cache: npm
 
-      - name: Verify Phase 6 version boundary
+      - name: Verify release-candidate metadata
         shell: bash
         run: |
           set -euo pipefail
           package_version="$(node -p "require('./package.json').version")"
           lock_version="$(node -p "require('./package-lock.json').version")"
-          [[ "$package_version" == "$lock_version" ]]
-          [[ "$package_version" == "2.1.0" ]] || {
-            echo "Phase 6 must not change the release version: $package_version" >&2
+          [[ "$package_version" == "$lock_version" ]] || {
+            echo "package.json and package-lock.json versions differ." >&2
+            exit 1
+          }
+          release_notes="docs/releases/v${package_version}.md"
+          test -s "$release_notes" || {
+            echo "Missing release notes for package version: $release_notes" >&2
             exit 1
           }
 
