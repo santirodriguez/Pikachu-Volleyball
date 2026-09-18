@@ -11,6 +11,11 @@ APPDIR="$BUILD_ROOT/PikachuVolleyballNative.AppDir"
 OUTPUT="$BUILD_ROOT/Pikachu-Volleyball-Native-x86_64.AppImage"
 MAX_APPIMAGE_BYTES=$((30 * 1024 * 1024))
 SOURCE_HEAD_SHA="$(git -C "$ROOT" rev-parse HEAD)"
+SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH:-$(git -C "$ROOT" show -s --format=%ct "$SOURCE_HEAD_SHA")}"
+export SOURCE_DATE_EPOCH
+export LC_ALL=C
+export TZ=UTC
+PATH_MAP_FLAGS="-ffile-prefix-map=$ROOT=/usr/src/pikachu-volleyball -ffile-prefix-map=$BUILD_ROOT=/usr/src/native-release"
 
 rm -rf "$BUILD_ROOT"
 mkdir -p "$BUILD_ROOT" "$EVIDENCE_DIR"
@@ -73,13 +78,13 @@ cmake --build "$LEVELDB_BUILD" --parallel 2 --target leveldb
 LEVELDB_STATIC="$LEVELDB_BUILD/libleveldb.a"
 test -s "$LEVELDB_STATIC"
 IMPORTER="$BUILD_ROOT/electron-preferences-importer"
-g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic \
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic $PATH_MAP_FLAGS \
   -I"$LEVELDB_SOURCE/include" "$ROOT/desktop/native/electron_preferences_importer.cc" \
   "$LEVELDB_STATIC" -pthread -static-libstdc++ -static-libgcc -o "$IMPORTER"
 strip --strip-unneeded "$IMPORTER"
 
 FIXTURE_WRITER="$BUILD_ROOT/electron-preferences-fixture"
-g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic \
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic $PATH_MAP_FLAGS \
   -I"$LEVELDB_SOURCE/include" "$ROOT/desktop/native/electron_preferences_fixture.cc" \
   "$LEVELDB_STATIC" -pthread -static-libstdc++ -static-libgcc -o "$FIXTURE_WRITER"
 strip --strip-unneeded "$FIXTURE_WRITER"
@@ -102,6 +107,7 @@ ACCESSKIT_COMMIT="826d672661f9453c8b269ab3946dbcbae6300555"
 ACCESSKIT_REPOSITORY="https://github.com/AccessKit/accesskit-c.git"
 ACCESSKIT_SOURCE="$TOOLCHAIN_ROOT/sources/accesskit-c"
 ACCESSKIT_BUILD="$TOOLCHAIN_ROOT/accesskit-build"
+export RUSTFLAGS="${RUSTFLAGS:-} --remap-path-prefix=$ROOT=/usr/src/pikachu-volleyball --remap-path-prefix=$TOOLCHAIN_ROOT=/usr/src/native-toolchain"
 rm -rf "$ACCESSKIT_SOURCE" "$ACCESSKIT_BUILD"
 git clone --filter=blob:none --no-checkout "$ACCESSKIT_REPOSITORY" "$ACCESSKIT_SOURCE"
 git -C "$ACCESSKIT_SOURCE" fetch --depth 1 origin "$ACCESSKIT_COMMIT"
@@ -126,7 +132,7 @@ cmake --install "$ACCESSKIT_BUILD"
 ACCESSKIT_STATIC="$ACCESSKIT_SOURCE/lib/linux/x86_64/static/libaccesskit.a"
 test -s "$ACCESSKIT_STATIC"
 
-cc -std=c11 -O2 -Wall -Wextra -Wpedantic -D_GNU_SOURCE \
+cc -std=c11 -O2 -Wall -Wextra -Wpedantic -D_GNU_SOURCE $PATH_MAP_FLAGS \
   -I"$QUICKJS_SOURCE" -I"$ACCESSKIT_SOURCE/include" \
   $(pkg-config --cflags sdl3 sdl3-ttf libpng libmpg123) \
   "$ROOT/desktop/native/native_main.c" \
@@ -283,6 +289,18 @@ framebuffer_bytes="$(stat -c%s "$framebuffer")"
 framebuffer_sha256="$(sha256sum "$framebuffer" | awk '{print $1}')"
 render_trace_bytes="$(stat -c%s "$render_trace")"
 render_trace_sha256="$(sha256sum "$render_trace" | awk '{print $1}')"
+
+find "$APPDIR" -print0 \
+  | xargs -0 touch --no-dereference --date="@$SOURCE_DATE_EPOCH"
+(
+  cd "$APPDIR"
+  find . -type f -print0 | sort -z | xargs -0 sha256sum
+) > "$EVIDENCE_DIR/appdir-files.sha256"
+(
+  cd "$APPDIR"
+  find . -printf '%y\t%m\t%s\t%p\n' | sort
+) > "$EVIDENCE_DIR/appdir-metadata.txt"
+
 ARCH=x86_64 APPIMAGE_EXTRACT_AND_RUN=1 "$APPIMAGETOOL" \
   --runtime-file "$APPIMAGE_RUNTIME" \
   --comp zstd \
@@ -294,13 +312,44 @@ bytes="$(stat -c%s "$OUTPUT")"
 mib="$(awk -v bytes="$bytes" 'BEGIN { printf "%.2f", bytes / 1048576 }')"
 sha256="$(sha256sum "$OUTPUT" | awk '{print $1}')"
 headroom_bytes=$((MAX_APPIMAGE_BYTES - bytes))
+toolchain_summary_sha256="$(sha256sum "$TOOLCHAIN_ROOT/evidence/summary.txt" | awk '{print $1}')"
+appdir_files_sha256="$(sha256sum "$EVIDENCE_DIR/appdir-files.sha256" | awk '{print $1}')"
+appdir_metadata_sha256="$(sha256sum "$EVIDENCE_DIR/appdir-metadata.txt" | awk '{print $1}')"
+
+node - "$EVIDENCE_DIR/provenance.json" <<NODE
+const fs = require('node:fs');
+const output = process.argv[2];
+const provenance = {
+  schema: 1,
+  sourceHeadSha: '${SOURCE_HEAD_SHA}',
+  sourceDateEpoch: Number('${SOURCE_DATE_EPOCH}'),
+  architecture: 'x86_64',
+  packaging: {
+    format: 'AppImage',
+    compression: 'zstd',
+    maxBytes: ${MAX_APPIMAGE_BYTES},
+    artifact: 'Pikachu-Volleyball-Native-x86_64.AppImage',
+    artifactBytes: Number('${bytes}'),
+    artifactSha256: '${sha256}',
+  },
+  toolchainSummarySha256: '${toolchain_summary_sha256}',
+  appDirFilesSha256: '${appdir_files_sha256}',
+  appDirMetadataSha256: '${appdir_metadata_sha256}',
+  pins: {
+    leveldb: '${LEVELDB_VERSION}',
+    leveldbSourceSha256: '${LEVELDB_SHA256}',
+    accesskit: '${ACCESSKIT_VERSION}',
+    accesskitCommit: '${actual_accesskit_commit}',
+  },
+};
+fs.writeFileSync(output, JSON.stringify(provenance, null, 2) + '\n');
+NODE
 bundle_bytes="$(stat -c%s "$BUNDLE")"
 bundle_sha256="$(sha256sum "$BUNDLE" | awk '{print $1}')"
 host_bytes="$(stat -c%s "$BINARY")"
 host_sha256="$(sha256sum "$BINARY" | awk '{print $1}')"
 importer_bytes="$(stat -c%s "$IMPORTER")"
 importer_sha256="$(sha256sum "$IMPORTER" | awk '{print $1}')"
-toolchain_summary_sha256="$(sha256sum "$TOOLCHAIN_ROOT/evidence/summary.txt" | awk '{print $1}')"
 
 if (( bytes > MAX_APPIMAGE_BYTES )); then
   {
@@ -391,6 +440,7 @@ printf '%s  %s\n' "$sha256" "$(basename "$OUTPUT")" \
 {
   echo 'size_gate=PASS'
   echo "source_head_sha=$SOURCE_HEAD_SHA"
+  echo "source_date_epoch=$SOURCE_DATE_EPOCH"
   echo "bytes=$bytes"
   echo "mib=$mib"
   echo "limit_bytes=$MAX_APPIMAGE_BYTES"
@@ -414,6 +464,9 @@ printf '%s  %s\n' "$sha256" "$(basename "$OUTPUT")" \
   echo "framebuffer_bytes=$framebuffer_bytes"
   echo "framebuffer_sha256=$framebuffer_sha256"
   echo "production_toolchain_summary_sha256=$toolchain_summary_sha256"
+  echo "appdir_files_sha256=$appdir_files_sha256"
+  echo "appdir_metadata_sha256=$appdir_metadata_sha256"
+  echo "provenance_sha256=$(sha256sum "$EVIDENCE_DIR/provenance.json" | awk '{print $1}')"
   echo "direct_appimage_self_test=$direct_result"
   echo 'extract_run_self_test=PASS'
   echo 'extracted_apprun_self_test=PASS'
