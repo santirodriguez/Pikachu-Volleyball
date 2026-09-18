@@ -324,6 +324,34 @@ Passing this gate still does not authorize the Phase 6 merge, promotion to
 `main`, choosing/changing the release version, version bump, tag creation,
 release publication, deployment, or public distribution.
 
+### Phase 6 result
+
+`RELEASE_READY=PASS` was proven on exact task head
+`1c091c945c4fe94412c2fe3969a17399b32b2939`.
+
+Final Phase 6 evidence included:
+
+- Pull Request Quality: PASS;
+- Phase 4 shared-core regression: PASS;
+- two independent byte-identical native AppImages: PASS;
+- direct AppImage execution: PASS;
+- production AccessKit/AT-SPI validation: PASS;
+- dependency/security/license closure: PASS;
+- bounded legacy Electron preference migration without Electron tooling: PASS;
+- Debian 12, Ubuntu 22.04, Ubuntu 24.04, Fedora 44 and openSUSE Leap 16.0: PASS;
+- AppImage size: `9,419,256` bytes (~8.98 MiB);
+- AppImage SHA-256:
+  `e504eaa3a3efbd3840fb4c693b1f9dc496db19ebe5122b57bd56dc4d41961fc1`.
+
+PR #90 was then squash-merged into `v3-restart` as
+`0a84f0a010ab5ce2626d5e8ad06b8a036400b4b2`.
+
+The next stage is deliberately pre-`main`: generate a fresh integrated
+candidate, complete [v3 Manual AppImage QA](v3-manual-qa.md), finish
+release-facing metadata/documentation on a focused release-prep branch and
+validate that final candidate. Promotion to `main` is the last integration
+step and requires separate explicit user authorization.
+
 ## Operating rule
 
 The sequence is:
