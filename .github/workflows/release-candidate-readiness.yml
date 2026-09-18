@@ -1,16 +1,13 @@
 name: Release Candidate Readiness
 
 on:
-  pull_request:
-    branches:
-      - v3-restart
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: phase6-release-readiness-${{ github.event.pull_request.number || github.ref }}
+  group: release-candidate-readiness-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -21,7 +18,7 @@ jobs:
       - name: Check out exact task head
         uses: actions/checkout@v5
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ github.sha }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v5
@@ -70,7 +67,7 @@ jobs:
       - name: Check out exact task head
         uses: actions/checkout@v5
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ github.sha }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v5
@@ -99,7 +96,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          root="$GITHUB_WORKSPACE/build/phase6/native-${{ matrix.variant }}"
+          root="$GITHUB_WORKSPACE/build/release-candidate/native-${{ matrix.variant }}"
           echo "PV_NATIVE_RELEASE_ROOT=$root" >> "$GITHUB_ENV"
           PV_NATIVE_RELEASE_ROOT="$root" bash scripts/build-native-appimage.sh
 
@@ -208,14 +205,13 @@ jobs:
       - name: Upload native build evidence
         uses: actions/upload-artifact@v6
         with:
-          name: phase6-native-build-${{ matrix.variant }}
+          name: release-candidate-native-build-${{ matrix.variant }}
           path: |
-            build/phase6/native-${{ matrix.variant }}/*.AppImage
-            build/phase6/native-${{ matrix.variant }}/SHA256SUMS.txt
-            build/phase6/native-${{ matrix.variant }}/PikachuVolleyballNative.AppDir/provenance.json
-            build/phase6/native-${{ matrix.variant }}/evidence/**
+            build/release-candidate/native-${{ matrix.variant }}/*.AppImage
+            build/release-candidate/native-${{ matrix.variant }}/SHA256SUMS.txt
+            build/release-candidate/native-${{ matrix.variant }}/PikachuVolleyballNative.AppDir/provenance.json
+            build/release-candidate/native-${{ matrix.variant }}/evidence/**
           if-no-files-found: error
-          retention-days: 14
 
   reproducibility:
     needs: native-build
@@ -225,13 +221,13 @@ jobs:
       - name: Download build A
         uses: actions/download-artifact@v6
         with:
-          name: phase6-native-build-a
+          name: release-candidate-native-build-a
           path: build/a
 
       - name: Download build B
         uses: actions/download-artifact@v6
         with:
-          name: phase6-native-build-b
+          name: release-candidate-native-build-b
           path: build/b
 
       - name: Require byte-identical independent builds
@@ -277,7 +273,7 @@ jobs:
       - name: Upload reproducibility evidence
         uses: actions/upload-artifact@v6
         with:
-          name: phase6-reproducibility
+          name: release-candidate-reproducibility
           path: build/reproducibility/summary.txt
           if-no-files-found: error
 
@@ -288,7 +284,7 @@ jobs:
       - name: Check out exact task head
         uses: actions/checkout@v5
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ github.sha }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v5
@@ -306,7 +302,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          evidence='build/phase6/core-parity'
+          evidence='build/release-candidate/core-parity'
           mkdir -p "$evidence"
           node build/phase4/core-parity.bundle.js > "$evidence/node-trace.json"
 
@@ -316,7 +312,7 @@ jobs:
           set -euo pipefail
           version='2026-06-04'
           sha256='b376e839b322978313d929fd20663b11ba58b75df5a46c126dd19ea2fa70ad2a'
-          root='build/phase6/core-parity'
+          root='build/release-candidate/core-parity'
           archive="$root/quickjs-$version.tar.xz"
           source="$root/quickjs"
           curl --fail --location --retry 3 --retry-all-errors --silent --show-error \
@@ -330,7 +326,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          evidence='build/phase6/core-parity'
+          evidence='build/release-candidate/core-parity'
           wrapper="$evidence/quickjs-runner.js"
           {
             echo 'globalThis.console = {'
@@ -352,8 +348,8 @@ jobs:
       - name: Upload core parity evidence
         uses: actions/upload-artifact@v6
         with:
-          name: phase6-core-parity
-          path: build/phase6/core-parity/summary.txt
+          name: release-candidate-core-parity
+          path: build/release-candidate/core-parity/summary.txt
           if-no-files-found: error
 
   linux-matrix:
@@ -382,7 +378,7 @@ jobs:
       - name: Download exact reproducible candidate
         uses: actions/download-artifact@v6
         with:
-          name: phase6-native-build-a
+          name: release-candidate-native-build-a
           path: candidate
 
       - name: Install runtime smoke dependencies
@@ -432,7 +428,7 @@ jobs:
       - name: Upload Linux matrix evidence
         uses: actions/upload-artifact@v6
         with:
-          name: phase6-linux-${{ matrix.label }}
+          name: release-candidate-linux-${{ matrix.label }}
           path: /tmp/${{ matrix.label }}.txt
           if-no-files-found: error
 
@@ -449,24 +445,24 @@ jobs:
       - name: Check out exact task head
         uses: actions/checkout@v5
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ github.sha }}
 
       - name: Download exact candidate evidence
         uses: actions/download-artifact@v6
         with:
-          name: phase6-native-build-a
+          name: release-candidate-native-build-a
           path: build/native
 
       - name: Download reproducibility evidence
         uses: actions/download-artifact@v6
         with:
-          name: phase6-reproducibility
+          name: release-candidate-reproducibility
           path: build/repro
 
       - name: Download core parity evidence
         uses: actions/download-artifact@v6
         with:
-          name: phase6-core-parity
+          name: release-candidate-core-parity
           path: build/core
 
       - name: Close exact-head RELEASE_READY gate
@@ -501,7 +497,7 @@ jobs:
           limit="$(sed -n 's/^limit_bytes=//p' "$native" | head -1)"
           [[ "$bytes" =~ ^[0-9]+$ && "$limit" =~ ^[0-9]+$ && "$bytes" -le "$limit" ]]
 
-          mkdir -p build/phase6/closure
+          mkdir -p build/release-candidate/closure
           {
             echo 'RELEASE_READY=PASS'
             echo "head_sha=$expected_head"
@@ -512,11 +508,11 @@ jobs:
             echo "provenance_sha256=$(sed -n 's/^provenance_sha256=//p' "$native" | head -1)"
             echo "core_trace_sha256=$(sed -n 's/^trace_sha256=//p' "$core" | head -1)"
             echo "startup_ready_ms=$(sed -n 's/^startup_ready_ms=//p' "$native" | head -1)"
-          } | tee build/phase6/closure/summary.txt
+          } | tee build/release-candidate/closure/summary.txt
 
       - name: Upload RELEASE_READY evidence
         uses: actions/upload-artifact@v6
         with:
-          name: phase6-release-ready
-          path: build/phase6/closure/summary.txt
+          name: release-candidate-release-ready
+          path: build/release-candidate/closure/summary.txt
           if-no-files-found: error
