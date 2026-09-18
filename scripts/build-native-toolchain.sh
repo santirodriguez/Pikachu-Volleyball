@@ -27,6 +27,13 @@ UNIFONT_VERSION="17.0.04"
 UNIFONT_SHA256="d1f664a9753b9c6b7ff357128749e32b5d3eee90c7c03618363fabd43a39b5b7"
 UNIFONT_URL="https://ftp.gnu.org/gnu/unifont/unifont-${UNIFONT_VERSION}/unifont-${UNIFONT_VERSION}.otf"
 
+INTER_VERSION="4.1"
+INTER_COMMIT="e3a3d4c57d5ecc01453a575621882a384c1995a3"
+INTER_FONT_BLOB_SHA="4ab79e0102bbe0ffa1ed879b13e52ac8c6487833"
+INTER_LICENSE_BLOB_SHA="9b2ca37b3ffc77391d8b2ebef4a974ef32bf46ea"
+INTER_FONT_URL="https://raw.githubusercontent.com/rsms/inter/${INTER_COMMIT}/docs/font-files/InterVariable.ttf"
+INTER_LICENSE_URL="https://raw.githubusercontent.com/rsms/inter/${INTER_COMMIT}/LICENSE.txt"
+
 APPIMAGETOOL_VERSION="1.9.1"
 APPIMAGETOOL_SHA256="ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0"
 APPIMAGETOOL_URL="https://github.com/AppImage/appimagetool/releases/download/${APPIMAGETOOL_VERSION}/appimagetool-x86_64.AppImage"
@@ -49,10 +56,25 @@ fetch_verified() {
   }
 }
 
+fetch_git_blob_verified() {
+  local url="$1"
+  local blob_sha="$2"
+  local output="$3"
+  curl --fail --location --retry 3 --retry-all-errors --silent --show-error     "$url" --output "$output"
+  local actual_blob_sha
+  actual_blob_sha="$(git hash-object "$output")"
+  if [[ "$actual_blob_sha" != "$blob_sha" ]]; then
+    echo "Git blob mismatch for $url: expected $blob_sha, got $actual_blob_sha" >&2
+    exit 1
+  fi
+}
+
 SDL_ARCHIVE="$DOWNLOAD_DIR/SDL3-${SDL_VERSION}.tar.gz"
 SDL_TTF_ARCHIVE="$DOWNLOAD_DIR/SDL3_ttf-${SDL_TTF_VERSION}.tar.gz"
 QUICKJS_ARCHIVE="$DOWNLOAD_DIR/quickjs-${QUICKJS_VERSION}.tar.xz"
 UNIFONT_FILE="$DOWNLOAD_DIR/unifont-${UNIFONT_VERSION}.otf"
+INTER_FONT_FILE="$DOWNLOAD_DIR/InterVariable-${INTER_VERSION}.ttf"
+INTER_LICENSE_FILE="$DOWNLOAD_DIR/Inter-LICENSE-${INTER_VERSION}.txt"
 APPIMAGETOOL="$DOWNLOAD_DIR/appimagetool-x86_64.AppImage"
 APPIMAGE_RUNTIME="$DOWNLOAD_DIR/runtime-x86_64"
 
@@ -60,6 +82,8 @@ fetch_verified "$SDL_URL" "$SDL_SHA256" "$SDL_ARCHIVE"
 fetch_verified "$SDL_TTF_URL" "$SDL_TTF_SHA256" "$SDL_TTF_ARCHIVE"
 fetch_verified "$QUICKJS_URL" "$QUICKJS_SHA256" "$QUICKJS_ARCHIVE"
 fetch_verified "$UNIFONT_URL" "$UNIFONT_SHA256" "$UNIFONT_FILE"
+fetch_git_blob_verified "$INTER_FONT_URL" "$INTER_FONT_BLOB_SHA" "$INTER_FONT_FILE"
+fetch_git_blob_verified "$INTER_LICENSE_URL" "$INTER_LICENSE_BLOB_SHA" "$INTER_LICENSE_FILE"
 fetch_verified "$APPIMAGETOOL_URL" "$APPIMAGETOOL_SHA256" "$APPIMAGETOOL"
 fetch_verified "$APPIMAGE_RUNTIME_URL" "$APPIMAGE_RUNTIME_SHA256" "$APPIMAGE_RUNTIME"
 chmod 0755 "$APPIMAGETOOL" "$APPIMAGE_RUNTIME"
@@ -68,6 +92,10 @@ mkdir -p "$SOURCE_DIR/sdl" "$SOURCE_DIR/sdl-ttf" "$SOURCE_DIR/quickjs"
 tar -xzf "$SDL_ARCHIVE" --strip-components=1 -C "$SOURCE_DIR/sdl"
 tar -xzf "$SDL_TTF_ARCHIVE" --strip-components=1 -C "$SOURCE_DIR/sdl-ttf"
 tar -xJf "$QUICKJS_ARCHIVE" --strip-components=1 -C "$SOURCE_DIR/quickjs"
+test -s "$INTER_FONT_FILE"
+test -s "$INTER_LICENSE_FILE"
+INTER_FONT_SHA256="$(sha256sum "$INTER_FONT_FILE" | awk '{print $1}')"
+INTER_LICENSE_SHA256="$(sha256sum "$INTER_LICENSE_FILE" | awk '{print $1}')"
 
 cmake -S "$SOURCE_DIR/sdl" -B "$BUILD_ROOT/sdl-build" -G Ninja   -DCMAKE_BUILD_TYPE=Release   -DCMAKE_INSTALL_PREFIX="$PREFIX"   -DSDL_SHARED=ON   -DSDL_STATIC=OFF   -DSDL_TESTS=OFF
 cmake --build "$BUILD_ROOT/sdl-build" --parallel 2
@@ -107,6 +135,12 @@ quickjs_static_sha256="$(sha256sum "$SOURCE_DIR/quickjs/libquickjs.a" | awk '{pr
   echo "quickjs_static_sha256=$quickjs_static_sha256"
   echo "unifont=$UNIFONT_VERSION"
   echo "unifont_sha256=$UNIFONT_SHA256"
+  echo "inter=$INTER_VERSION"
+  echo "inter_commit=$INTER_COMMIT"
+  echo "inter_font_blob_sha=$INTER_FONT_BLOB_SHA"
+  echo "inter_font_sha256=$INTER_FONT_SHA256"
+  echo "inter_license_blob_sha=$INTER_LICENSE_BLOB_SHA"
+  echo "inter_license_sha256=$INTER_LICENSE_SHA256"
   echo "appimagetool=$APPIMAGETOOL_VERSION"
   echo "appimagetool_sha256=$APPIMAGETOOL_SHA256"
   echo "appimage_runtime=$APPIMAGE_RUNTIME_VERSION"

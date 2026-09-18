@@ -9,6 +9,7 @@ typedef struct NativeMenuRenderer NativeMenuRenderer;
 
 struct NativeMenuRenderer {
   void *font;
+  void *fallback_font;
   bool initialized;
 };
 
