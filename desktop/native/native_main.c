@@ -850,8 +850,14 @@ static const char *scancode_to_code(SDL_Scancode scancode, char *buffer,
       return "IntlBackslash";
     case SDL_SCANCODE_INTERNATIONAL1:
       return "IntlRo";
+    case SDL_SCANCODE_INTERNATIONAL2:
+      return "KanaMode";
     case SDL_SCANCODE_INTERNATIONAL3:
       return "IntlYen";
+    case SDL_SCANCODE_INTERNATIONAL4:
+      return "Convert";
+    case SDL_SCANCODE_INTERNATIONAL5:
+      return "NonConvert";
     case SDL_SCANCODE_LANG1:
       return "Lang1";
     case SDL_SCANCODE_LANG2:
@@ -883,7 +889,26 @@ static const char *scancode_to_code(SDL_Scancode scancode, char *buffer,
     case SDL_SCANCODE_PAUSE:
       return "Pause";
     case SDL_SCANCODE_APPLICATION:
+    case SDL_SCANCODE_MENU:
       return "ContextMenu";
+    case SDL_SCANCODE_HELP:
+      return "Help";
+    case SDL_SCANCODE_SELECT:
+      return "Select";
+    case SDL_SCANCODE_AGAIN:
+      return "Again";
+    case SDL_SCANCODE_UNDO:
+      return "Undo";
+    case SDL_SCANCODE_CUT:
+      return "Cut";
+    case SDL_SCANCODE_COPY:
+      return "Copy";
+    case SDL_SCANCODE_PASTE:
+      return "Paste";
+    case SDL_SCANCODE_FIND:
+      return "Find";
+    case SDL_SCANCODE_POWER:
+      return "Power";
     case SDL_SCANCODE_RIGHT:
       return "ArrowRight";
     case SDL_SCANCODE_LEFT:
@@ -956,8 +981,18 @@ static const char *scancode_to_code(SDL_Scancode scancode, char *buffer,
     case SDL_SCANCODE_MEDIA_PAUSE:
     case SDL_SCANCODE_MEDIA_PLAY_PAUSE:
       return "MediaPlayPause";
+    case SDL_SCANCODE_MEDIA_RECORD:
+      return "MediaRecord";
+    case SDL_SCANCODE_MEDIA_FAST_FORWARD:
+      return "MediaFastForward";
+    case SDL_SCANCODE_MEDIA_REWIND:
+      return "MediaRewind";
     case SDL_SCANCODE_MEDIA_SELECT:
       return "MediaSelect";
+    case SDL_SCANCODE_AC_OPEN:
+      return "Open";
+    case SDL_SCANCODE_AC_PROPERTIES:
+      return "Props";
     case SDL_SCANCODE_AC_SEARCH:
       return "BrowserSearch";
     case SDL_SCANCODE_AC_HOME:
@@ -976,6 +1011,8 @@ static const char *scancode_to_code(SDL_Scancode scancode, char *buffer,
       return "Eject";
     case SDL_SCANCODE_SLEEP:
       return "Sleep";
+    case SDL_SCANCODE_WAKE:
+      return "WakeUp";
     default:
       return NULL;
   }
@@ -1005,7 +1042,10 @@ static bool validate_scancode_mapping(void) {
       {SDL_SCANCODE_NONUSBACKSLASH, "IntlBackslash"},
       {SDL_SCANCODE_KP_EQUALS, "NumpadEqual"},
       {SDL_SCANCODE_INTERNATIONAL1, "IntlRo"},
+      {SDL_SCANCODE_INTERNATIONAL2, "KanaMode"},
       {SDL_SCANCODE_INTERNATIONAL3, "IntlYen"},
+      {SDL_SCANCODE_INTERNATIONAL4, "Convert"},
+      {SDL_SCANCODE_INTERNATIONAL5, "NonConvert"},
   };
 
   char buffer[32];
