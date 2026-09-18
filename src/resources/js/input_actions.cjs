@@ -87,12 +87,13 @@ class InputActionState {
 
   handleKeyDown(code) {
     if (!this.boundCodes.has(code)) return false;
-    const wasDown = this.downCodes.has(code);
-    this.downCodes.add(code);
-    if (!wasDown) {
+    if (!this.downCodes.has(code)) {
       for (const [action, codes] of Object.entries(this.bindings)) {
-        if (codes.includes(code)) this.pendingPressedActions.add(action);
+        if (codes.includes(code) && !this.isActionDown(action)) {
+          this.pendingPressedActions.add(action);
+        }
       }
+      this.downCodes.add(code);
     }
     return true;
   }
