@@ -342,6 +342,11 @@ bool native_audio_stop(NativeAudio *audio, const char *sound) {
   return true;
 }
 
+bool native_audio_set_bgm_gain(NativeAudio *audio, float volume) {
+  if (!ensure_loaded(audio)) return false;
+  return SDL_SetAudioStreamGain(audio->bgm_stream, volume);
+}
+
 bool native_audio_set_muted(NativeAudio *audio, bool muted) {
   audio->muted = muted;
   if (!audio->loaded) return true;
@@ -364,16 +369,27 @@ bool native_audio_self_test(NativeAudio *audio) {
   if (!ensure_loaded(audio) || !SDL_PauseAudioDevice(audio->device)) {
     return false;
   }
-  bool ok =
-      native_audio_play(audio, "bgm", 0.2f, 0.0f, true) &&
-      native_audio_play(audio, "pi", 0.35f, -0.75f, false) &&
-      native_audio_play(audio, "powerHit", 0.35f, 0.75f, false) &&
-      SDL_GetAudioStreamQueued(audio->bgm_stream) > 0 &&
-      native_audio_set_muted(audio, true) &&
-      native_audio_set_muted(audio, false) &&
-      native_audio_stop(audio, "bgm");
+
+  bool ok = native_audio_play(audio, "bgm", 0.2f, 0.0f, true);
+  int queued_before_gain =
+      ok ? SDL_GetAudioStreamQueued(audio->bgm_stream) : -1;
+  bool position_preserved =
+      ok && queued_before_gain > 0 &&
+      native_audio_set_bgm_gain(audio, 0.0f) &&
+      SDL_GetAudioStreamQueued(audio->bgm_stream) == queued_before_gain &&
+      native_audio_set_bgm_gain(audio, 0.2f) &&
+      SDL_GetAudioStreamQueued(audio->bgm_stream) == queued_before_gain;
+
+  ok = position_preserved &&
+       native_audio_play(audio, "pi", 0.35f, -0.75f, false) &&
+       native_audio_play(audio, "powerHit", 0.35f, 0.75f, false) &&
+       native_audio_set_muted(audio, true) &&
+       native_audio_set_muted(audio, false) &&
+       native_audio_stop(audio, "bgm");
   if (!SDL_ResumeAudioDevice(audio->device)) ok = false;
   printf("native_audio_assets=%d\n", NATIVE_AUDIO_ASSET_COUNT);
+  printf("native_bgm_position_preserved=%s\n",
+         position_preserved ? "PASS" : "FAIL");
   printf("native_audio_mixer=%s\n", ok ? "PASS" : "FAIL");
   return ok;
 }
