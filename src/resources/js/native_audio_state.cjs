@@ -29,17 +29,11 @@ class NativeAudioState {
     this.settings = normalizedSettings(settings);
 
     if (previous.bgm !== this.settings.bgm && this.bgmDesired) {
-      if (this.settings.bgm === 'off') {
-        this.pending.push({ type: 'stop', sound: 'bgm' });
-      } else {
-        this.pending.push({
-          type: 'play',
-          sound: 'bgm',
-          volume: BGM_VOLUME,
-          pan: 0,
-          loop: true,
-        });
-      }
+      this.pending.push({
+        type: 'gain',
+        sound: 'bgm',
+        volume: this.settings.bgm === 'off' ? 0 : BGM_VOLUME,
+      });
     }
   }
 
@@ -60,11 +54,10 @@ class NativeAudioState {
 
     if (sound === 'bgm') {
       this.bgmDesired = true;
-      if (this.settings.bgm === 'off') return;
       this.pending.push({
         type: 'play',
         sound,
-        volume: BGM_VOLUME,
+        volume: this.settings.bgm === 'off' ? 0 : BGM_VOLUME,
         pan: 0,
         loop: true,
       });
