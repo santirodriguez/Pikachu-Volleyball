@@ -282,3 +282,115 @@ test('native host renders quick-rematch copy, interface themes and extended rema
   assert.match(hostSource, /SDL_SCANCODE_KP_EQUALS/);
   assert.match(hostSource, /native_remap_scancode_coverage=PASS/);
 });
+
+test('native stabilization covers interactive audio, hyper-ball rendering, Escape and crisp menu text', () => {
+  const hostSource = read('desktop/native/native_main.c');
+  const audioHeader = read('desktop/native/native_audio.h');
+  const audioSource = read('desktop/native/native_audio.c');
+  const renderSource = read('src/resources/js/native_render_state.js');
+  const menuRenderer = read('desktop/native/native_menu_renderer.c');
+  const atlas = JSON.parse(
+    read('src/resources/assets/images/sprite_sheet.json')
+  );
+
+  assert.match(hostSource, /step_runtime\(&state\)/);
+  assert.match(hostSource, /native_escape_recovery=PASS/);
+  assert.match(audioHeader, /bool backend_available;/);
+  assert.match(
+    audioSource,
+    /SDL_OpenAudioDevice\(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, NULL\)/
+  );
+  assert.match(audioSource, /SDL_ResumeAudioDevice\(audio->device\)/);
+  assert.match(
+    audioSource,
+    /gameplay will continue muted/
+  );
+
+  assert.equal(atlas.frames['ball/ball_5.png'], undefined);
+  assert.ok(atlas.frames['ball/ball_hyper.png']);
+  assert.match(
+    renderSource,
+    /ball\.rotation === 5[\s\S]*TEXTURES\.BALL\('hyper'\)/
+  );
+
+  assert.match(
+    menuRenderer,
+    /SDL_LOGICAL_PRESENTATION_DISABLED/
+  );
+  assert.match(menuRenderer, /TTF_SetFontSize/);
+  assert.match(menuRenderer, /PIKACHU VOLLEYBALL/);
+  assert.match(menuRenderer, /117, 201, 238/);
+  assert.match(menuRenderer, /247, 220, 82/);
+  assert.match(menuRenderer, /189, 67, 56/);
+});
+
+test('native menu parity restores the colorful integrated-menu visual language', () => {
+  const css = read('src/resources/integrated-menu.css');
+  const renderer = read('desktop/native/native_menu_renderer.c');
+  const host = read('desktop/native/native_main.c');
+  const build = read('scripts/build-native-appimage.sh');
+
+  assert.match(css, /#75c9ee/);
+  assert.match(css, /#f4d44d/);
+  assert.match(css, /#bd4338/);
+  assert.match(renderer, /detail_panel = \{117, 201, 238, 255\}/);
+  assert.match(renderer, /accent_yellow = \{244, 212, 77, 255\}/);
+  assert.match(renderer, /accent_red = \{189, 67, 56, 255\}/);
+  assert.match(renderer, /SDL_GetRenderLogicalPresentationRect/);
+  assert.match(renderer, /SDL_LOGICAL_PRESENTATION_DISABLED/);
+  assert.match(host, /native_menu_visual_parity=PASS/);
+  assert.match(host, /PV_NATIVE_MENU_FRAMEBUFFER_PATH/);
+  assert.match(build, /native-menu-framebuffer\.bmp/);
+});
+
+test('native menu polish uses a proportional primary font with Unicode fallback', () => {
+  const toolchain = read('scripts/build-native-toolchain.sh');
+  const packaging = read('scripts/build-native-appimage.sh');
+  const header = read('desktop/native/native_menu_renderer.h');
+  const renderer = read('desktop/native/native_menu_renderer.c');
+
+  assert.match(toolchain, /INTER_VERSION="4\.1"/);
+  assert.match(
+    toolchain,
+    /INTER_COMMIT="e3a3d4c57d5ecc01453a575621882a384c1995a3"/
+  );
+  assert.match(
+    toolchain,
+    /INTER_FONT_BLOB_SHA="4ab79e0102bbe0ffa1ed879b13e52ac8c6487833"/
+  );
+  assert.match(
+    toolchain,
+    /INTER_LICENSE_BLOB_SHA="9b2ca37b3ffc77391d8b2ebef4a974ef32bf46ea"/
+  );
+  assert.match(toolchain, /fetch_git_blob_verified/);
+  assert.match(packaging, /fonts\/InterVariable\.ttf/);
+  assert.match(packaging, /Inter-LICENSE\.txt/);
+  assert.match(header, /void \*fallback_font;/);
+  assert.match(renderer, /TTF_AddFallbackFont\(font, fallback\)/);
+  assert.match(renderer, /TTF_HINTING_LIGHT/);
+  assert.match(renderer, /TTF_SetFontKerning\(font, true\)/);
+  assert.match(renderer, /fonts\/InterVariable\.ttf/);
+  assert.match(renderer, /fonts\/unifont-17\.0\.04\.otf/);
+});
+
+test('native confirmation actions remain horizontally inside the modal card', () => {
+  const menuState = read('src/resources/js/native_menu_state.js');
+  const host = read('desktop/native/native_main.c');
+  const packaging = read('scripts/build-native-appimage.sh');
+
+  assert.match(
+    menuState,
+    /MODAL_ACCEPT_LAYOUT[\s\S]*x: 106,[\s\S]*y: 188,[\s\S]*height: 22/
+  );
+  assert.match(
+    menuState,
+    /MODAL_CANCEL_LAYOUT[\s\S]*x: 222,[\s\S]*y: 188,[\s\S]*height: 22/
+  );
+  assert.match(
+    menuState,
+    /id: 'modal:cancel'[\s\S]*index: 0,[\s\S]*layout: MODAL_CANCEL_LAYOUT/
+  );
+  assert.match(host, /PV_NATIVE_MENU_MODAL_FRAMEBUFFER_PATH/);
+  assert.match(host, /native_menu_modal_layout=PASS/);
+  assert.match(packaging, /native-menu-modal-framebuffer\.bmp/);
+});

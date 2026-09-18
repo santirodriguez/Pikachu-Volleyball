@@ -708,6 +708,27 @@ static bool write_render_trace(NativeRuntime *state) {
   return true;
 }
 
+static bool save_framebuffer_from_env(NativeRuntime *state,
+                                      const char *environment_name) {
+  const char *path = getenv(environment_name);
+  if (!path || path[0] == '\0') return true;
+  SDL_Surface *surface = SDL_RenderReadPixels(state->renderer, NULL);
+  if (!surface) {
+    fprintf(stderr, "SDL_RenderReadPixels failed for %s: %s\n",
+            environment_name, SDL_GetError());
+    return false;
+  }
+  bool saved = SDL_SaveBMP(surface, path);
+  SDL_DestroySurface(surface);
+  if (!saved) {
+    fprintf(stderr, "SDL_SaveBMP failed for %s: %s\n", environment_name,
+            SDL_GetError());
+    return false;
+  }
+  printf("native_menu_framebuffer=PASS\n");
+  return true;
+}
+
 static bool validate_framebuffer(NativeRuntime *state) {
   SDL_Surface *surface = SDL_RenderReadPixels(state->renderer, NULL);
   if (!surface) {
@@ -1148,6 +1169,25 @@ static bool run_self_test(NativeRuntime *state) {
     return false;
   }
 
+  bool escape_requested_quit = false;
+  if (!js_handle_key(state, "Escape", true, false) ||
+      !js_handle_key(state, "Escape", false, false) ||
+      !process_platform_commands(state, &escape_requested_quit, true) ||
+      escape_requested_quit ||
+      !js_handle_key(state, "KeyP", true, false) ||
+      !js_handle_key(state, "KeyP", false, false) ||
+      !js_handle_key(state, "Escape", true, false) ||
+      !js_handle_key(state, "Escape", false, false) ||
+      !js_get_string(state, "getStateJson", json, sizeof(json)) ||
+      !contains(json, "\"paused\":false") ||
+      !contains(json, "\"visible\":false") ||
+      !process_platform_commands(state, &escape_requested_quit, true) ||
+      escape_requested_quit) {
+    fprintf(stderr, "Native Escape back/cancel contract failed\n");
+    return false;
+  }
+  printf("native_escape_recovery=PASS\n");
+
   const char *custom_preferences =
       "{\"pv-offline-speed\":\"fast\","
       "\"pv-offline-winningScore\":\"10\","
@@ -1189,14 +1229,28 @@ static bool run_self_test(NativeRuntime *state) {
       !contains(json, "\"colorScheme\":\"light\"") ||
       !js_set_setting(state, "colorScheme", "dark") ||
       !render_frame(state, false, NULL) ||
+      !save_framebuffer_from_env(state, "PV_NATIVE_MENU_FRAMEBUFFER_PATH") ||
       !js_get_string(state, "getStateJson", json, sizeof(json)) ||
       !contains(json, "\"colorScheme\":\"dark\"") ||
+      !js_handle_key(state, "ArrowDown", true, false) ||
+      !js_handle_key(state, "ArrowDown", false, false) ||
+      !js_handle_key(state, "Enter", true, false) ||
+      !js_handle_key(state, "Enter", false, false) ||
+      !render_frame(state, false, NULL) ||
+      !save_framebuffer_from_env(
+          state, "PV_NATIVE_MENU_MODAL_FRAMEBUFFER_PATH") ||
+      !js_get_string(state, "getMenuFrameJson", json, sizeof(json)) ||
+      !contains(json, "\"modal\":{") ||
+      !js_handle_key(state, "Escape", true, false) ||
+      !js_handle_key(state, "Escape", false, false) ||
       !js_handle_key(state, "KeyP", true, false) ||
       !js_handle_key(state, "KeyP", false, false)) {
     fprintf(stderr, "Native menu theme rendering contract failed\n");
     return false;
   }
   printf("native_menu_theme=PASS\n");
+  printf("native_menu_visual_parity=PASS\n");
+  printf("native_menu_modal_layout=PASS\n");
 
   printf("native_js_bundle=PASS\n");
   printf("shared_core_bridge=PASS\n");
@@ -1666,7 +1720,8 @@ int main(int argc, char **argv) {
     }
     uint64_t now = SDL_GetTicks();
     if (now >= next_tick) {
-      if (!js_step(&state)) {
+      if (!step_runtime(&state)) {
+        fprintf(stderr, "Native interactive runtime step failed\n");
         destroy_runtime(&state);
         return 2;
       }
@@ -1675,7 +1730,6 @@ int main(int argc, char **argv) {
     }
 
     if (!native_audio_pump(&state.audio) ||
-        !persist_preferences_if_dirty(&state) ||
         !process_platform_commands(&state, &quit, false) ||
         !render_frame(&state, false, NULL)) {
       destroy_runtime(&state);

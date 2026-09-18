@@ -36,6 +36,8 @@ QUICKJS_SOURCE="$TOOLCHAIN_ROOT/sources/quickjs"
 SDL_SOURCE="$TOOLCHAIN_ROOT/sources/sdl"
 SDL_TTF_SOURCE="$TOOLCHAIN_ROOT/sources/sdl-ttf"
 UNIFONT_FILE="$TOOLCHAIN_ROOT/downloads/unifont-17.0.04.otf"
+INTER_FONT="$TOOLCHAIN_ROOT/downloads/InterVariable-4.1.ttf"
+INTER_LICENSE="$TOOLCHAIN_ROOT/downloads/Inter-LICENSE-4.1.txt"
 APPIMAGETOOL="$TOOLCHAIN_ROOT/downloads/appimagetool-x86_64.AppImage"
 APPIMAGE_RUNTIME="$TOOLCHAIN_ROOT/downloads/runtime-x86_64"
 
@@ -43,6 +45,8 @@ for required in \
   "$PREFIX" \
   "$QUICKJS_SOURCE/libquickjs.a" \
   "$UNIFONT_FILE" \
+  "$INTER_FONT" \
+  "$INTER_LICENSE" \
   "$APPIMAGETOOL" \
   "$APPIMAGE_RUNTIME"; do
   if [[ ! -e "$required" ]]; then
@@ -149,6 +153,10 @@ mkdir -p "$APPDIR/usr/bin/assets" "$APPDIR/usr/bin/fonts" "$APPDIR/usr/lib" \
 
 install -m 0644 "$UNIFONT_FILE" \
   "$APPDIR/usr/bin/fonts/unifont-17.0.04.otf"
+install -m 0644 "$INTER_FONT" \
+  "$APPDIR/usr/bin/fonts/InterVariable.ttf"
+install -m 0644 "$INTER_LICENSE" \
+  "$APPDIR/usr/share/licenses/pikachu-volleyball-native/Inter-LICENSE.txt"
 install -m 0644 "$ROOT/src/resources/assets/images/sprite_sheet.png" \
   "$APPDIR/usr/bin/assets/sprite_sheet.png"
 install -m 0644 "$ROOT/src/resources/assets/images/sprite_sheet.json" \
@@ -322,14 +330,18 @@ if grep -Eq 'not found|libleveldb|libsnappy' "$EVIDENCE_DIR/importer-ldd.txt"; t
   exit 1
 fi
 
-framebuffer="$EVIDENCE_DIR/native-menu-framebuffer.bmp"
+framebuffer="$EVIDENCE_DIR/native-game-framebuffer.bmp"
+menu_framebuffer="$EVIDENCE_DIR/native-menu-framebuffer.bmp"
+modal_framebuffer="$EVIDENCE_DIR/native-menu-modal-framebuffer.bmp"
 render_trace="$EVIDENCE_DIR/native-menu-render.json"
 preference_root="$BUILD_ROOT/selftest-preferences"
 rm -rf "$preference_root"
 mkdir -p "$preference_root/prepackage"
 xvfb-run -a env \
   SDL_AUDIODRIVER=dummy SDL_RENDER_DRIVER=software \
-  PV_NATIVE_FRAMEBUFFER_PATH="$framebuffer" PV_NATIVE_RENDER_TRACE_PATH="$render_trace" \
+  PV_NATIVE_FRAMEBUFFER_PATH="$framebuffer" PV_NATIVE_MENU_FRAMEBUFFER_PATH="$menu_framebuffer" \
+  PV_NATIVE_MENU_MODAL_FRAMEBUFFER_PATH="$modal_framebuffer" \
+  PV_NATIVE_RENDER_TRACE_PATH="$render_trace" \
   PV_NATIVE_EXPECT_MIGRATION=1 PV_NATIVE_PREFS_DIR="$preference_root/prepackage" \
   "$APPDIR/AppRun" --self-test | tee "$EVIDENCE_DIR/prepackage-self-test.txt"
 grep -q '^native_host_self_test=PASS$' "$EVIDENCE_DIR/prepackage-self-test.txt"
@@ -339,6 +351,9 @@ grep -q '^native_bgm_position_preserved=PASS$' "$EVIDENCE_DIR/prepackage-self-te
 grep -q '^native_remap_scancode_coverage=PASS$' "$EVIDENCE_DIR/prepackage-self-test.txt"
 grep -q '^native_quick_rematch_hint=PASS$' "$EVIDENCE_DIR/prepackage-self-test.txt"
 grep -q '^native_menu_theme=PASS$' "$EVIDENCE_DIR/prepackage-self-test.txt"
+grep -q '^native_menu_visual_parity=PASS$' "$EVIDENCE_DIR/prepackage-self-test.txt"
+grep -q '^native_menu_framebuffer=PASS$' "$EVIDENCE_DIR/prepackage-self-test.txt"
+grep -q '^native_menu_modal_layout=PASS$' "$EVIDENCE_DIR/prepackage-self-test.txt"
 grep -q '^native_preferences_store=PASS$' "$EVIDENCE_DIR/prepackage-self-test.txt"
 grep -q '^electron_migration_runtime=PASS$' "$EVIDENCE_DIR/prepackage-self-test.txt"
 grep -q '^native_pointer_menu=PASS$' "$EVIDENCE_DIR/prepackage-self-test.txt"
@@ -348,9 +363,15 @@ grep -q '^native_quit_path=PASS$' "$EVIDENCE_DIR/prepackage-self-test.txt"
 grep -q '^native_startup_localization=PASS$' "$EVIDENCE_DIR/prepackage-self-test.txt"
 grep -q '^native_framebuffer_variation=PASS$' "$EVIDENCE_DIR/prepackage-self-test.txt"
 test -s "$framebuffer"
+test -s "$menu_framebuffer"
+test -s "$modal_framebuffer"
 test -s "$render_trace"
 framebuffer_bytes="$(stat -c%s "$framebuffer")"
 framebuffer_sha256="$(sha256sum "$framebuffer" | awk '{print $1}')"
+menu_framebuffer_bytes="$(stat -c%s "$menu_framebuffer")"
+menu_framebuffer_sha256="$(sha256sum "$menu_framebuffer" | awk '{print $1}')"
+modal_framebuffer_bytes="$(stat -c%s "$modal_framebuffer")"
+modal_framebuffer_sha256="$(sha256sum "$modal_framebuffer" | awk '{print $1}')"
 render_trace_bytes="$(stat -c%s "$render_trace")"
 render_trace_sha256="$(sha256sum "$render_trace" | awk '{print $1}')"
 
@@ -495,6 +516,10 @@ printf '%s  %s\n' "$sha256" "$(basename "$OUTPUT")" \
   echo "render_trace_sha256=$render_trace_sha256"
   echo "framebuffer_bytes=$framebuffer_bytes"
   echo "framebuffer_sha256=$framebuffer_sha256"
+  echo "menu_framebuffer_bytes=$menu_framebuffer_bytes"
+  echo "menu_framebuffer_sha256=$menu_framebuffer_sha256"
+  echo "modal_framebuffer_bytes=$modal_framebuffer_bytes"
+  echo "modal_framebuffer_sha256=$modal_framebuffer_sha256"
   echo "provenance_sha256=$provenance_sha256"
   echo "appdir_inventory_sha256=$appdir_inventory_sha256"
   echo "appdir_content_sha256=$appdir_content_sha256"
@@ -513,6 +538,7 @@ printf '%s  %s\n' "$sha256" "$(basename "$OUTPUT")" \
   echo 'electron_migration_runtime=PASS'
   echo 'native_pointer_menu=PASS'
   echo 'native_locale_menu=PASS'
+  echo 'native_menu_modal_layout=PASS'
   echo 'native_external_url_allowlist=PASS'
   echo 'native_quit_path=PASS'
   echo 'native_startup_localization=PASS'

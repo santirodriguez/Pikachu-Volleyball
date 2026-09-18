@@ -73,11 +73,18 @@ const PANEL_LAYOUT = Object.freeze({
   height: 14,
 });
 
-const MODAL_LAYOUT = Object.freeze({
+const MODAL_ACCEPT_LAYOUT = Object.freeze({
   x: 106,
-  y: 202,
+  y: 188,
   width: 104,
-  height: 24,
+  height: 22,
+});
+
+const MODAL_CANCEL_LAYOUT = Object.freeze({
+  x: 222,
+  y: 188,
+  width: 104,
+  height: 22,
 });
 
 function replaceTokens(template, tokens) {
@@ -542,7 +549,7 @@ export function createNativeMenuState(commands, initialLocale = 'en') {
         kind: 'modal',
         label: copy.confirmation.accept,
         index: 0,
-        layout: MODAL_LAYOUT,
+        layout: MODAL_ACCEPT_LAYOUT,
         focused: mode === 'modal' && modalFocusIndex === 0,
         meta: { modalAction: 'accept' },
       }),
@@ -551,8 +558,8 @@ export function createNativeMenuState(commands, initialLocale = 'en') {
         id: 'modal:cancel',
         kind: 'modal',
         label: copy.confirmation.cancel,
-        index: 1,
-        layout: { ...MODAL_LAYOUT, x: 222 },
+        index: 0,
+        layout: MODAL_CANCEL_LAYOUT,
         focused: mode === 'modal' && modalFocusIndex === 1,
         meta: { modalAction: 'cancel' },
       }),
