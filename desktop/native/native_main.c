@@ -848,6 +848,7 @@ static const char *scancode_to_code(SDL_Scancode scancode, char *buffer,
     case SDL_SCANCODE_0:
       return "Digit0";
     case SDL_SCANCODE_RETURN:
+    case SDL_SCANCODE_RETURN2:
       return "Enter";
     case SDL_SCANCODE_ESCAPE:
       return "Escape";
@@ -1058,6 +1059,8 @@ static bool validate_scancode_mapping(void) {
     const char *code;
   };
   static const struct MappingCase cases[] = {
+      {SDL_SCANCODE_RETURN, "Enter"},
+      {SDL_SCANCODE_RETURN2, "Enter"},
       {SDL_SCANCODE_F13, "F13"},
       {SDL_SCANCODE_F24, "F24"},
       {SDL_SCANCODE_NONUSBACKSLASH, "IntlBackslash"},
