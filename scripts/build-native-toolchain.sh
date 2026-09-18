@@ -80,6 +80,16 @@ cmake -S "$SOURCE_DIR/sdl-ttf" -B "$BUILD_ROOT/sdl-ttf-build" -G Ninja   -DCMAKE
 cmake --build "$BUILD_ROOT/sdl-ttf-build" --parallel 2
 cmake --install "$BUILD_ROOT/sdl-ttf-build"
 
+# GitHub-hosted parallel builds can produce different GNU build IDs even when
+# the linked SDL shared-library payload is otherwise byte-identical. The build
+# ID is not part of the runtime contract, so remove it from the pinned
+# source-built shared libraries before packaging and hashing.
+for shared_library in "$PREFIX/lib/libSDL3.so.0" "$PREFIX/lib/libSDL3_ttf.so.0"; do
+  resolved_library="$(readlink -f "$shared_library")"
+  test -f "$resolved_library"
+  objcopy --remove-section .note.gnu.build-id "$resolved_library"
+done
+
 make -C "$SOURCE_DIR/quickjs" -j2 libquickjs.a
 strip --strip-debug "$SOURCE_DIR/quickjs/libquickjs.a"
 quickjs_static_sha256="$(sha256sum "$SOURCE_DIR/quickjs/libquickjs.a" | awk '{print $1}')"
