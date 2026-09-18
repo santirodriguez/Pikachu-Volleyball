@@ -247,6 +247,21 @@ test('native app exposes one menu state to keyboard pointer accessibility and pl
 });
 
 
+
+
+test('persisted control-code domain is representable by the native SDL bridge', () => {
+  const hostSource = read('desktop/native/native_main.c');
+  const generatedCode = /^(?:Key[A-Z]|Digit[0-9]|F(?:[1-9]|1[0-9]|2[0-4])|Numpad[0-9])$/;
+
+  for (const code of controlsModule.SUPPORTED_CONTROL_CODES) {
+    if (generatedCode.test(code)) continue;
+    assert.equal(
+      hostSource.includes(`return "${code}";`),
+      true,
+      `native scancode bridge must emit ${code}`
+    );
+  }
+});
 test('native host renders quick-rematch copy, interface themes and extended remaps', () => {
   const appSource = read('src/resources/js/native_app.js');
   const menuStateSource = read('src/resources/js/native_menu_state.js');
