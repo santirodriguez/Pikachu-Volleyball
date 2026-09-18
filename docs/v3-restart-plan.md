@@ -287,20 +287,42 @@ Passing this gate does not authorize Electron retirement or any Phase 6/release 
 
 ## Phase 6 — AppImage & release readiness
 
-Objective: turn the selected architecture into a reproducible release candidate.
+Objective: turn the integrated SDL3 + QuickJS architecture into a reproducible
+release candidate without changing accepted gameplay or performing any
+version/tag/publication action.
 
-Required evidence includes:
+Phase 6 is implemented on a focused task branch after `NATIVE_PARITY` has
+already passed and Phase 5 has been integrated. The release-readiness work:
 
-- reproducible AppImage generation;
-- final dependency inventory;
-- artifact size and startup measurements;
-- CI gates based on actual product requirements;
-- representative Linux distribution/desktop validation;
-- release documentation and remaining manual checks.
+- productionizes the native AppImage builder so it no longer uses the Phase 3
+  spike AppImage as a build primitive;
+- makes the generic desktop build commands point to the native runtime;
+- preserves legacy Electron preference migration with a deterministic LevelDB
+  fixture that does not require Electron tooling;
+- retires Electron and electron-builder from the supported desktop/release
+  dependency graph only after the independent native builder exists;
+- requires two clean independent builds of one exact head to produce
+  byte-identical AppImages and matching component fingerprints;
+- records source/toolchain provenance, dependency/ELF inventory, bundled
+  license material, artifact size and startup observations;
+- validates the exact reproducible AppImage on Debian 12, Ubuntu 22.04,
+  Ubuntu 24.04, Fedora 44 and openSUSE Leap 16.0, with direct AppImage
+  execution required on the primary build host and extract-and-run used only
+  as explicitly scoped container evidence;
+- keeps Web/PWA, shared-core parity and production AT-SPI accessibility gates
+  green;
+- retargets the dormant release workflow to build the native AppImage from a
+  definitive future tag.
 
-Gate: `RELEASE_READY`.
+The full Phase 6 contract is recorded in
+`docs/v3-release-readiness.md`.
 
-Promotion to `main`, version bump, tag creation, release publication, and distribution remain separate explicit decisions after this gate.
+Gate: `RELEASE_READY` only when all evidence is produced from the same exact
+task head and the native AppImage remains `<= 30 MiB`.
+
+Passing this gate still does not authorize the Phase 6 merge, promotion to
+`main`, choosing/changing the release version, version bump, tag creation,
+release publication, deployment, or public distribution.
 
 ## Operating rule
 
