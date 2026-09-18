@@ -41,6 +41,7 @@ typedef struct NativeRuntime {
 
 static bool render_frame(NativeRuntime *state, bool validate_pixels,
                          int *command_count_out);
+static char *read_text_file(const char *path, size_t *length_out);
 
 static bool join_path(char *output, size_t output_size, const char *base,
                       const char *relative) {
