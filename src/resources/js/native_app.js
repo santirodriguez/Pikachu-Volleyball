@@ -73,6 +73,7 @@ export function initialize(serializedPreferences = '{}') {
       createPlayerActionState(controlBindings, 2),
     ],
     fixedDownCodes: new Set(),
+    preferencesDirty: false,
     lastResult: core.finish(),
   };
   return true;
@@ -212,6 +213,7 @@ export function setSetting(name, value) {
   }
 
   active.settings = { ...active.settings, [name]: sanitized };
+  active.preferencesDirty = true;
   if (name === 'bgm' || name === 'sfx') {
     active.audioState.updateSettings(active.settings);
   }
@@ -227,6 +229,7 @@ export function setControlBinding(bindingId, code) {
   );
   if (!result.ok) return result;
   active.controlBindings = result.bindings;
+  active.preferencesDirty = true;
   rebuildActionStates(active);
   return {
     ok: true,
@@ -242,6 +245,7 @@ export function resetControlBindingScope(scope) {
     active.controlBindings,
     scope
   );
+  active.preferencesDirty = true;
   rebuildActionStates(active);
   return {
     ok: true,
@@ -257,4 +261,12 @@ export function resetDefaults() {
     setSetting(name, value);
   }
   return true;
+}
+
+
+export function consumePreferencesDirty() {
+  const active = requireApplication();
+  const dirty = active.preferencesDirty;
+  active.preferencesDirty = false;
+  return dirty;
 }

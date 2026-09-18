@@ -3,12 +3,17 @@
 #include <png.h>
 #include <quickjs.h>
 
+#include "native_audio.h"
+
+#include <errno.h>
 #include <limits.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #define WINDOW_WIDTH 1024
 #define WINDOW_HEIGHT 768
@@ -29,6 +34,9 @@ typedef struct NativeRuntime {
   int sprite_width;
   int sprite_height;
   char base_path[PATH_MAX];
+  char preferences_dir[PATH_MAX];
+  char preferences_path[PATH_MAX];
+  NativeAudio audio;
 } NativeRuntime;
 
 static bool render_frame(NativeRuntime *state, bool validate_pixels,
@@ -38,6 +46,54 @@ static bool join_path(char *output, size_t output_size, const char *base,
                       const char *relative) {
   int written = snprintf(output, output_size, "%s%s", base, relative);
   return written > 0 && (size_t)written < output_size;
+}
+
+static bool join_directory_file(char *output, size_t output_size,
+                                const char *directory, const char *filename) {
+  size_t length = strlen(directory);
+  const char *separator =
+      length > 0 && directory[length - 1] == '/' ? "" : "/";
+  int written =
+      snprintf(output, output_size, "%s%s%s", directory, separator, filename);
+  return written > 0 && (size_t)written < output_size;
+}
+
+static bool initialize_preferences_path(NativeRuntime *state) {
+  const char *override = getenv("PV_NATIVE_PREFS_DIR");
+  if (override && override[0] != '\0') {
+    if (strlen(override) >= sizeof(state->preferences_dir)) return false;
+    strcpy(state->preferences_dir, override);
+    if (mkdir(state->preferences_dir, 0700) != 0 && errno != EEXIST) {
+      fprintf(stderr, "Unable to create native preference directory: %s\n",
+              state->preferences_dir);
+      return false;
+    }
+  } else {
+    char *path = SDL_GetPrefPath("santirodriguez", "Pikachu Volleyball");
+    if (!path || strlen(path) >= sizeof(state->preferences_dir)) {
+      if (path) SDL_free(path);
+      return false;
+    }
+    strcpy(state->preferences_dir, path);
+    SDL_free(path);
+  }
+  return join_directory_file(state->preferences_path,
+                             sizeof(state->preferences_path),
+                             state->preferences_dir, "preferences.json");
+}
+
+static char *read_optional_preferences(const char *path) {
+  size_t length = 0;
+  char *content = read_text_file(path, &length);
+  if (content) return content;
+  if (errno != ENOENT) {
+    fprintf(stderr, "Unable to read native preferences: %s\n", path);
+    return NULL;
+  }
+  content = malloc(3);
+  if (!content) return NULL;
+  memcpy(content, "{}", 3);
+  return content;
 }
 
 static char *read_text_file(const char *path, size_t *length_out) {
@@ -150,6 +206,55 @@ static bool call_api(NativeRuntime *state, const char *name, int argc,
   return true;
 }
 
+static bool write_atomic_text(const char *path, const char *text, size_t length) {
+  char temporary[PATH_MAX];
+  int written = snprintf(temporary, sizeof(temporary), "%s.tmp", path);
+  if (written <= 0 || (size_t)written >= sizeof(temporary)) return false;
+
+  FILE *file = fopen(temporary, "wb");
+  if (!file) return false;
+  bool ok = fwrite(text, 1, length, file) == length && fflush(file) == 0;
+  if (ok && fsync(fileno(file)) != 0) ok = false;
+  if (fclose(file) != 0) ok = false;
+  if (!ok) {
+    unlink(temporary);
+    return false;
+  }
+  if (rename(temporary, path) != 0) {
+    unlink(temporary);
+    return false;
+  }
+  return true;
+}
+
+static bool persist_preferences(NativeRuntime *state) {
+  JSValue result;
+  if (!call_api(state, "getPersistedPreferencesJson", 0, NULL, &result)) {
+    return false;
+  }
+  size_t length = 0;
+  const char *text = JS_ToCStringLen(state->context, &length, result);
+  JS_FreeValue(state->context, result);
+  if (!text) return false;
+  bool ok = write_atomic_text(state->preferences_path, text, length);
+  JS_FreeCString(state->context, text);
+  if (!ok) {
+    fprintf(stderr, "Unable to atomically persist native preferences\n");
+  }
+  return ok;
+}
+
+static bool persist_preferences_if_dirty(NativeRuntime *state) {
+  JSValue result;
+  if (!call_api(state, "consumePreferencesDirty", 0, NULL, &result)) {
+    return false;
+  }
+  int dirty = JS_ToBool(state->context, result);
+  JS_FreeValue(state->context, result);
+  if (dirty < 0) return false;
+  return dirty == 0 || persist_preferences(state);
+}
+
 static bool initialize_javascript(NativeRuntime *state,
                                   const char *preferences_json) {
   char bundle_path[PATH_MAX];
@@ -220,6 +325,47 @@ static bool js_reset_inputs(NativeRuntime *state) {
 
 static bool js_step(NativeRuntime *state) {
   return call_api(state, "step", 0, NULL, NULL);
+}
+
+static bool js_set_setting(NativeRuntime *state, const char *name,
+                           const char *value) {
+  JSValue arguments[2] = {
+      JS_NewString(state->context, name),
+      JS_NewString(state->context, value),
+  };
+  JSValueConst const_arguments[2] = {arguments[0], arguments[1]};
+  JSValue result;
+  bool ok = call_api(state, "setSetting", 2, const_arguments, &result);
+  for (int index = 0; index < 2; index += 1) {
+    JS_FreeValue(state->context, arguments[index]);
+  }
+  if (!ok) return false;
+  int accepted = JS_ToBool(state->context, result);
+  JS_FreeValue(state->context, result);
+  return accepted == 1;
+}
+
+static bool js_set_control_binding(NativeRuntime *state,
+                                   const char *binding_id,
+                                   const char *code) {
+  JSValue arguments[2] = {
+      JS_NewString(state->context, binding_id),
+      JS_NewString(state->context, code),
+  };
+  JSValueConst const_arguments[2] = {arguments[0], arguments[1]};
+  JSValue result;
+  bool ok =
+      call_api(state, "setControlBinding", 2, const_arguments, &result);
+  for (int index = 0; index < 2; index += 1) {
+    JS_FreeValue(state->context, arguments[index]);
+  }
+  if (!ok) return false;
+  JSValue accepted_value =
+      JS_GetPropertyStr(state->context, result, "ok");
+  int accepted = JS_ToBool(state->context, accepted_value);
+  JS_FreeValue(state->context, accepted_value);
+  JS_FreeValue(state->context, result);
+  return accepted == 1;
 }
 
 static bool js_get_int(NativeRuntime *state, const char *name, int *value_out) {
@@ -364,6 +510,54 @@ static bool validate_framebuffer(NativeRuntime *state) {
 }
 
 
+static bool process_audio_commands(NativeRuntime *state) {
+  JSValue commands;
+  if (!call_api(state, "drainAudioCommands", 0, NULL, &commands)) {
+    return false;
+  }
+  uint32_t count = 0;
+  if (!js_array_length(state->context, commands, &count)) {
+    JS_FreeValue(state->context, commands);
+    return false;
+  }
+
+  bool ok = true;
+  for (uint32_t index = 0; index < count && ok; index += 1) {
+    JSValue command =
+        JS_GetPropertyUint32(state->context, commands, index);
+    char type[16];
+    char sound[32];
+    ok = !JS_IsException(command) &&
+         js_object_get_string(state->context, command, "type", type,
+                              sizeof(type)) &&
+         js_object_get_string(state->context, command, "sound", sound,
+                              sizeof(sound));
+    if (ok && strcmp(type, "play") == 0) {
+      double volume = 0;
+      double pan = 0;
+      bool loop = false;
+      ok = js_object_get_double(state->context, command, "volume", &volume) &&
+           js_object_get_double(state->context, command, "pan", &pan) &&
+           js_object_get_bool(state->context, command, "loop", &loop) &&
+           native_audio_play(&state->audio, sound, (float)volume, (float)pan,
+                             loop);
+    } else if (ok && strcmp(type, "stop") == 0) {
+      ok = native_audio_stop(&state->audio, sound);
+    } else if (ok) {
+      fprintf(stderr, "Unknown native audio command: %s\n", type);
+      ok = false;
+    }
+    JS_FreeValue(state->context, command);
+  }
+  JS_FreeValue(state->context, commands);
+  return ok;
+}
+
+static bool step_runtime(NativeRuntime *state) {
+  return js_step(state) && process_audio_commands(state) &&
+         persist_preferences_if_dirty(state);
+}
+
 static const char *scancode_to_code(SDL_Scancode scancode, char *buffer,
                                     size_t buffer_size) {
   if (scancode >= SDL_SCANCODE_A && scancode <= SDL_SCANCODE_Z) {
@@ -500,7 +694,7 @@ static bool run_self_test(NativeRuntime *state) {
     return false;
   }
 
-  if (!js_handle_key(state, "KeyZ", true, false) || !js_step(state) ||
+  if (!js_handle_key(state, "KeyZ", true, false) || !step_runtime(state) ||
       !js_handle_key(state, "KeyZ", false, false) ||
       !js_get_string(state, "getStateJson", json, sizeof(json)) ||
       !contains(json, "\"state\":\"menu\"")) {
@@ -508,7 +702,7 @@ static bool run_self_test(NativeRuntime *state) {
     return false;
   }
 
-  if (!js_step(state)) {
+  if (!step_runtime(state)) {
     fprintf(stderr, "Native menu presentation step failed\n");
     return false;
   }
@@ -549,7 +743,7 @@ static bool run_self_test(NativeRuntime *state) {
   JS_FreeValue(state->context, result);
   if (initialized_value != 1 ||
       !js_get_int(state, "getTargetFps", &target_fps) || target_fps != 30 ||
-      !js_handle_key(state, "KeyA", true, false) || !js_step(state) ||
+      !js_handle_key(state, "KeyA", true, false) || !step_runtime(state) ||
       !js_get_string(state, "getStateJson", json, sizeof(json)) ||
       !contains(json, "\"speed\":\"fast\"") ||
       !contains(json, "\"sfx\":\"mono\"") ||
@@ -559,7 +753,7 @@ static bool run_self_test(NativeRuntime *state) {
     return false;
   }
 
-  if (!js_reset_inputs(state) || !js_step(state) ||
+  if (!js_reset_inputs(state) || !step_runtime(state) ||
       !js_get_string(state, "getStateJson", json, sizeof(json)) ||
       !contains(json, "\"lastFrameInputs\":[{\"xDirection\":0")) {
     fprintf(stderr, "Focus-loss input reset contract failed\n");
@@ -571,7 +765,33 @@ static bool run_self_test(NativeRuntime *state) {
   printf("semantic_input_bridge=PASS\n");
   printf("settings_bridge=PASS\n");
   printf("focus_reset_bridge=PASS\n");
+  if (!native_audio_self_test(&state->audio) ||
+      !js_set_setting(state, "graphic", "soft") ||
+      !js_set_setting(state, "bgm", "off") ||
+      !js_set_setting(state, "colorScheme", "dark") ||
+      !js_set_control_binding(state, "p1.left", "KeyA") ||
+      !persist_preferences_if_dirty(state)) {
+    fprintf(stderr, "Native audio/preference self-test failed\n");
+    return false;
+  }
+
+  size_t persisted_length = 0;
+  char *persisted =
+      read_text_file(state->preferences_path, &persisted_length);
+  bool persisted_ok =
+      persisted && persisted_length > 0 &&
+      contains(persisted, "\"pv-offline-graphic\":\"soft\"") &&
+      contains(persisted, "\"pv-offline-bgm\":\"off\"") &&
+      contains(persisted, "\"colorScheme\":\"dark\"") &&
+      contains(persisted, "\"p1.left\":\"KeyA\"");
+  free(persisted);
+  if (!persisted_ok) {
+    fprintf(stderr, "Persisted native preference bytes did not match\n");
+    return false;
+  }
+
   printf("native_graphics_bridge=PASS\n");
+  printf("native_preferences_store=PASS\n");
   return true;
 }
 
@@ -692,6 +912,7 @@ static bool render_frame(NativeRuntime *state, bool validate_pixels,
 }
 
 static void destroy_runtime(NativeRuntime *state) {
+  native_audio_destroy(&state->audio);
   if (state->sprite_texture) SDL_DestroyTexture(state->sprite_texture);
   if (state->renderer) SDL_DestroyRenderer(state->renderer);
   if (state->window) SDL_DestroyWindow(state->window);
@@ -716,8 +937,13 @@ int main(int argc, char **argv) {
     return 2;
   }
   strcpy(state.base_path, base_path);
+  if (!native_audio_init(&state.audio, state.base_path) ||
+      !initialize_preferences_path(&state)) {
+    fprintf(stderr, "Unable to initialize native platform paths\n");
+    return 2;
+  }
 
-  if (!SDL_Init(SDL_INIT_VIDEO)) {
+  if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO)) {
     fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
     return 2;
   }
@@ -755,10 +981,13 @@ int main(int argc, char **argv) {
     return 2;
   }
 
-  if (!initialize_javascript(&state, "{}")) {
+  char *preferences = read_optional_preferences(state.preferences_path);
+  if (!preferences || !initialize_javascript(&state, preferences)) {
+    free(preferences);
     destroy_runtime(&state);
     return 2;
   }
+  free(preferences);
 
   if (self_test) {
     bool ok = run_self_test(&state);
@@ -785,7 +1014,13 @@ int main(int argc, char **argv) {
           return 2;
         }
       } else if (event.type == SDL_EVENT_WINDOW_FOCUS_LOST) {
-        if (!js_reset_inputs(&state)) {
+        if (!js_reset_inputs(&state) ||
+            !native_audio_set_muted(&state.audio, true)) {
+          destroy_runtime(&state);
+          return 2;
+        }
+      } else if (event.type == SDL_EVENT_WINDOW_FOCUS_GAINED) {
+        if (!native_audio_set_muted(&state.audio, false)) {
           destroy_runtime(&state);
           return 2;
         }
@@ -807,7 +1042,9 @@ int main(int argc, char **argv) {
       next_tick = now + (frame_ms > 0 ? frame_ms : 1);
     }
 
-    if (!render_frame(&state, false, NULL)) {
+    if (!native_audio_pump(&state.audio) ||
+        !persist_preferences_if_dirty(&state) ||
+        !render_frame(&state, false, NULL)) {
       destroy_runtime(&state);
       return 2;
     }
