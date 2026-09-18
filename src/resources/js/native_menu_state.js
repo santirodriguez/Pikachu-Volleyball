@@ -565,9 +565,11 @@ export function createNativeMenuState(commands, initialLocale = 'en') {
     const navItems = buildNavItems();
     const panelItems = buildPanelItems();
     const modalItems = buildModalItems();
+    const settings = commands.getSettings();
     return {
       visible,
       locale,
+      colorScheme: settings.colorScheme === 'dark' ? 'dark' : 'light',
       mode,
       title: copy.paused,
       panelTitle: section.title || copy.nav[currentNavId()],
@@ -808,6 +810,7 @@ export function createNativeMenuState(commands, initialLocale = 'en') {
     handleAccessibilityAction,
     getFrame,
     getLocale: () => locale,
+    getQuickRematchHint: () => strings().quickRematchHint,
     setLocale,
     isVisible: () => visible,
   });
