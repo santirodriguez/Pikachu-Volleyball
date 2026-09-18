@@ -16,9 +16,9 @@ rm -rf "$BUILD_ROOT"
 mkdir -p "$BUILD_ROOT" "$EVIDENCE_DIR"
 export SOURCE_DATE_EPOCH="$(git -C "$ROOT" show -s --format=%ct "$SOURCE_HEAD_SHA")"
 export PV_NATIVE_BUNDLE_DIR="$BUILD_ROOT"
-export CFLAGS="${CFLAGS:+$CFLAGS }-ffile-prefix-map=$BUILD_ROOT=/build -fdebug-prefix-map=$BUILD_ROOT=/build -ffile-prefix-map=$ROOT=/src -fdebug-prefix-map=$ROOT=/src"
-export CXXFLAGS="${CXXFLAGS:+$CXXFLAGS }-ffile-prefix-map=$BUILD_ROOT=/build -fdebug-prefix-map=$BUILD_ROOT=/build -ffile-prefix-map=$ROOT=/src -fdebug-prefix-map=$ROOT=/src"
-export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }--remap-path-prefix=$BUILD_ROOT=/build --remap-path-prefix=$ROOT=/src"
+export CFLAGS="${CFLAGS:+$CFLAGS }-ffile-prefix-map=$ROOT=/src -fdebug-prefix-map=$ROOT=/src -ffile-prefix-map=$BUILD_ROOT=/build -fdebug-prefix-map=$BUILD_ROOT=/build"
+export CXXFLAGS="${CXXFLAGS:+$CXXFLAGS }-ffile-prefix-map=$ROOT=/src -fdebug-prefix-map=$ROOT=/src -ffile-prefix-map=$BUILD_ROOT=/build -fdebug-prefix-map=$BUILD_ROOT=/build"
+export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }--remap-path-prefix=$ROOT=/src --remap-path-prefix=$BUILD_ROOT=/build"
 
 npx webpack --config "$ROOT/webpack.native.js"
 if [[ ! -s "$BUNDLE" ]]; then
