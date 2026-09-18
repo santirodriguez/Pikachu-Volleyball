@@ -342,3 +342,46 @@ test('native menu parity restores the colorful integrated-menu visual language',
   assert.match(host, /PV_NATIVE_MENU_FRAMEBUFFER_PATH/);
   assert.match(build, /native-menu-framebuffer\.bmp/);
 });
+
+test('native menu polish uses a proportional primary font with Unicode fallback', () => {
+  const toolchain = read('scripts/build-native-toolchain.sh');
+  const packaging = read('scripts/build-native-appimage.sh');
+  const header = read('desktop/native/native_menu_renderer.h');
+  const renderer = read('desktop/native/native_menu_renderer.c');
+
+  assert.match(toolchain, /DEJAVU_VERSION="2\.37"/);
+  assert.match(
+    toolchain,
+    /DEJAVU_SHA256="fa9ca4d13871dd122f61258a80d01751d603b4d3ee14095d65453b4e846e17d7"/
+  );
+  assert.match(packaging, /fonts\/DejaVuSans\.ttf/);
+  assert.match(packaging, /DejaVu-LICENSE\.txt/);
+  assert.match(header, /void \*fallback_font;/);
+  assert.match(renderer, /TTF_AddFallbackFont\(font, fallback\)/);
+  assert.match(renderer, /TTF_HINTING_LIGHT/);
+  assert.match(renderer, /TTF_SetFontKerning\(font, true\)/);
+  assert.match(renderer, /fonts\/DejaVuSans\.ttf/);
+  assert.match(renderer, /fonts\/unifont-17\.0\.04\.otf/);
+});
+
+test('native confirmation actions remain horizontally inside the modal card', () => {
+  const menuState = read('src/resources/js/native_menu_state.js');
+  const host = read('desktop/native/native_main.c');
+  const packaging = read('scripts/build-native-appimage.sh');
+
+  assert.match(
+    menuState,
+    /MODAL_ACCEPT_LAYOUT[\s\S]*x: 106,[\s\S]*y: 188,[\s\S]*height: 22/
+  );
+  assert.match(
+    menuState,
+    /MODAL_CANCEL_LAYOUT[\s\S]*x: 222,[\s\S]*y: 188,[\s\S]*height: 22/
+  );
+  assert.match(
+    menuState,
+    /id: 'modal:cancel'[\s\S]*index: 0,[\s\S]*layout: MODAL_CANCEL_LAYOUT/
+  );
+  assert.match(host, /PV_NATIVE_MENU_MODAL_FRAMEBUFFER_PATH/);
+  assert.match(host, /native_menu_modal_layout=PASS/);
+  assert.match(packaging, /native-menu-modal-framebuffer\.bmp/);
+});

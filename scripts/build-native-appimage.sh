@@ -36,6 +36,9 @@ QUICKJS_SOURCE="$TOOLCHAIN_ROOT/sources/quickjs"
 SDL_SOURCE="$TOOLCHAIN_ROOT/sources/sdl"
 SDL_TTF_SOURCE="$TOOLCHAIN_ROOT/sources/sdl-ttf"
 UNIFONT_FILE="$TOOLCHAIN_ROOT/downloads/unifont-17.0.04.otf"
+DEJAVU_ROOT="$TOOLCHAIN_ROOT/sources/dejavu/dejavu-fonts-ttf-2.37"
+DEJAVU_FONT="$DEJAVU_ROOT/ttf/DejaVuSans.ttf"
+DEJAVU_LICENSE="$DEJAVU_ROOT/LICENSE"
 APPIMAGETOOL="$TOOLCHAIN_ROOT/downloads/appimagetool-x86_64.AppImage"
 APPIMAGE_RUNTIME="$TOOLCHAIN_ROOT/downloads/runtime-x86_64"
 
@@ -43,6 +46,8 @@ for required in \
   "$PREFIX" \
   "$QUICKJS_SOURCE/libquickjs.a" \
   "$UNIFONT_FILE" \
+  "$DEJAVU_FONT" \
+  "$DEJAVU_LICENSE" \
   "$APPIMAGETOOL" \
   "$APPIMAGE_RUNTIME"; do
   if [[ ! -e "$required" ]]; then
@@ -149,6 +154,10 @@ mkdir -p "$APPDIR/usr/bin/assets" "$APPDIR/usr/bin/fonts" "$APPDIR/usr/lib" \
 
 install -m 0644 "$UNIFONT_FILE" \
   "$APPDIR/usr/bin/fonts/unifont-17.0.04.otf"
+install -m 0644 "$DEJAVU_FONT" \
+  "$APPDIR/usr/bin/fonts/DejaVuSans.ttf"
+install -m 0644 "$DEJAVU_LICENSE" \
+  "$APPDIR/usr/share/licenses/pikachu-volleyball-native/DejaVu-LICENSE.txt"
 install -m 0644 "$ROOT/src/resources/assets/images/sprite_sheet.png" \
   "$APPDIR/usr/bin/assets/sprite_sheet.png"
 install -m 0644 "$ROOT/src/resources/assets/images/sprite_sheet.json" \
@@ -324,6 +333,7 @@ fi
 
 framebuffer="$EVIDENCE_DIR/native-game-framebuffer.bmp"
 menu_framebuffer="$EVIDENCE_DIR/native-menu-framebuffer.bmp"
+modal_framebuffer="$EVIDENCE_DIR/native-menu-modal-framebuffer.bmp"
 render_trace="$EVIDENCE_DIR/native-menu-render.json"
 preference_root="$BUILD_ROOT/selftest-preferences"
 rm -rf "$preference_root"
@@ -331,6 +341,7 @@ mkdir -p "$preference_root/prepackage"
 xvfb-run -a env \
   SDL_AUDIODRIVER=dummy SDL_RENDER_DRIVER=software \
   PV_NATIVE_FRAMEBUFFER_PATH="$framebuffer" PV_NATIVE_MENU_FRAMEBUFFER_PATH="$menu_framebuffer" \
+  PV_NATIVE_MENU_MODAL_FRAMEBUFFER_PATH="$modal_framebuffer" \
   PV_NATIVE_RENDER_TRACE_PATH="$render_trace" \
   PV_NATIVE_EXPECT_MIGRATION=1 PV_NATIVE_PREFS_DIR="$preference_root/prepackage" \
   "$APPDIR/AppRun" --self-test | tee "$EVIDENCE_DIR/prepackage-self-test.txt"
@@ -341,8 +352,603 @@ grep -q '^native_bgm_position_preserved=PASS$' "$EVIDENCE_DIR/prepackage-self-te
 grep -q '^native_remap_scancode_coverage=PASS$' "$EVIDENCE_DIR/prepackage-self-test.txt"
 grep -q '^native_quick_rematch_hint=PASS$' "$EVIDENCE_DIR/prepackage-self-test.txt"
 grep -q '^native_menu_theme=PASS$' "$EVIDENCE_DIR/prepackage-self-test.txt"
-grep -q '^native_menu_visual_parity=PASS$' "$EVIDENCE_DIR/prepackage-self-test.txt"
-grep -q '^native_menu_framebuffer=PASS$' "$EVIDENCE_DIR/prepackage-self-test.txt"
+grep -q '^native_menu_visual_parity=PASS
+grep -q '^native_preferences_store=PASS$' "$EVIDENCE_DIR/prepackage-self-test.txt"
+grep -q '^electron_migration_runtime=PASS$' "$EVIDENCE_DIR/prepackage-self-test.txt"
+grep -q '^native_pointer_menu=PASS$' "$EVIDENCE_DIR/prepackage-self-test.txt"
+grep -q '^native_locale_menu=PASS$' "$EVIDENCE_DIR/prepackage-self-test.txt"
+grep -q '^native_external_url_allowlist=PASS$' "$EVIDENCE_DIR/prepackage-self-test.txt"
+grep -q '^native_quit_path=PASS$' "$EVIDENCE_DIR/prepackage-self-test.txt"
+grep -q '^native_startup_localization=PASS$' "$EVIDENCE_DIR/prepackage-self-test.txt"
+grep -q '^native_framebuffer_variation=PASS$' "$EVIDENCE_DIR/prepackage-self-test.txt"
+test -s "$framebuffer"
+test -s "$menu_framebuffer"
+test -s "$modal_framebuffer"
+test -s "$render_trace"
+framebuffer_bytes="$(stat -c%s "$framebuffer")"
+framebuffer_sha256="$(sha256sum "$framebuffer" | awk '{print $1}')"
+menu_framebuffer_bytes="$(stat -c%s "$menu_framebuffer")"
+menu_framebuffer_sha256="$(sha256sum "$menu_framebuffer" | awk '{print $1}')"
+modal_framebuffer_bytes="$(stat -c%s "$modal_framebuffer")"
+modal_framebuffer_sha256="$(sha256sum "$modal_framebuffer" | awk '{print $1}')"
+render_trace_bytes="$(stat -c%s "$render_trace")"
+render_trace_sha256="$(sha256sum "$render_trace" | awk '{print $1}')"
+
+# Normalize all staged metadata before SquashFS creation.
+find "$APPDIR" -exec touch -h -d "@$SOURCE_DATE_EPOCH" {} +
+find "$APPDIR" -printf '%P\t%y\t%s\t%TY-%Tm-%TdT%TH:%TM:%TS\n' | sort \
+  > "$EVIDENCE_DIR/appdir-inventory.tsv"
+(
+  cd "$APPDIR"
+  find . -type f -print0 | sort -z | xargs -0 sha256sum
+) > "$EVIDENCE_DIR/appdir-sha256.txt"
+
+ARCH=x86_64 APPIMAGE_EXTRACT_AND_RUN=1 "$APPIMAGETOOL" \
+  --runtime-file "$APPIMAGE_RUNTIME" \
+  --comp zstd \
+  --no-appstream \
+  "$APPDIR" "$OUTPUT"
+chmod 0755 "$OUTPUT"
+
+bytes="$(stat -c%s "$OUTPUT")"
+mib="$(awk -v bytes="$bytes" 'BEGIN { printf "%.2f", bytes / 1048576 }')"
+sha256="$(sha256sum "$OUTPUT" | awk '{print $1}')"
+headroom_bytes=$((MAX_APPIMAGE_BYTES - bytes))
+bundle_bytes="$(stat -c%s "$BUNDLE")"
+bundle_sha256="$(sha256sum "$BUNDLE" | awk '{print $1}')"
+host_bytes="$(stat -c%s "$BINARY")"
+host_sha256="$(sha256sum "$BINARY" | awk '{print $1}')"
+importer_bytes="$(stat -c%s "$IMPORTER")"
+importer_sha256="$(sha256sum "$IMPORTER" | awk '{print $1}')"
+provenance_sha256="$(sha256sum "$APPDIR/provenance.json" | awk '{print $1}')"
+appdir_inventory_sha256="$(sha256sum "$EVIDENCE_DIR/appdir-inventory.tsv" | awk '{print $1}')"
+appdir_content_sha256="$(sha256sum "$EVIDENCE_DIR/appdir-sha256.txt" | awk '{print $1}')"
+
+if (( bytes > MAX_APPIMAGE_BYTES )); then
+  {
+    echo 'size_gate=FAIL'
+    echo "source_head_sha=$SOURCE_HEAD_SHA"
+    echo "bytes=$bytes"
+    echo "mib=$mib"
+    echo "limit_bytes=$MAX_APPIMAGE_BYTES"
+    echo "native_bundle_bytes=$bundle_bytes"
+    echo "native_bundle_sha256=$bundle_sha256"
+  } | tee "$EVIDENCE_DIR/summary.txt"
+  echo 'Native release AppImage exceeds the 30 MiB architecture budget.' >&2
+  exit 1
+fi
+
+is_known_appimage_host_limit() {
+  local log_file="$1"
+  grep -Eiq \
+    'dlopen\(\): error loading libfuse|AppImages require FUSE|Cannot mount AppImage|failed to open /dev/fuse|fusermount.*failed|FUSE setup failed' \
+    "$log_file"
+}
+
+run_direct_appimage_test() {
+  local log_file="$EVIDENCE_DIR/direct-self-test.txt"
+  set +e
+  rm -rf "$preference_root/direct"; mkdir -p "$preference_root/direct"
+  timeout 30 xvfb-run -a env SDL_AUDIODRIVER=dummy SDL_RENDER_DRIVER=software \
+    PV_NATIVE_EXPECT_MIGRATION=1 PV_NATIVE_PREFS_DIR="$preference_root/direct" \
+    "$OUTPUT" --self-test > "$log_file" 2>&1
+  local status=$?
+  set -e
+  if [[ "$status" -eq 0 ]]; then
+    grep -q '^native_host_self_test=PASS$' "$log_file"
+    printf 'PASS'
+    return 0
+  fi
+  if is_known_appimage_host_limit "$log_file"; then
+    printf 'SKIPPED_HOST_LIMITATION'
+    return 0
+  fi
+  cat "$log_file" >&2
+  echo "Direct native AppImage self-test failed with status $status." >&2
+  return 1
+}
+
+direct_result="$(run_direct_appimage_test)"
+
+rm -rf "$preference_root/extract-run"; mkdir -p "$preference_root/extract-run"
+APPIMAGE_EXTRACT_AND_RUN=1 timeout 30 xvfb-run -a env \
+  SDL_AUDIODRIVER=dummy SDL_RENDER_DRIVER=software \
+  PV_NATIVE_EXPECT_MIGRATION=1 PV_NATIVE_PREFS_DIR="$preference_root/extract-run" \
+  "$OUTPUT" --self-test \
+  | tee "$EVIDENCE_DIR/extract-run-self-test.txt"
+grep -q '^native_host_self_test=PASS$' "$EVIDENCE_DIR/extract-run-self-test.txt"
+
+rm -rf "$BUILD_ROOT/verify"
+mkdir -p "$BUILD_ROOT/verify"
+(
+  cd "$BUILD_ROOT/verify"
+  "$OUTPUT" --appimage-extract >/dev/null
+)
+rm -rf "$preference_root/extracted-apprun"; mkdir -p "$preference_root/extracted-apprun"
+xvfb-run -a env SDL_AUDIODRIVER=dummy SDL_RENDER_DRIVER=software \
+  PV_NATIVE_EXPECT_MIGRATION=1 PV_NATIVE_PREFS_DIR="$preference_root/extracted-apprun" \
+  "$BUILD_ROOT/verify/squashfs-root/AppRun" --self-test \
+  | tee "$EVIDENCE_DIR/extracted-apprun-self-test.txt"
+grep -q '^native_host_self_test=PASS$' "$EVIDENCE_DIR/extracted-apprun-self-test.txt"
+
+packaged_bundle="$BUILD_ROOT/verify/squashfs-root/usr/bin/native-app.bundle.js"
+packaged_host="$BUILD_ROOT/verify/squashfs-root/usr/bin/pikachu-volleyball-native"
+packaged_importer="$BUILD_ROOT/verify/squashfs-root/usr/bin/electron-preferences-importer"
+if [[ "$(sha256sum "$packaged_bundle" | awk '{print $1}')" != "$bundle_sha256" ]]; then
+  echo 'Native application bundle changed during packaging.' >&2
+  exit 1
+fi
+if [[ "$(sha256sum "$packaged_host" | awk '{print $1}')" != "$host_sha256" ]]; then
+  echo 'Native host binary changed during packaging.' >&2
+  exit 1
+fi
+if [[ "$(sha256sum "$packaged_importer" | awk '{print $1}')" != "$importer_sha256" ]]; then
+  echo 'Electron preference importer changed during packaging.' >&2
+  exit 1
+fi
+
+printf '%s  %s\n' "$sha256" "$(basename "$OUTPUT")" \
+  > "$BUILD_ROOT/SHA256SUMS.txt"
+
+{
+  echo 'size_gate=PASS'
+  echo "source_head_sha=$SOURCE_HEAD_SHA"
+  echo "bytes=$bytes"
+  echo "mib=$mib"
+  echo "limit_bytes=$MAX_APPIMAGE_BYTES"
+  echo "headroom_bytes=$headroom_bytes"
+  echo "sha256=$sha256"
+  echo "native_bundle_bytes=$bundle_bytes"
+  echo "native_bundle_sha256=$bundle_sha256"
+  echo "native_host_bytes=$host_bytes"
+  echo "native_host_sha256=$host_sha256"
+  echo "electron_importer_bytes=$importer_bytes"
+  echo "electron_importer_sha256=$importer_sha256"
+  echo "leveldb_version=$LEVELDB_VERSION"
+  echo "leveldb_source_sha256=$LEVELDB_SHA256"
+  echo "accesskit_version=$ACCESSKIT_VERSION"
+  echo "accesskit_commit=$actual_accesskit_commit"
+  echo "accesskit_static_bytes=$(stat -c%s "$ACCESSKIT_STATIC")"
+  echo "accesskit_static_sha256=$(sha256sum "$ACCESSKIT_STATIC" | awk '{print $1}')"
+  echo "quickjs_static_sha256=$(sha256sum "$QUICKJS_SOURCE/libquickjs.a" | awk '{print $1}')"
+  echo "render_trace_bytes=$render_trace_bytes"
+  echo "render_trace_sha256=$render_trace_sha256"
+  echo "framebuffer_bytes=$framebuffer_bytes"
+  echo "framebuffer_sha256=$framebuffer_sha256"
+  echo "menu_framebuffer_bytes=$menu_framebuffer_bytes"
+  echo "menu_framebuffer_sha256=$menu_framebuffer_sha256"
+  echo "modal_framebuffer_bytes=$modal_framebuffer_bytes"
+  echo "modal_framebuffer_sha256=$modal_framebuffer_sha256"
+  echo "provenance_sha256=$provenance_sha256"
+  echo "appdir_inventory_sha256=$appdir_inventory_sha256"
+  echo "appdir_content_sha256=$appdir_content_sha256"
+  echo "build_environment_sha256=$build_environment_sha256"
+  echo "runtime_packages_sha256=$runtime_packages_sha256"
+  echo "source_date_epoch=$SOURCE_DATE_EPOCH"
+  echo "direct_appimage_self_test=$direct_result"
+  echo 'extract_run_self_test=PASS'
+  echo 'extracted_apprun_self_test=PASS'
+  echo 'shared_core_bridge=PASS'
+  echo 'semantic_input_bridge=PASS'
+  echo 'focus_reset_bridge=PASS'
+  echo 'native_graphics_bridge=PASS'
+  echo 'native_audio_mixer=PASS'
+  echo 'native_preferences_store=PASS'
+  echo 'electron_migration_runtime=PASS'
+  echo 'native_pointer_menu=PASS'
+  echo 'native_locale_menu=PASS'
+  echo 'native_menu_modal_layout=PASS'
+  echo 'native_external_url_allowlist=PASS'
+  echo 'native_quit_path=PASS'
+  echo 'native_startup_localization=PASS'
+  echo 'native_startup_error_locales=PASS'
+  echo 'native_release_builder=PASS'
+  echo 'phase3_build_primitive_dependency=NONE'
+  echo 'legacy_electron_fixture=PASS'
+  if find "$APPDIR/usr/share/licenses/pikachu-volleyball-native/runtime" \
+      -type f -name '*.copyright' -print -quit | grep -q .; then
+    echo 'runtime_license_inventory=PASS'
+  else
+    echo 'runtime_license_inventory=FAIL'
+  fi
+} | tee "$EVIDENCE_DIR/summary.txt"
+
+grep -Fxq 'runtime_license_inventory=PASS' "$EVIDENCE_DIR/summary.txt"
+ "$EVIDENCE_DIR/prepackage-self-test.txt"
+grep -q '^native_menu_framebuffer=PASS
+grep -q '^native_preferences_store=PASS$' "$EVIDENCE_DIR/prepackage-self-test.txt"
+grep -q '^electron_migration_runtime=PASS$' "$EVIDENCE_DIR/prepackage-self-test.txt"
+grep -q '^native_pointer_menu=PASS$' "$EVIDENCE_DIR/prepackage-self-test.txt"
+grep -q '^native_locale_menu=PASS$' "$EVIDENCE_DIR/prepackage-self-test.txt"
+grep -q '^native_external_url_allowlist=PASS$' "$EVIDENCE_DIR/prepackage-self-test.txt"
+grep -q '^native_quit_path=PASS$' "$EVIDENCE_DIR/prepackage-self-test.txt"
+grep -q '^native_startup_localization=PASS$' "$EVIDENCE_DIR/prepackage-self-test.txt"
+grep -q '^native_framebuffer_variation=PASS$' "$EVIDENCE_DIR/prepackage-self-test.txt"
+test -s "$framebuffer"
+test -s "$menu_framebuffer"
+test -s "$render_trace"
+framebuffer_bytes="$(stat -c%s "$framebuffer")"
+framebuffer_sha256="$(sha256sum "$framebuffer" | awk '{print $1}')"
+menu_framebuffer_bytes="$(stat -c%s "$menu_framebuffer")"
+menu_framebuffer_sha256="$(sha256sum "$menu_framebuffer" | awk '{print $1}')"
+render_trace_bytes="$(stat -c%s "$render_trace")"
+render_trace_sha256="$(sha256sum "$render_trace" | awk '{print $1}')"
+
+# Normalize all staged metadata before SquashFS creation.
+find "$APPDIR" -exec touch -h -d "@$SOURCE_DATE_EPOCH" {} +
+find "$APPDIR" -printf '%P\t%y\t%s\t%TY-%Tm-%TdT%TH:%TM:%TS\n' | sort \
+  > "$EVIDENCE_DIR/appdir-inventory.tsv"
+(
+  cd "$APPDIR"
+  find . -type f -print0 | sort -z | xargs -0 sha256sum
+) > "$EVIDENCE_DIR/appdir-sha256.txt"
+
+ARCH=x86_64 APPIMAGE_EXTRACT_AND_RUN=1 "$APPIMAGETOOL" \
+  --runtime-file "$APPIMAGE_RUNTIME" \
+  --comp zstd \
+  --no-appstream \
+  "$APPDIR" "$OUTPUT"
+chmod 0755 "$OUTPUT"
+
+bytes="$(stat -c%s "$OUTPUT")"
+mib="$(awk -v bytes="$bytes" 'BEGIN { printf "%.2f", bytes / 1048576 }')"
+sha256="$(sha256sum "$OUTPUT" | awk '{print $1}')"
+headroom_bytes=$((MAX_APPIMAGE_BYTES - bytes))
+bundle_bytes="$(stat -c%s "$BUNDLE")"
+bundle_sha256="$(sha256sum "$BUNDLE" | awk '{print $1}')"
+host_bytes="$(stat -c%s "$BINARY")"
+host_sha256="$(sha256sum "$BINARY" | awk '{print $1}')"
+importer_bytes="$(stat -c%s "$IMPORTER")"
+importer_sha256="$(sha256sum "$IMPORTER" | awk '{print $1}')"
+provenance_sha256="$(sha256sum "$APPDIR/provenance.json" | awk '{print $1}')"
+appdir_inventory_sha256="$(sha256sum "$EVIDENCE_DIR/appdir-inventory.tsv" | awk '{print $1}')"
+appdir_content_sha256="$(sha256sum "$EVIDENCE_DIR/appdir-sha256.txt" | awk '{print $1}')"
+
+if (( bytes > MAX_APPIMAGE_BYTES )); then
+  {
+    echo 'size_gate=FAIL'
+    echo "source_head_sha=$SOURCE_HEAD_SHA"
+    echo "bytes=$bytes"
+    echo "mib=$mib"
+    echo "limit_bytes=$MAX_APPIMAGE_BYTES"
+    echo "native_bundle_bytes=$bundle_bytes"
+    echo "native_bundle_sha256=$bundle_sha256"
+  } | tee "$EVIDENCE_DIR/summary.txt"
+  echo 'Native release AppImage exceeds the 30 MiB architecture budget.' >&2
+  exit 1
+fi
+
+is_known_appimage_host_limit() {
+  local log_file="$1"
+  grep -Eiq \
+    'dlopen\(\): error loading libfuse|AppImages require FUSE|Cannot mount AppImage|failed to open /dev/fuse|fusermount.*failed|FUSE setup failed' \
+    "$log_file"
+}
+
+run_direct_appimage_test() {
+  local log_file="$EVIDENCE_DIR/direct-self-test.txt"
+  set +e
+  rm -rf "$preference_root/direct"; mkdir -p "$preference_root/direct"
+  timeout 30 xvfb-run -a env SDL_AUDIODRIVER=dummy SDL_RENDER_DRIVER=software \
+    PV_NATIVE_EXPECT_MIGRATION=1 PV_NATIVE_PREFS_DIR="$preference_root/direct" \
+    "$OUTPUT" --self-test > "$log_file" 2>&1
+  local status=$?
+  set -e
+  if [[ "$status" -eq 0 ]]; then
+    grep -q '^native_host_self_test=PASS$' "$log_file"
+    printf 'PASS'
+    return 0
+  fi
+  if is_known_appimage_host_limit "$log_file"; then
+    printf 'SKIPPED_HOST_LIMITATION'
+    return 0
+  fi
+  cat "$log_file" >&2
+  echo "Direct native AppImage self-test failed with status $status." >&2
+  return 1
+}
+
+direct_result="$(run_direct_appimage_test)"
+
+rm -rf "$preference_root/extract-run"; mkdir -p "$preference_root/extract-run"
+APPIMAGE_EXTRACT_AND_RUN=1 timeout 30 xvfb-run -a env \
+  SDL_AUDIODRIVER=dummy SDL_RENDER_DRIVER=software \
+  PV_NATIVE_EXPECT_MIGRATION=1 PV_NATIVE_PREFS_DIR="$preference_root/extract-run" \
+  "$OUTPUT" --self-test \
+  | tee "$EVIDENCE_DIR/extract-run-self-test.txt"
+grep -q '^native_host_self_test=PASS$' "$EVIDENCE_DIR/extract-run-self-test.txt"
+
+rm -rf "$BUILD_ROOT/verify"
+mkdir -p "$BUILD_ROOT/verify"
+(
+  cd "$BUILD_ROOT/verify"
+  "$OUTPUT" --appimage-extract >/dev/null
+)
+rm -rf "$preference_root/extracted-apprun"; mkdir -p "$preference_root/extracted-apprun"
+xvfb-run -a env SDL_AUDIODRIVER=dummy SDL_RENDER_DRIVER=software \
+  PV_NATIVE_EXPECT_MIGRATION=1 PV_NATIVE_PREFS_DIR="$preference_root/extracted-apprun" \
+  "$BUILD_ROOT/verify/squashfs-root/AppRun" --self-test \
+  | tee "$EVIDENCE_DIR/extracted-apprun-self-test.txt"
+grep -q '^native_host_self_test=PASS$' "$EVIDENCE_DIR/extracted-apprun-self-test.txt"
+
+packaged_bundle="$BUILD_ROOT/verify/squashfs-root/usr/bin/native-app.bundle.js"
+packaged_host="$BUILD_ROOT/verify/squashfs-root/usr/bin/pikachu-volleyball-native"
+packaged_importer="$BUILD_ROOT/verify/squashfs-root/usr/bin/electron-preferences-importer"
+if [[ "$(sha256sum "$packaged_bundle" | awk '{print $1}')" != "$bundle_sha256" ]]; then
+  echo 'Native application bundle changed during packaging.' >&2
+  exit 1
+fi
+if [[ "$(sha256sum "$packaged_host" | awk '{print $1}')" != "$host_sha256" ]]; then
+  echo 'Native host binary changed during packaging.' >&2
+  exit 1
+fi
+if [[ "$(sha256sum "$packaged_importer" | awk '{print $1}')" != "$importer_sha256" ]]; then
+  echo 'Electron preference importer changed during packaging.' >&2
+  exit 1
+fi
+
+printf '%s  %s\n' "$sha256" "$(basename "$OUTPUT")" \
+  > "$BUILD_ROOT/SHA256SUMS.txt"
+
+{
+  echo 'size_gate=PASS'
+  echo "source_head_sha=$SOURCE_HEAD_SHA"
+  echo "bytes=$bytes"
+  echo "mib=$mib"
+  echo "limit_bytes=$MAX_APPIMAGE_BYTES"
+  echo "headroom_bytes=$headroom_bytes"
+  echo "sha256=$sha256"
+  echo "native_bundle_bytes=$bundle_bytes"
+  echo "native_bundle_sha256=$bundle_sha256"
+  echo "native_host_bytes=$host_bytes"
+  echo "native_host_sha256=$host_sha256"
+  echo "electron_importer_bytes=$importer_bytes"
+  echo "electron_importer_sha256=$importer_sha256"
+  echo "leveldb_version=$LEVELDB_VERSION"
+  echo "leveldb_source_sha256=$LEVELDB_SHA256"
+  echo "accesskit_version=$ACCESSKIT_VERSION"
+  echo "accesskit_commit=$actual_accesskit_commit"
+  echo "accesskit_static_bytes=$(stat -c%s "$ACCESSKIT_STATIC")"
+  echo "accesskit_static_sha256=$(sha256sum "$ACCESSKIT_STATIC" | awk '{print $1}')"
+  echo "quickjs_static_sha256=$(sha256sum "$QUICKJS_SOURCE/libquickjs.a" | awk '{print $1}')"
+  echo "render_trace_bytes=$render_trace_bytes"
+  echo "render_trace_sha256=$render_trace_sha256"
+  echo "framebuffer_bytes=$framebuffer_bytes"
+  echo "framebuffer_sha256=$framebuffer_sha256"
+  echo "menu_framebuffer_bytes=$menu_framebuffer_bytes"
+  echo "menu_framebuffer_sha256=$menu_framebuffer_sha256"
+  echo "provenance_sha256=$provenance_sha256"
+  echo "appdir_inventory_sha256=$appdir_inventory_sha256"
+  echo "appdir_content_sha256=$appdir_content_sha256"
+  echo "build_environment_sha256=$build_environment_sha256"
+  echo "runtime_packages_sha256=$runtime_packages_sha256"
+  echo "source_date_epoch=$SOURCE_DATE_EPOCH"
+  echo "direct_appimage_self_test=$direct_result"
+  echo 'extract_run_self_test=PASS'
+  echo 'extracted_apprun_self_test=PASS'
+  echo 'shared_core_bridge=PASS'
+  echo 'semantic_input_bridge=PASS'
+  echo 'focus_reset_bridge=PASS'
+  echo 'native_graphics_bridge=PASS'
+  echo 'native_audio_mixer=PASS'
+  echo 'native_preferences_store=PASS'
+  echo 'electron_migration_runtime=PASS'
+  echo 'native_pointer_menu=PASS'
+  echo 'native_locale_menu=PASS'
+  echo 'native_external_url_allowlist=PASS'
+  echo 'native_quit_path=PASS'
+  echo 'native_startup_localization=PASS'
+  echo 'native_startup_error_locales=PASS'
+  echo 'native_release_builder=PASS'
+  echo 'phase3_build_primitive_dependency=NONE'
+  echo 'legacy_electron_fixture=PASS'
+  if find "$APPDIR/usr/share/licenses/pikachu-volleyball-native/runtime" \
+      -type f -name '*.copyright' -print -quit | grep -q .; then
+    echo 'runtime_license_inventory=PASS'
+  else
+    echo 'runtime_license_inventory=FAIL'
+  fi
+} | tee "$EVIDENCE_DIR/summary.txt"
+
+grep -Fxq 'runtime_license_inventory=PASS' "$EVIDENCE_DIR/summary.txt"
+ "$EVIDENCE_DIR/prepackage-self-test.txt"
+grep -q '^native_menu_modal_layout=PASS
+grep -q '^native_preferences_store=PASS$' "$EVIDENCE_DIR/prepackage-self-test.txt"
+grep -q '^electron_migration_runtime=PASS$' "$EVIDENCE_DIR/prepackage-self-test.txt"
+grep -q '^native_pointer_menu=PASS$' "$EVIDENCE_DIR/prepackage-self-test.txt"
+grep -q '^native_locale_menu=PASS$' "$EVIDENCE_DIR/prepackage-self-test.txt"
+grep -q '^native_external_url_allowlist=PASS$' "$EVIDENCE_DIR/prepackage-self-test.txt"
+grep -q '^native_quit_path=PASS$' "$EVIDENCE_DIR/prepackage-self-test.txt"
+grep -q '^native_startup_localization=PASS$' "$EVIDENCE_DIR/prepackage-self-test.txt"
+grep -q '^native_framebuffer_variation=PASS$' "$EVIDENCE_DIR/prepackage-self-test.txt"
+test -s "$framebuffer"
+test -s "$menu_framebuffer"
+test -s "$render_trace"
+framebuffer_bytes="$(stat -c%s "$framebuffer")"
+framebuffer_sha256="$(sha256sum "$framebuffer" | awk '{print $1}')"
+menu_framebuffer_bytes="$(stat -c%s "$menu_framebuffer")"
+menu_framebuffer_sha256="$(sha256sum "$menu_framebuffer" | awk '{print $1}')"
+render_trace_bytes="$(stat -c%s "$render_trace")"
+render_trace_sha256="$(sha256sum "$render_trace" | awk '{print $1}')"
+
+# Normalize all staged metadata before SquashFS creation.
+find "$APPDIR" -exec touch -h -d "@$SOURCE_DATE_EPOCH" {} +
+find "$APPDIR" -printf '%P\t%y\t%s\t%TY-%Tm-%TdT%TH:%TM:%TS\n' | sort \
+  > "$EVIDENCE_DIR/appdir-inventory.tsv"
+(
+  cd "$APPDIR"
+  find . -type f -print0 | sort -z | xargs -0 sha256sum
+) > "$EVIDENCE_DIR/appdir-sha256.txt"
+
+ARCH=x86_64 APPIMAGE_EXTRACT_AND_RUN=1 "$APPIMAGETOOL" \
+  --runtime-file "$APPIMAGE_RUNTIME" \
+  --comp zstd \
+  --no-appstream \
+  "$APPDIR" "$OUTPUT"
+chmod 0755 "$OUTPUT"
+
+bytes="$(stat -c%s "$OUTPUT")"
+mib="$(awk -v bytes="$bytes" 'BEGIN { printf "%.2f", bytes / 1048576 }')"
+sha256="$(sha256sum "$OUTPUT" | awk '{print $1}')"
+headroom_bytes=$((MAX_APPIMAGE_BYTES - bytes))
+bundle_bytes="$(stat -c%s "$BUNDLE")"
+bundle_sha256="$(sha256sum "$BUNDLE" | awk '{print $1}')"
+host_bytes="$(stat -c%s "$BINARY")"
+host_sha256="$(sha256sum "$BINARY" | awk '{print $1}')"
+importer_bytes="$(stat -c%s "$IMPORTER")"
+importer_sha256="$(sha256sum "$IMPORTER" | awk '{print $1}')"
+provenance_sha256="$(sha256sum "$APPDIR/provenance.json" | awk '{print $1}')"
+appdir_inventory_sha256="$(sha256sum "$EVIDENCE_DIR/appdir-inventory.tsv" | awk '{print $1}')"
+appdir_content_sha256="$(sha256sum "$EVIDENCE_DIR/appdir-sha256.txt" | awk '{print $1}')"
+
+if (( bytes > MAX_APPIMAGE_BYTES )); then
+  {
+    echo 'size_gate=FAIL'
+    echo "source_head_sha=$SOURCE_HEAD_SHA"
+    echo "bytes=$bytes"
+    echo "mib=$mib"
+    echo "limit_bytes=$MAX_APPIMAGE_BYTES"
+    echo "native_bundle_bytes=$bundle_bytes"
+    echo "native_bundle_sha256=$bundle_sha256"
+  } | tee "$EVIDENCE_DIR/summary.txt"
+  echo 'Native release AppImage exceeds the 30 MiB architecture budget.' >&2
+  exit 1
+fi
+
+is_known_appimage_host_limit() {
+  local log_file="$1"
+  grep -Eiq \
+    'dlopen\(\): error loading libfuse|AppImages require FUSE|Cannot mount AppImage|failed to open /dev/fuse|fusermount.*failed|FUSE setup failed' \
+    "$log_file"
+}
+
+run_direct_appimage_test() {
+  local log_file="$EVIDENCE_DIR/direct-self-test.txt"
+  set +e
+  rm -rf "$preference_root/direct"; mkdir -p "$preference_root/direct"
+  timeout 30 xvfb-run -a env SDL_AUDIODRIVER=dummy SDL_RENDER_DRIVER=software \
+    PV_NATIVE_EXPECT_MIGRATION=1 PV_NATIVE_PREFS_DIR="$preference_root/direct" \
+    "$OUTPUT" --self-test > "$log_file" 2>&1
+  local status=$?
+  set -e
+  if [[ "$status" -eq 0 ]]; then
+    grep -q '^native_host_self_test=PASS$' "$log_file"
+    printf 'PASS'
+    return 0
+  fi
+  if is_known_appimage_host_limit "$log_file"; then
+    printf 'SKIPPED_HOST_LIMITATION'
+    return 0
+  fi
+  cat "$log_file" >&2
+  echo "Direct native AppImage self-test failed with status $status." >&2
+  return 1
+}
+
+direct_result="$(run_direct_appimage_test)"
+
+rm -rf "$preference_root/extract-run"; mkdir -p "$preference_root/extract-run"
+APPIMAGE_EXTRACT_AND_RUN=1 timeout 30 xvfb-run -a env \
+  SDL_AUDIODRIVER=dummy SDL_RENDER_DRIVER=software \
+  PV_NATIVE_EXPECT_MIGRATION=1 PV_NATIVE_PREFS_DIR="$preference_root/extract-run" \
+  "$OUTPUT" --self-test \
+  | tee "$EVIDENCE_DIR/extract-run-self-test.txt"
+grep -q '^native_host_self_test=PASS$' "$EVIDENCE_DIR/extract-run-self-test.txt"
+
+rm -rf "$BUILD_ROOT/verify"
+mkdir -p "$BUILD_ROOT/verify"
+(
+  cd "$BUILD_ROOT/verify"
+  "$OUTPUT" --appimage-extract >/dev/null
+)
+rm -rf "$preference_root/extracted-apprun"; mkdir -p "$preference_root/extracted-apprun"
+xvfb-run -a env SDL_AUDIODRIVER=dummy SDL_RENDER_DRIVER=software \
+  PV_NATIVE_EXPECT_MIGRATION=1 PV_NATIVE_PREFS_DIR="$preference_root/extracted-apprun" \
+  "$BUILD_ROOT/verify/squashfs-root/AppRun" --self-test \
+  | tee "$EVIDENCE_DIR/extracted-apprun-self-test.txt"
+grep -q '^native_host_self_test=PASS$' "$EVIDENCE_DIR/extracted-apprun-self-test.txt"
+
+packaged_bundle="$BUILD_ROOT/verify/squashfs-root/usr/bin/native-app.bundle.js"
+packaged_host="$BUILD_ROOT/verify/squashfs-root/usr/bin/pikachu-volleyball-native"
+packaged_importer="$BUILD_ROOT/verify/squashfs-root/usr/bin/electron-preferences-importer"
+if [[ "$(sha256sum "$packaged_bundle" | awk '{print $1}')" != "$bundle_sha256" ]]; then
+  echo 'Native application bundle changed during packaging.' >&2
+  exit 1
+fi
+if [[ "$(sha256sum "$packaged_host" | awk '{print $1}')" != "$host_sha256" ]]; then
+  echo 'Native host binary changed during packaging.' >&2
+  exit 1
+fi
+if [[ "$(sha256sum "$packaged_importer" | awk '{print $1}')" != "$importer_sha256" ]]; then
+  echo 'Electron preference importer changed during packaging.' >&2
+  exit 1
+fi
+
+printf '%s  %s\n' "$sha256" "$(basename "$OUTPUT")" \
+  > "$BUILD_ROOT/SHA256SUMS.txt"
+
+{
+  echo 'size_gate=PASS'
+  echo "source_head_sha=$SOURCE_HEAD_SHA"
+  echo "bytes=$bytes"
+  echo "mib=$mib"
+  echo "limit_bytes=$MAX_APPIMAGE_BYTES"
+  echo "headroom_bytes=$headroom_bytes"
+  echo "sha256=$sha256"
+  echo "native_bundle_bytes=$bundle_bytes"
+  echo "native_bundle_sha256=$bundle_sha256"
+  echo "native_host_bytes=$host_bytes"
+  echo "native_host_sha256=$host_sha256"
+  echo "electron_importer_bytes=$importer_bytes"
+  echo "electron_importer_sha256=$importer_sha256"
+  echo "leveldb_version=$LEVELDB_VERSION"
+  echo "leveldb_source_sha256=$LEVELDB_SHA256"
+  echo "accesskit_version=$ACCESSKIT_VERSION"
+  echo "accesskit_commit=$actual_accesskit_commit"
+  echo "accesskit_static_bytes=$(stat -c%s "$ACCESSKIT_STATIC")"
+  echo "accesskit_static_sha256=$(sha256sum "$ACCESSKIT_STATIC" | awk '{print $1}')"
+  echo "quickjs_static_sha256=$(sha256sum "$QUICKJS_SOURCE/libquickjs.a" | awk '{print $1}')"
+  echo "render_trace_bytes=$render_trace_bytes"
+  echo "render_trace_sha256=$render_trace_sha256"
+  echo "framebuffer_bytes=$framebuffer_bytes"
+  echo "framebuffer_sha256=$framebuffer_sha256"
+  echo "menu_framebuffer_bytes=$menu_framebuffer_bytes"
+  echo "menu_framebuffer_sha256=$menu_framebuffer_sha256"
+  echo "provenance_sha256=$provenance_sha256"
+  echo "appdir_inventory_sha256=$appdir_inventory_sha256"
+  echo "appdir_content_sha256=$appdir_content_sha256"
+  echo "build_environment_sha256=$build_environment_sha256"
+  echo "runtime_packages_sha256=$runtime_packages_sha256"
+  echo "source_date_epoch=$SOURCE_DATE_EPOCH"
+  echo "direct_appimage_self_test=$direct_result"
+  echo 'extract_run_self_test=PASS'
+  echo 'extracted_apprun_self_test=PASS'
+  echo 'shared_core_bridge=PASS'
+  echo 'semantic_input_bridge=PASS'
+  echo 'focus_reset_bridge=PASS'
+  echo 'native_graphics_bridge=PASS'
+  echo 'native_audio_mixer=PASS'
+  echo 'native_preferences_store=PASS'
+  echo 'electron_migration_runtime=PASS'
+  echo 'native_pointer_menu=PASS'
+  echo 'native_locale_menu=PASS'
+  echo 'native_external_url_allowlist=PASS'
+  echo 'native_quit_path=PASS'
+  echo 'native_startup_localization=PASS'
+  echo 'native_startup_error_locales=PASS'
+  echo 'native_release_builder=PASS'
+  echo 'phase3_build_primitive_dependency=NONE'
+  echo 'legacy_electron_fixture=PASS'
+  if find "$APPDIR/usr/share/licenses/pikachu-volleyball-native/runtime" \
+      -type f -name '*.copyright' -print -quit | grep -q .; then
+    echo 'runtime_license_inventory=PASS'
+  else
+    echo 'runtime_license_inventory=FAIL'
+  fi
+} | tee "$EVIDENCE_DIR/summary.txt"
+
+grep -Fxq 'runtime_license_inventory=PASS' "$EVIDENCE_DIR/summary.txt"
+ "$EVIDENCE_DIR/prepackage-self-test.txt"
 grep -q '^native_preferences_store=PASS$' "$EVIDENCE_DIR/prepackage-self-test.txt"
 grep -q '^electron_migration_runtime=PASS$' "$EVIDENCE_DIR/prepackage-self-test.txt"
 grep -q '^native_pointer_menu=PASS$' "$EVIDENCE_DIR/prepackage-self-test.txt"

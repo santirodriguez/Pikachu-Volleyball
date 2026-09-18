@@ -1232,6 +1232,17 @@ static bool run_self_test(NativeRuntime *state) {
       !save_framebuffer_from_env(state, "PV_NATIVE_MENU_FRAMEBUFFER_PATH") ||
       !js_get_string(state, "getStateJson", json, sizeof(json)) ||
       !contains(json, "\"colorScheme\":\"dark\"") ||
+      !js_handle_key(state, "ArrowDown", true, false) ||
+      !js_handle_key(state, "ArrowDown", false, false) ||
+      !js_handle_key(state, "Enter", true, false) ||
+      !js_handle_key(state, "Enter", false, false) ||
+      !render_frame(state, false, NULL) ||
+      !save_framebuffer_from_env(
+          state, "PV_NATIVE_MENU_MODAL_FRAMEBUFFER_PATH") ||
+      !js_get_string(state, "getMenuFrameJson", json, sizeof(json)) ||
+      !contains(json, "\"modal\":{") ||
+      !js_handle_key(state, "Escape", true, false) ||
+      !js_handle_key(state, "Escape", false, false) ||
       !js_handle_key(state, "KeyP", true, false) ||
       !js_handle_key(state, "KeyP", false, false)) {
     fprintf(stderr, "Native menu theme rendering contract failed\n");
@@ -1239,6 +1250,7 @@ static bool run_self_test(NativeRuntime *state) {
   }
   printf("native_menu_theme=PASS\n");
   printf("native_menu_visual_parity=PASS\n");
+  printf("native_menu_modal_layout=PASS\n");
 
   printf("native_js_bundle=PASS\n");
   printf("shared_core_bridge=PASS\n");

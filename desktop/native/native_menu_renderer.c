@@ -246,9 +246,11 @@ static bool render_menu_text(NativeMenuRenderer *menu, SDL_Renderer *renderer,
                              float logical_size, SDL_Color color) {
   if (!text || text[0] == '\0') return true;
   TTF_Font *font = (TTF_Font *)menu->font;
+  TTF_Font *fallback = (TTF_Font *)menu->fallback_font;
   float point_size = logical_size * canvas->scale;
   if (point_size < 8.0f) point_size = 8.0f;
-  if (!TTF_SetFontSize(font, point_size)) {
+  if (!TTF_SetFontSize(font, point_size) ||
+      (fallback && !TTF_SetFontSize(fallback, point_size))) {
     fprintf(stderr, "TTF_SetFontSize failed: %s\n", SDL_GetError());
     return false;
   }
@@ -291,7 +293,11 @@ static bool render_logical_centered_text(NativeMenuRenderer *menu,
                                          SDL_Color color) {
   if (!text || text[0] == '\0') return true;
   TTF_Font *font = (TTF_Font *)menu->font;
-  if (!TTF_SetFontSize(font, 10.0f)) return false;
+  TTF_Font *fallback = (TTF_Font *)menu->fallback_font;
+  if (!TTF_SetFontSize(font, 10.0f) ||
+      (fallback && !TTF_SetFontSize(fallback, 10.0f))) {
+    return false;
+  }
   SDL_Surface *surface =
       TTF_RenderText_Blended_Wrapped(font, text, 0, color, wrap_width);
   if (!surface) {
@@ -525,30 +531,51 @@ bool native_menu_renderer_init(NativeMenuRenderer *menu,
   }
 
   char font_path[PATH_MAX];
+  char fallback_path[PATH_MAX];
   int written = snprintf(font_path, sizeof(font_path),
-                         "%sfonts/unifont-17.0.04.otf", base_path);
-  if (written <= 0 || (size_t)written >= sizeof(font_path)) {
+                         "%sfonts/DejaVuSans.ttf", base_path);
+  int fallback_written =
+      snprintf(fallback_path, sizeof(fallback_path),
+               "%sfonts/unifont-17.0.04.otf", base_path);
+  if (written <= 0 || (size_t)written >= sizeof(font_path) ||
+      fallback_written <= 0 ||
+      (size_t)fallback_written >= sizeof(fallback_path)) {
     TTF_Quit();
     return false;
   }
 
   TTF_Font *font = TTF_OpenFont(font_path, 10.0f);
-  if (!font) {
-    fprintf(stderr, "Unable to load native menu font %s: %s\n", font_path,
+  TTF_Font *fallback = TTF_OpenFont(fallback_path, 10.0f);
+  if (!font || !fallback || !TTF_AddFallbackFont(font, fallback)) {
+    fprintf(stderr,
+            "Unable to load native menu primary/fallback fonts: %s\n",
             SDL_GetError());
+    if (font) TTF_CloseFont(font);
+    if (fallback) TTF_CloseFont(fallback);
     TTF_Quit();
     return false;
   }
 
+  TTF_SetFontHinting(font, TTF_HINTING_LIGHT);
+  TTF_SetFontHinting(fallback, TTF_HINTING_LIGHT);
+  TTF_SetFontKerning(font, true);
+  TTF_SetFontKerning(fallback, true);
+
   menu->font = font;
+  menu->fallback_font = fallback;
   menu->initialized = true;
   return true;
 }
 
 void native_menu_renderer_destroy(NativeMenuRenderer *menu) {
   if (!menu || !menu->initialized) return;
-  if (menu->font) TTF_CloseFont((TTF_Font *)menu->font);
+  TTF_Font *font = (TTF_Font *)menu->font;
+  TTF_Font *fallback = (TTF_Font *)menu->fallback_font;
+  if (font) TTF_ClearFallbackFonts(font);
+  if (fallback) TTF_CloseFont(fallback);
+  if (font) TTF_CloseFont(font);
   menu->font = NULL;
+  menu->fallback_font = NULL;
   menu->initialized = false;
   TTF_Quit();
 }
@@ -572,8 +599,12 @@ bool native_menu_renderer_render_quick_rematch(NativeMenuRenderer *menu,
   }
 
   TTF_Font *font = (TTF_Font *)menu->font;
-  bool ok = TTF_SetFontLanguage(font, locale_language_tag(locale)) &&
-            TTF_SetFontSize(font, 10.0f);
+  TTF_Font *fallback = (TTF_Font *)menu->fallback_font;
+  const char *language = locale_language_tag(locale);
+  bool ok = TTF_SetFontLanguage(font, language) &&
+            (!fallback || TTF_SetFontLanguage(fallback, language)) &&
+            TTF_SetFontSize(font, 10.0f) &&
+            (!fallback || TTF_SetFontSize(fallback, 10.0f));
   if (ok) {
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 150);
@@ -618,7 +649,10 @@ bool native_menu_renderer_render(NativeMenuRenderer *menu,
 
   NativeMenuPalette palette = menu_palette(strcmp(color_scheme, "dark") == 0);
   TTF_Font *font = (TTF_Font *)menu->font;
-  if (!TTF_SetFontLanguage(font, locale_language_tag(locale))) {
+  TTF_Font *fallback = (TTF_Font *)menu->fallback_font;
+  const char *language = locale_language_tag(locale);
+  if (!TTF_SetFontLanguage(font, language) ||
+      (fallback && !TTF_SetFontLanguage(fallback, language))) {
     fprintf(stderr, "TTF_SetFontLanguage failed for %s: %s\n", locale,
             SDL_GetError());
     free(locale);
