@@ -309,7 +309,7 @@ int main(int argc, char** argv) {
     output << "    \"" << JsonEscape(key) << "\": \""
            << JsonEscape(found->second.origin) << "\"";
   }
-  output << "\n"
+  output << "\n";
   output << "  }\n}\n";
   output.close();
   fs::remove_all(copy_path, filesystem_error);
