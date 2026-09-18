@@ -946,20 +946,18 @@ static const char *scancode_to_code(SDL_Scancode scancode, char *buffer,
       return "AudioVolumeUp";
     case SDL_SCANCODE_VOLUMEDOWN:
       return "AudioVolumeDown";
-    case SDL_SCANCODE_AUDIONEXT:
+    case SDL_SCANCODE_MEDIA_NEXT_TRACK:
       return "MediaTrackNext";
-    case SDL_SCANCODE_AUDIOPREV:
+    case SDL_SCANCODE_MEDIA_PREVIOUS_TRACK:
       return "MediaTrackPrevious";
-    case SDL_SCANCODE_AUDIOSTOP:
+    case SDL_SCANCODE_MEDIA_STOP:
       return "MediaStop";
-    case SDL_SCANCODE_AUDIOPLAY:
+    case SDL_SCANCODE_MEDIA_PLAY:
+    case SDL_SCANCODE_MEDIA_PAUSE:
+    case SDL_SCANCODE_MEDIA_PLAY_PAUSE:
       return "MediaPlayPause";
-    case SDL_SCANCODE_MEDIASELECT:
+    case SDL_SCANCODE_MEDIA_SELECT:
       return "MediaSelect";
-    case SDL_SCANCODE_MAIL:
-      return "LaunchMail";
-    case SDL_SCANCODE_CALCULATOR:
-      return "LaunchApp2";
     case SDL_SCANCODE_AC_SEARCH:
       return "BrowserSearch";
     case SDL_SCANCODE_AC_HOME:
@@ -974,7 +972,7 @@ static const char *scancode_to_code(SDL_Scancode scancode, char *buffer,
       return "BrowserRefresh";
     case SDL_SCANCODE_AC_BOOKMARKS:
       return "BrowserFavorites";
-    case SDL_SCANCODE_EJECT:
+    case SDL_SCANCODE_MEDIA_EJECT:
       return "Eject";
     case SDL_SCANCODE_SLEEP:
       return "Sleep";
