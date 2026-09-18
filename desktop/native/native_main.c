@@ -4,6 +4,7 @@
 #include <quickjs.h>
 
 #include "native_audio.h"
+#include "native_menu_renderer.h"
 
 #include <errno.h>
 #include <limits.h>
@@ -38,6 +39,7 @@ typedef struct NativeRuntime {
   char preferences_dir[PATH_MAX];
   char preferences_path[PATH_MAX];
   NativeAudio audio;
+  NativeMenuRenderer menu_renderer;
 } NativeRuntime;
 
 static bool render_frame(NativeRuntime *state, bool validate_pixels,
@@ -374,7 +376,8 @@ static bool persist_preferences_if_dirty(NativeRuntime *state) {
 }
 
 static bool initialize_javascript(NativeRuntime *state,
-                                  const char *preferences_json) {
+                                  const char *preferences_json,
+                                  const char *initial_locale) {
   char bundle_path[PATH_MAX];
   if (!join_path(bundle_path, sizeof(bundle_path), state->base_path,
                  "native-app.bundle.js")) {
@@ -411,11 +414,15 @@ static bool initialize_javascript(NativeRuntime *state,
     return false;
   }
 
-  JSValue argument = JS_NewString(state->context, preferences_json);
-  JSValueConst arguments[] = {argument};
+  JSValue arguments[2] = {
+      JS_NewString(state->context, preferences_json),
+      JS_NewString(state->context, initial_locale),
+  };
+  JSValueConst const_arguments[2] = {arguments[0], arguments[1]};
   JSValue result;
-  bool ok = call_api(state, "initialize", 1, arguments, &result);
-  JS_FreeValue(state->context, argument);
+  bool ok = call_api(state, "initialize", 2, const_arguments, &result);
+  JS_FreeValue(state->context, arguments[0]);
+  JS_FreeValue(state->context, arguments[1]);
   if (!ok) return false;
   int initialized = JS_ToBool(state->context, result);
   JS_FreeValue(state->context, result);
@@ -435,6 +442,36 @@ static bool js_handle_key(NativeRuntime *state, const char *code, bool is_down,
     JS_FreeValue(state->context, arguments[index]);
   }
   return ok;
+}
+
+static bool js_handle_pointer(NativeRuntime *state, double x, double y,
+                              bool is_down) {
+  JSValue arguments[3] = {
+      JS_NewFloat64(state->context, x),
+      JS_NewFloat64(state->context, y),
+      JS_NewBool(state->context, is_down),
+  };
+  JSValueConst const_arguments[3] = {arguments[0], arguments[1], arguments[2]};
+  JSValue result;
+  bool ok = call_api(state, "handlePointer", 3, const_arguments, &result);
+  for (int index = 0; index < 3; index += 1) {
+    JS_FreeValue(state->context, arguments[index]);
+  }
+  if (!ok) return false;
+  JS_FreeValue(state->context, result);
+  return true;
+}
+
+static bool js_set_locale(NativeRuntime *state, const char *locale) {
+  JSValue argument = JS_NewString(state->context, locale);
+  JSValueConst arguments[1] = {argument};
+  JSValue result;
+  bool ok = call_api(state, "setLocale", 1, arguments, &result);
+  JS_FreeValue(state->context, argument);
+  if (!ok) return false;
+  int accepted = JS_ToBool(state->context, result);
+  JS_FreeValue(state->context, result);
+  return accepted == 1;
 }
 
 static bool js_reset_inputs(NativeRuntime *state) {
@@ -565,6 +602,66 @@ static bool js_array_length(JSContext *context, JSValueConst array,
   int status = JS_ToUint32(context, length_out, length);
   JS_FreeValue(context, length);
   return status == 0;
+}
+
+static bool is_allowed_external_url(const char *url) {
+  static const char *allowed[] = {
+      "https://santiagorodriguez.com",
+      "https://github.com/santirodriguez/pikachu-volleyball",
+      "https://github.com/gorisanson/pikachu-volleyball",
+  };
+  for (size_t index = 0; index < sizeof(allowed) / sizeof(allowed[0]);
+       index += 1) {
+    if (strcmp(url, allowed[index]) == 0) return true;
+  }
+  return false;
+}
+
+static bool process_platform_commands(NativeRuntime *state, bool *quit_out,
+                                      bool dry_run) {
+  JSValue commands;
+  if (!call_api(state, "drainPlatformCommands", 0, NULL, &commands)) {
+    return false;
+  }
+
+  uint32_t length = 0;
+  if (!js_array_length(state->context, commands, &length)) {
+    JS_FreeValue(state->context, commands);
+    return false;
+  }
+
+  bool ok = true;
+  for (uint32_t index = 0; index < length && ok; index += 1) {
+    JSValue command =
+        JS_GetPropertyUint32(state->context, commands, index);
+    char type[32];
+    ok = !JS_IsException(command) &&
+         js_object_get_string(state->context, command, "type", type,
+                              sizeof(type));
+    if (ok && strcmp(type, "quit") == 0) {
+      if (quit_out) *quit_out = true;
+    } else if (ok && strcmp(type, "openUrl") == 0) {
+      char url[256];
+      ok = js_object_get_string(state->context, command, "url", url,
+                                sizeof(url)) &&
+           is_allowed_external_url(url);
+      if (ok && !dry_run) {
+        ok = SDL_OpenURL(url);
+      }
+    } else if (ok) {
+      fprintf(stderr, "Unknown native platform command: %s\n", type);
+      ok = false;
+    }
+    JS_FreeValue(state->context, command);
+  }
+
+  JS_FreeValue(state->context, commands);
+  return ok;
+}
+
+static const char *detect_initial_locale(void) {
+  const char *language = getenv("LANG");
+  return language && language[0] != '\0' ? language : "en";
 }
 
 static bool write_render_trace(NativeRuntime *state) {
@@ -937,6 +1034,65 @@ static bool run_self_test(NativeRuntime *state) {
     return false;
   }
 
+  if (!is_allowed_external_url("https://santiagorodriguez.com") ||
+      !is_allowed_external_url(
+          "https://github.com/santirodriguez/pikachu-volleyball") ||
+      !is_allowed_external_url(
+          "https://github.com/gorisanson/pikachu-volleyball") ||
+      is_allowed_external_url("https://santiagorodriguez.com.evil.test") ||
+      is_allowed_external_url(
+          "https://github.com/santirodriguez/pikachu-volleyball?x=1") ||
+      is_allowed_external_url("file:///tmp/pikachu")) {
+    fprintf(stderr, "Native external URL allowlist contract failed\n");
+    return false;
+  }
+  printf("native_external_url_allowlist=PASS\n");
+
+  if (!js_handle_key(state, "KeyP", true, false) ||
+      !js_handle_key(state, "KeyP", false, false) ||
+      !js_handle_pointer(state, 20.0, 103.0, true) ||
+      !js_handle_pointer(state, 160.0, 60.0, true) ||
+      !js_get_string(state, "getStateJson", json, sizeof(json)) ||
+      !contains(json, "\"winningScore\":15")) {
+    fprintf(stderr, "Native pointer menu path failed\n");
+    return false;
+  }
+  printf("native_pointer_menu=PASS\n");
+
+  const char *locales[] = {"en", "es-ar", "ca", "ko", "zh"};
+  for (size_t index = 0; index < sizeof(locales) / sizeof(locales[0]);
+       index += 1) {
+    if (!js_set_locale(state, locales[index]) ||
+        !render_frame(state, false, NULL)) {
+      fprintf(stderr, "Native menu locale render failed: %s\n",
+              locales[index]);
+      return false;
+    }
+    printf("native_menu_locale[%s]=PASS\n", locales[index]);
+  }
+  printf("native_locale_menu=PASS\n");
+
+  if (!js_handle_key(state, "KeyP", true, false) ||
+      !js_handle_key(state, "KeyP", false, false) ||
+      !js_handle_key(state, "KeyP", true, false) ||
+      !js_handle_key(state, "KeyP", false, false) ||
+      !js_handle_key(state, "ArrowUp", true, false) ||
+      !js_handle_key(state, "ArrowUp", false, false) ||
+      !js_handle_key(state, "Enter", true, false) ||
+      !js_handle_key(state, "Enter", false, false) ||
+      !js_handle_key(state, "Enter", true, false) ||
+      !js_handle_key(state, "Enter", false, false)) {
+    fprintf(stderr, "Native Quit menu keyboard path failed\n");
+    return false;
+  }
+  bool requested_quit = false;
+  if (!process_platform_commands(state, &requested_quit, true) ||
+      !requested_quit) {
+    fprintf(stderr, "Native Quit platform command was not emitted\n");
+    return false;
+  }
+  printf("native_quit_path=PASS\n");
+
   printf("native_graphics_bridge=PASS\n");
   printf("native_preferences_store=PASS\n");
   return true;
@@ -1049,7 +1205,19 @@ static bool render_frame(NativeRuntime *state, bool validate_pixels,
   }
 
   SDL_SetTextureAlphaMod(state->sprite_texture, 255);
-  bool framebuffer_ok = !validate_pixels || validate_framebuffer(state);
+
+  JSValue menu_frame;
+  if (!call_api(state, "getMenuFrame", 0, NULL, &menu_frame)) {
+    JS_FreeValue(state->context, commands);
+    JS_FreeValue(state->context, frame);
+    return false;
+  }
+  bool menu_ok = native_menu_renderer_render(
+      &state->menu_renderer, state->renderer, state->context, menu_frame);
+  JS_FreeValue(state->context, menu_frame);
+
+  bool framebuffer_ok =
+      menu_ok && (!validate_pixels || validate_framebuffer(state));
   SDL_RenderPresent(state->renderer);
 
   JS_FreeValue(state->context, commands);
@@ -1059,6 +1227,7 @@ static bool render_frame(NativeRuntime *state, bool validate_pixels,
 }
 
 static void destroy_runtime(NativeRuntime *state) {
+  native_menu_renderer_destroy(&state->menu_renderer);
   native_audio_destroy(&state->audio);
   if (state->sprite_texture) SDL_DestroyTexture(state->sprite_texture);
   if (state->renderer) SDL_DestroyRenderer(state->renderer);
@@ -1112,6 +1281,12 @@ int main(int argc, char **argv) {
     return 2;
   }
 
+  if (!native_menu_renderer_init(&state.menu_renderer, state.base_path)) {
+    fprintf(stderr, "Unable to initialize native menu renderer\n");
+    destroy_runtime(&state);
+    return 2;
+  }
+
   char sprite_path[PATH_MAX];
   if (!join_path(sprite_path, sizeof(sprite_path), state.base_path,
                  "assets/sprite_sheet.png")) {
@@ -1131,7 +1306,8 @@ int main(int argc, char **argv) {
   bool migrated_preferences = false;
   char *preferences =
       load_initial_preferences(&state, &migrated_preferences);
-  if (!preferences || !initialize_javascript(&state, preferences)) {
+  if (!preferences ||
+      !initialize_javascript(&state, preferences, detect_initial_locale())) {
     free(preferences);
     destroy_runtime(&state);
     return 2;
@@ -1169,6 +1345,16 @@ int main(int argc, char **argv) {
           destroy_runtime(&state);
           return 2;
         }
+      } else if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN &&
+                 event.button.button == SDL_BUTTON_LEFT) {
+        SDL_Event logical_event = event;
+        if (!SDL_ConvertEventToRenderCoordinates(state.renderer,
+                                                 &logical_event) ||
+            !js_handle_pointer(&state, logical_event.button.x,
+                               logical_event.button.y, true)) {
+          destroy_runtime(&state);
+          return 2;
+        }
       } else if (event.type == SDL_EVENT_WINDOW_FOCUS_LOST) {
         if (!js_reset_inputs(&state) ||
             !native_audio_set_muted(&state.audio, true)) {
@@ -1200,6 +1386,7 @@ int main(int argc, char **argv) {
 
     if (!native_audio_pump(&state.audio) ||
         !persist_preferences_if_dirty(&state) ||
+        !process_platform_commands(&state, &quit, false) ||
         !render_frame(&state, false, NULL)) {
       destroy_runtime(&state);
       return 2;
