@@ -32,6 +32,7 @@ void native_audio_destroy(NativeAudio *audio);
 bool native_audio_play(NativeAudio *audio, const char *sound, float volume,
                        float pan, bool loop);
 bool native_audio_stop(NativeAudio *audio, const char *sound);
+bool native_audio_set_bgm_gain(NativeAudio *audio, float volume);
 bool native_audio_set_muted(NativeAudio *audio, bool muted);
 bool native_audio_pump(NativeAudio *audio);
 bool native_audio_self_test(NativeAudio *audio);
