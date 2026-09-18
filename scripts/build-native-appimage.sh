@@ -142,7 +142,7 @@ patchelf --set-rpath '$ORIGIN/../lib' "$BINARY"
 
 rm -rf "$APPDIR"
 mkdir -p "$APPDIR/usr/bin/assets" "$APPDIR/usr/bin/fonts" "$APPDIR/usr/lib" \
-  "$APPDIR/usr/share/licenses/pikachu-volleyball-native"
+  "$APPDIR/usr/share/licenses/pikachu-volleyball-native/runtime"
 
 install -m 0644 "$UNIFONT_FILE" \
   "$APPDIR/usr/bin/fonts/unifont-17.0.04.otf"
@@ -178,6 +178,16 @@ for library in "${linked_libraries[@]}"; do
       ;;
   esac
   install -m 0644 -T "$(readlink -f "$library")" "$APPDIR/usr/lib/$name"
+
+  if command -v dpkg-query >/dev/null 2>&1; then
+    package="$(dpkg-query -S "$(readlink -f "$library")" 2>/dev/null | head -1 | cut -d: -f1 || true)"
+    package="${package%%:*}"
+    copyright="/usr/share/doc/$package/copyright"
+    if [[ -n "$package" && -f "$copyright" ]]; then
+      install -m 0644 "$copyright" \
+        "$APPDIR/usr/share/licenses/pikachu-volleyball-native/runtime/$package.copyright"
+    fi
+  fi
 done
 
 install -m 0755 "$BINARY" "$APPDIR/usr/bin/pikachu-volleyball-native"
@@ -306,8 +316,10 @@ render_trace_sha256="$(sha256sum "$render_trace" | awk '{print $1}')"
 find "$APPDIR" -exec touch -h -d "@$SOURCE_DATE_EPOCH" {} +
 find "$APPDIR" -printf '%P\t%y\t%s\t%TY-%Tm-%TdT%TH:%TM:%TS\n' | sort \
   > "$EVIDENCE_DIR/appdir-inventory.tsv"
-find "$APPDIR" -type f -print0 | sort -z | xargs -0 sha256sum \
-  > "$EVIDENCE_DIR/appdir-sha256.txt"
+(
+  cd "$APPDIR"
+  find . -type f -print0 | sort -z | xargs -0 sha256sum
+) > "$EVIDENCE_DIR/appdir-sha256.txt"
 
 ARCH=x86_64 APPIMAGE_EXTRACT_AND_RUN=1 "$APPIMAGETOOL" \
   --runtime-file "$APPIMAGE_RUNTIME" \
@@ -463,4 +475,13 @@ printf '%s  %s\n' "$sha256" "$(basename "$OUTPUT")" \
   echo 'native_release_builder=PASS'
   echo 'phase3_build_primitive_dependency=NONE'
   echo 'legacy_electron_fixture=PASS'
+  if find "$APPDIR/usr/share/licenses/pikachu-volleyball-native/runtime" \
+      -type f -name '*.copyright' -print -quit | grep -q .; then
+    echo 'runtime_license_inventory=PASS'
+  else
+    echo 'runtime_license_inventory=FAIL'
+  fi
 } | tee "$EVIDENCE_DIR/summary.txt"
+
+grep -q '^runtime_license_inventory=PASS
+ "$EVIDENCE_DIR/summary.txt"
