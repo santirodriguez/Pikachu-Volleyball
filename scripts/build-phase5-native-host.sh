@@ -75,15 +75,45 @@ g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic \
   "$LEVELDB_STATIC" -pthread -static-libstdc++ -static-libgcc -o "$IMPORTER"
 strip --strip-unneeded "$IMPORTER"
 
+ACCESSKIT_VERSION="0.22.3"
+ACCESSKIT_COMMIT="826d672661f9453c8b269ab3946dbcbae6300555"
+ACCESSKIT_REPOSITORY="https://github.com/AccessKit/accesskit-c.git"
+ACCESSKIT_SOURCE="$TOOLCHAIN_ROOT/sources/accesskit-c"
+ACCESSKIT_BUILD="$TOOLCHAIN_ROOT/accesskit-build"
+rm -rf "$ACCESSKIT_SOURCE" "$ACCESSKIT_BUILD"
+git clone --filter=blob:none --no-checkout "$ACCESSKIT_REPOSITORY" "$ACCESSKIT_SOURCE"
+git -C "$ACCESSKIT_SOURCE" fetch --depth 1 origin "$ACCESSKIT_COMMIT"
+git -C "$ACCESSKIT_SOURCE" checkout --detach FETCH_HEAD
+actual_accesskit_commit="$(git -C "$ACCESSKIT_SOURCE" rev-parse HEAD)"
+if [[ "$actual_accesskit_commit" != "$ACCESSKIT_COMMIT" ]]; then
+  echo "AccessKit checkout mismatch: expected $ACCESSKIT_COMMIT, got $actual_accesskit_commit" >&2
+  exit 1
+fi
+manifest_version="$(sed -n 's/^version = "\([^"]*\)"/\1/p' "$ACCESSKIT_SOURCE/Cargo.toml" | head -1)"
+if [[ "$manifest_version" != "$ACCESSKIT_VERSION" ]]; then
+  echo "AccessKit manifest version mismatch: expected $ACCESSKIT_VERSION, got $manifest_version" >&2
+  exit 1
+fi
+cmake -S "$ACCESSKIT_SOURCE" -B "$ACCESSKIT_BUILD" -G Ninja \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DRust_CARGO_TARGET=x86_64-unknown-linux-gnu \
+  -DACCESSKIT_BUILD_HEADERS=OFF \
+  -DACCESSKIT_BUILD_LIBRARIES=ON
+cmake --build "$ACCESSKIT_BUILD" --parallel 2
+cmake --install "$ACCESSKIT_BUILD"
+ACCESSKIT_STATIC="$ACCESSKIT_SOURCE/lib/linux/x86_64/static/libaccesskit.a"
+test -s "$ACCESSKIT_STATIC"
+
 cc -std=c11 -O2 -Wall -Wextra -Wpedantic -D_GNU_SOURCE \
-  -I"$QUICKJS_SOURCE" \
+  -I"$QUICKJS_SOURCE" -I"$ACCESSKIT_SOURCE/include" \
   $(pkg-config --cflags sdl3 sdl3-ttf libpng libmpg123) \
   "$ROOT/desktop/native/native_main.c" \
   "$ROOT/desktop/native/native_audio.c" \
   "$ROOT/desktop/native/native_menu_renderer.c" \
-  "$QUICKJS_SOURCE/libquickjs.a" -o "$BINARY" \
+  "$ROOT/desktop/native/native_accessibility.c" \
+  "$QUICKJS_SOURCE/libquickjs.a" "$ACCESSKIT_STATIC" -o "$BINARY" \
   $(pkg-config --libs sdl3 sdl3-ttf libpng libmpg123) \
-  -lm -ldl -pthread -latomic -Wl,-rpath,'$ORIGIN/../lib'
+  -static-libgcc -lm -ldl -pthread -latomic -Wl,-rpath,'$ORIGIN/../lib'
 strip --strip-unneeded "$BINARY"
 patchelf --set-rpath '$ORIGIN/../lib' "$BINARY"
 
@@ -113,6 +143,11 @@ install -m 0755 "$IMPORTER" "$APPDIR/usr/bin/electron-preferences-importer"
 install -m 0644 "$BUNDLE" "$APPDIR/usr/bin/native-app.bundle.js"
 mkdir -p "$APPDIR/usr/share/licenses/pikachu-volleyball-native/leveldb"
 install -m 0644 "$LEVELDB_SOURCE/LICENSE" "$APPDIR/usr/share/licenses/pikachu-volleyball-native/leveldb/LICENSE"
+mkdir -p "$APPDIR/usr/share/licenses/pikachu-volleyball-native/accesskit"
+install -m 0644 "$ACCESSKIT_SOURCE/LICENSE-APACHE" \
+  "$APPDIR/usr/share/licenses/pikachu-volleyball-native/accesskit/LICENSE-APACHE"
+install -m 0644 "$ACCESSKIT_SOURCE/LICENSE-MIT" \
+  "$APPDIR/usr/share/licenses/pikachu-volleyball-native/accesskit/LICENSE-MIT"
 for wav in WAVE140_1.wav WAVE141_1.wav WAVE142_1.wav WAVE143_1.wav WAVE144_1.wav WAVE145_1.wav WAVE146_1.wav; do
   install -m 0644 "$ROOT/src/resources/assets/sounds/$wav" "$APPDIR/usr/bin/assets/$wav"
 done
@@ -298,6 +333,10 @@ printf '%s  %s\n' "$sha256" "$(basename "$OUTPUT")" \
   echo "electron_importer_sha256=$importer_sha256"
   echo "leveldb_version=$LEVELDB_VERSION"
   echo "leveldb_source_sha256=$LEVELDB_SHA256"
+  echo "accesskit_version=$ACCESSKIT_VERSION"
+  echo "accesskit_commit=$actual_accesskit_commit"
+  echo "accesskit_static_bytes=$(stat -c%s "$ACCESSKIT_STATIC")"
+  echo "accesskit_static_sha256=$(sha256sum "$ACCESSKIT_STATIC" | awk '{print $1}')"
   echo "render_trace_bytes=$render_trace_bytes"
   echo "render_trace_sha256=$render_trace_sha256"
   echo "framebuffer_bytes=$framebuffer_bytes"

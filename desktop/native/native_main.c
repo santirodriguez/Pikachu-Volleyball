@@ -3,6 +3,7 @@
 #include <png.h>
 #include <quickjs.h>
 
+#include "native_accessibility.h"
 #include "native_audio.h"
 #include "native_menu_renderer.h"
 
@@ -40,6 +41,7 @@ typedef struct NativeRuntime {
   char preferences_path[PATH_MAX];
   NativeAudio audio;
   NativeMenuRenderer menu_renderer;
+  NativeAccessibility accessibility;
 } NativeRuntime;
 
 static bool render_frame(NativeRuntime *state, bool validate_pixels,
@@ -460,6 +462,25 @@ static bool js_handle_pointer(NativeRuntime *state, double x, double y,
   if (!ok) return false;
   JS_FreeValue(state->context, result);
   return true;
+}
+
+static bool js_handle_accessibility_action(NativeRuntime *state,
+                                           uint64_t node_id,
+                                           const char *action) {
+  JSValue arguments[2] = {
+      JS_NewInt64(state->context, (int64_t)node_id),
+      JS_NewString(state->context, action),
+  };
+  JSValueConst const_arguments[2] = {arguments[0], arguments[1]};
+  JSValue result;
+  bool ok =
+      call_api(state, "handleAccessibilityAction", 2, const_arguments, &result);
+  JS_FreeValue(state->context, arguments[0]);
+  JS_FreeValue(state->context, arguments[1]);
+  if (!ok) return false;
+  int accepted = JS_ToBool(state->context, result);
+  JS_FreeValue(state->context, result);
+  return accepted >= 0;
 }
 
 static bool js_set_locale(NativeRuntime *state, const char *locale) {
@@ -1212,8 +1233,11 @@ static bool render_frame(NativeRuntime *state, bool validate_pixels,
     JS_FreeValue(state->context, frame);
     return false;
   }
-  bool menu_ok = native_menu_renderer_render(
-      &state->menu_renderer, state->renderer, state->context, menu_frame);
+  bool menu_ok =
+      native_accessibility_sync(&state->accessibility, state->context,
+                                menu_frame) &&
+      native_menu_renderer_render(&state->menu_renderer, state->renderer,
+                                  state->context, menu_frame);
   JS_FreeValue(state->context, menu_frame);
 
   bool framebuffer_ok =
@@ -1227,6 +1251,7 @@ static bool render_frame(NativeRuntime *state, bool validate_pixels,
 }
 
 static void destroy_runtime(NativeRuntime *state) {
+  native_accessibility_destroy(&state->accessibility);
   native_menu_renderer_destroy(&state->menu_renderer);
   native_audio_destroy(&state->audio);
   if (state->sprite_texture) SDL_DestroyTexture(state->sprite_texture);
@@ -1242,6 +1267,7 @@ static void destroy_runtime(NativeRuntime *state) {
 
 int main(int argc, char **argv) {
   bool self_test = argc > 1 && strcmp(argv[1], "--self-test") == 0;
+  bool a11y_test = argc > 1 && strcmp(argv[1], "--a11y-test") == 0;
   NativeRuntime state;
   memset(&state, 0, sizeof(state));
   state.api = JS_UNDEFINED;
@@ -1281,8 +1307,10 @@ int main(int argc, char **argv) {
     return 2;
   }
 
-  if (!native_menu_renderer_init(&state.menu_renderer, state.base_path)) {
-    fprintf(stderr, "Unable to initialize native menu renderer\n");
+  if (!native_menu_renderer_init(&state.menu_renderer, state.base_path) ||
+      !native_accessibility_init(&state.accessibility, state.window,
+                                 state.renderer)) {
+    fprintf(stderr, "Unable to initialize native menu/accessibility adapters\n");
     destroy_runtime(&state);
     return 2;
   }
@@ -1328,6 +1356,13 @@ int main(int argc, char **argv) {
     return ok ? 0 : 1;
   }
 
+  if (a11y_test &&
+      (!js_handle_key(&state, "KeyP", true, false) ||
+       !js_handle_key(&state, "KeyP", false, false))) {
+    destroy_runtime(&state);
+    return 2;
+  }
+
   bool quit = false;
   uint64_t next_tick = SDL_GetTicks();
   while (!quit) {
@@ -1356,15 +1391,36 @@ int main(int argc, char **argv) {
           return 2;
         }
       } else if (event.type == SDL_EVENT_WINDOW_FOCUS_LOST) {
+        native_accessibility_set_window_focus(&state.accessibility, false);
         if (!js_reset_inputs(&state) ||
             !native_audio_set_muted(&state.audio, true)) {
           destroy_runtime(&state);
           return 2;
         }
       } else if (event.type == SDL_EVENT_WINDOW_FOCUS_GAINED) {
+        native_accessibility_set_window_focus(&state.accessibility, true);
         if (!native_audio_set_muted(&state.audio, false)) {
           destroy_runtime(&state);
           return 2;
+        }
+      } else if (native_accessibility_is_window_geometry_event(event.type)) {
+        native_accessibility_update_window_bounds(&state.accessibility);
+      } else {
+        uint64_t accessible_node_id = 0;
+        NativeAccessibilityAction accessible_action =
+            NATIVE_ACCESSIBILITY_ACTION_NONE;
+        if (native_accessibility_translate_event(
+                &state.accessibility, &event, &accessible_node_id,
+                &accessible_action)) {
+          const char *action =
+              accessible_action == NATIVE_ACCESSIBILITY_ACTION_FOCUS
+                  ? "focus"
+                  : "click";
+          if (!js_handle_accessibility_action(&state, accessible_node_id,
+                                              action)) {
+            destroy_runtime(&state);
+            return 2;
+          }
         }
       }
     }

@@ -12,6 +12,8 @@ on:
       - 'scripts/build-phase5-native-host.sh'
       - 'scripts/run-phase5-accessibility-probe.sh'
       - 'scripts/validate-phase5-accessibility.py'
+      - 'scripts/run-phase5-production-accessibility.sh'
+      - 'scripts/validate-phase5-production-accessibility.py'
       - 'scripts/seed-electron-migration-fixture.cjs'
       - 'scripts/report-electron-user-data.cjs'
       - 'scripts/inspect-electron-migration-fixture.cjs'
@@ -289,7 +291,8 @@ jobs:
           set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            build-essential cmake ninja-build pkg-config curl xz-utils patchelf xvfb \
+            build-essential cmake ninja-build pkg-config curl xz-utils patchelf xvfb git \
+            x11-utils dbus-x11 at-spi2-core python3-pyatspi \
             libpng-dev libmpg123-dev libfreetype6-dev libharfbuzz-dev \
             libasound2-dev libpulse-dev \
             libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev \
@@ -300,6 +303,10 @@ jobs:
       - name: Build and validate production native core bridge
         shell: bash
         run: bash scripts/build-phase5-native-host.sh
+
+      - name: Exercise production native accessibility through AT-SPI
+        shell: bash
+        run: dbus-run-session -- bash scripts/run-phase5-production-accessibility.sh
 
       - name: Report native host evidence
         if: always()
