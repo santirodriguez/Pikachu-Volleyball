@@ -825,11 +825,15 @@ static bool run_self_test(NativeRuntime *state) {
     printf("electron_migration_runtime=PASS\n");
   }
 
-  if (!js_handle_key(state, "KeyZ", true, false) || !step_runtime(state) ||
-      !js_handle_key(state, "KeyZ", false, false) ||
+  const char *power_hit_code = expect_migration ? "KeyQ" : "KeyZ";
+  if (!js_handle_key(state, power_hit_code, true, false) ||
+      !step_runtime(state) ||
+      !js_handle_key(state, power_hit_code, false, false) ||
       !js_get_string(state, "getStateJson", json, sizeof(json)) ||
       !contains(json, "\"state\":\"menu\"")) {
-    fprintf(stderr, "Power Hit did not advance intro to menu\n");
+    fprintf(stderr,
+            "Power Hit did not advance intro to menu with active binding %s\n",
+            power_hit_code);
     return false;
   }
 
