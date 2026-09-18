@@ -2,10 +2,10 @@
   <img src="src/resources/assets/images/IDI_PIKAICON-1_gap_filled_192.png" width="96" alt="Pikachu Volleyball icon">
 </p>
 
-<h1 align="center">Pikachu Volleyball 2.1</h1>
+<h1 align="center">Pikachu Volleyball 3.0</h1>
 
 <p align="center">
-  <strong>A tiny beach-volleyball classic, carefully brought into a modern Linux desktop.</strong>
+  <strong>A tiny beach-volleyball classic, carefully brought into a modern native Linux desktop.</strong>
 </p>
 
 <p align="center">
@@ -14,7 +14,7 @@
 
 <p align="center">
   <a href="https://github.com/santirodriguez/pikachu-volleyball/releases"><img alt="Linux AppImage" src="https://img.shields.io/badge/Linux-AppImage-F7C948?style=for-the-badge&logo=linux&logoColor=111827"></a>
-  <img alt="Version 2.1" src="https://img.shields.io/badge/Version-2.1-E63946?style=for-the-badge">
+  <img alt="Version 3.0" src="https://img.shields.io/badge/Version-3.0-E63946?style=for-the-badge">
   <img alt="Five languages" src="https://img.shields.io/badge/Languages-5-4EA8DE?style=for-the-badge">
 </p>
 
@@ -41,7 +41,7 @@ This edition is simply my way of looking after a game I remember fondly. The ori
 
 | | |
 |---|---|
-| **A proper Linux edition** | Portable AppImage packaging with a focused desktop experience. |
+| **A native Linux edition** | A compact SDL3 + QuickJS AppImage with a focused desktop experience. |
 | **One coherent menu** | Pause, restart, match settings, audio, graphics, language and About in one place. |
 | **Editable controls** | Remap both players, detect conflicts and restore defaults whenever needed. |
 | **Five languages** | English, Español, Català, 한국어 and 中文. |
@@ -56,7 +56,7 @@ This edition is simply my way of looking after a game I remember fondly. The ori
 2. Download the latest `.AppImage` for `x86_64` and `SHA256SUMS.txt`.
 3. Verify the checksum, allow the AppImage to run as a program and open it.
 
-See the concise [2.1.0 release notes](docs/releases/v2.1.0.md). Development release candidates are built by the [Release Candidate Readiness workflow](https://github.com/santirodriguez/pikachu-volleyball/actions/workflows/phase6-release-readiness.yml).
+See the concise [3.0.0 release notes](docs/releases/v3.0.0.md). Development release candidates are built by the [Release Candidate Readiness workflow](https://github.com/santirodriguez/pikachu-volleyball/actions/workflows/phase6-release-readiness.yml).
 
 ## Controls
 
