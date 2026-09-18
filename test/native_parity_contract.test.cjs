@@ -245,3 +245,25 @@ test('native app exposes one menu state to keyboard pointer accessibility and pl
   assert.match(source, /drainPlatformCommands/);
   assert.match(source, /getAllowedExternalUrls/);
 });
+
+
+test('native host renders quick-rematch copy, interface themes and extended remaps', () => {
+  const appSource = read('src/resources/js/native_app.js');
+  const menuStateSource = read('src/resources/js/native_menu_state.js');
+  const stringsSource = read('src/resources/js/integrated_menu_strings.js');
+  const rendererSource = read('desktop/native/native_menu_renderer.c');
+  const hostSource = read('desktop/native/native_main.c');
+
+  assert.match(appSource, /quickRematchText/);
+  assert.match(menuStateSource, /getQuickRematchHint/);
+  assert.match(menuStateSource, /colorScheme:/);
+  assert.match(stringsSource, /Press Power Hit for a quick rematch/);
+  assert.match(rendererSource, /quickRematchVisible/);
+  assert.match(rendererSource, /quickRematchText/);
+  assert.match(rendererSource, /colorScheme/);
+  assert.match(rendererSource, /menu_palette/);
+  assert.match(hostSource, /SDL_SCANCODE_F24/);
+  assert.match(hostSource, /SDL_SCANCODE_NONUSBACKSLASH/);
+  assert.match(hostSource, /SDL_SCANCODE_KP_EQUALS/);
+  assert.match(hostSource, /native_remap_scancode_coverage=PASS/);
+});
