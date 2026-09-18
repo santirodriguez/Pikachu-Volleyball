@@ -212,3 +212,32 @@ test('native parity freezes extracted shared presentation formulas', () => {
   assert.match(source, /this\.messages\.ready\.y = 38/);
   assert.match(source, /getPlayerFrameIndex\(state, frameNumber\)/);
 });
+
+
+test('native menu reuses production locale/control policy and exact link allowlist', () => {
+  const source = read('src/resources/js/native_menu_state.js');
+  assert.match(source, /getIntegratedMenuStrings/);
+  assert.match(source, /SUPPORTED_LOCALES/);
+  assert.match(source, /CONTROL_BINDING_DEFINITIONS/);
+  assert.match(source, /validateControlBinding/);
+  assert.match(source, /https:\/\/santiagorodriguez\.com/);
+  assert.match(
+    source,
+    /https:\/\/github\.com\/santirodriguez\/pikachu-volleyball/
+  );
+  assert.match(
+    source,
+    /https:\/\/github\.com\/gorisanson\/pikachu-volleyball/
+  );
+  assert.doesNotMatch(source, /child_process|exec\(|spawn\(|shell:/);
+});
+
+test('native app exposes one menu state to keyboard pointer accessibility and platform host', () => {
+  const source = read('src/resources/js/native_app.js');
+  assert.match(source, /createNativeMenuState/);
+  assert.match(source, /handlePointer/);
+  assert.match(source, /handleAccessibilityAction/);
+  assert.match(source, /getMenuFrameJson/);
+  assert.match(source, /drainPlatformCommands/);
+  assert.match(source, /getAllowedExternalUrls/);
+});

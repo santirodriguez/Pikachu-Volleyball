@@ -20,6 +20,7 @@ on:
       - 'src/resources/js/input_frame.cjs'
       - 'src/resources/js/keyboard.js'
       - 'src/resources/js/native_app.js'
+      - 'src/resources/js/native_menu_state.js'
       - 'src/resources/js/native_audio_state.cjs'
       - 'src/resources/js/native_preferences.cjs'
       - 'src/resources/js/native_render_state.js'
