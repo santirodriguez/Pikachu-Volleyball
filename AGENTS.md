@@ -24,7 +24,8 @@ These rules apply to all future work in this repository.
 - Do not branch from the historical v3 lines or reuse their implementation wholesale.
 - Reuse a historical test, measurement, workflow technique, or implementation fragment only after reviewing it against the current `v3-restart` authority and preservation requirements.
 - Record materially reusable lessons in the active restart plan so later phases do not need to rediscover them.
-- Promotion from `v3-restart` to `main`, versioning, tags, releases, and publication remain separate explicit decisions.
+- `RELEASE_READY` has passed and Phase 6 is integrated; before any promotion to `main`, test a current release-candidate AppImage with `docs/v3-manual-qa.md` and close release-facing metadata/documentation.
+- Promotion from `v3-restart` to `main` is the final integration step and requires separate explicit user authorization. Versioning, tags, releases, and publication also remain separate explicit decisions.
 
 ## Preservation requirements
 

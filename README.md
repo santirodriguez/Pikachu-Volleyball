@@ -2,10 +2,10 @@
   <img src="src/resources/assets/images/IDI_PIKAICON-1_gap_filled_192.png" width="96" alt="Pikachu Volleyball icon">
 </p>
 
-<h1 align="center">Pikachu Volleyball 2.1</h1>
+<h1 align="center">Pikachu Volleyball 3.0</h1>
 
 <p align="center">
-  <strong>A tiny beach-volleyball classic, carefully brought into a modern Linux desktop.</strong>
+  <strong>A tiny beach-volleyball classic, carefully brought into a modern native Linux desktop.</strong>
 </p>
 
 <p align="center">
@@ -14,7 +14,7 @@
 
 <p align="center">
   <a href="https://github.com/santirodriguez/pikachu-volleyball/releases"><img alt="Linux AppImage" src="https://img.shields.io/badge/Linux-AppImage-F7C948?style=for-the-badge&logo=linux&logoColor=111827"></a>
-  <img alt="Version 2.1" src="https://img.shields.io/badge/Version-2.1-E63946?style=for-the-badge">
+  <img alt="Version 3.0" src="https://img.shields.io/badge/Version-3.0-E63946?style=for-the-badge">
   <img alt="Five languages" src="https://img.shields.io/badge/Languages-5-4EA8DE?style=for-the-badge">
 </p>
 
@@ -41,7 +41,7 @@ This edition is simply my way of looking after a game I remember fondly. The ori
 
 | | |
 |---|---|
-| **A proper Linux edition** | Portable AppImage packaging with a focused desktop experience. |
+| **A native Linux edition** | A compact SDL3 + QuickJS AppImage with a focused desktop experience. |
 | **One coherent menu** | Pause, restart, match settings, audio, graphics, language and About in one place. |
 | **Editable controls** | Remap both players, detect conflicts and restore defaults whenever needed. |
 | **Five languages** | English, Español, Català, 한국어 and 中文. |
@@ -56,7 +56,7 @@ This edition is simply my way of looking after a game I remember fondly. The ori
 2. Download the latest `.AppImage` for `x86_64` and `SHA256SUMS.txt`.
 3. Verify the checksum, allow the AppImage to run as a program and open it.
 
-See the concise [2.1.0 release notes](docs/releases/v2.1.0.md). Pre-release builds may also appear in the [Build Linux AppImage workflow](https://github.com/santirodriguez/pikachu-volleyball/actions/workflows/release-appimage.yml).
+See the concise [3.0.0 release notes](docs/releases/v3.0.0.md). Development release candidates are built by the [Release Candidate Readiness workflow](https://github.com/santirodriguez/pikachu-volleyball/actions/workflows/phase6-release-readiness.yml).
 
 ## Controls
 
@@ -88,7 +88,7 @@ These are the defaults. Player controls can be changed from the in-game **Contro
 
 The browser foundation comes from [Kyutae Lee’s JavaScript reverse-engineering reimplementation](https://github.com/gorisanson/pikachu-volleyball). This edition would not exist without that careful work.
 
-The Linux desktop edition, integrated interface, controls, localization and 2.x work are maintained by [Santiago Rodríguez](https://santiagorodriguez.com).
+The Linux desktop edition, integrated interface, controls, localization and current maintenance work are maintained by [Santiago Rodríguez](https://santiagorodriguez.com).
 
 <details>
 <summary><strong>Development and packaging</strong></summary>
@@ -111,10 +111,12 @@ npm run build:desktop:linux
 - `npm run quality:check` runs lint, unit tests and the production web build.
 - `npm run build:desktop:linux` builds the SDL3 + QuickJS Linux AppImage with the repository-owned native toolchain.
 
-### Extension guides
+### Extension and release guides
 
 - [Game presentation and graphical extension guide](docs/game-presentation-extension-guide.md)
 - [Control binding extension guide](docs/control-binding-extension-guide.md)
+- [v3 manual AppImage QA checklist](docs/v3-manual-qa.md)
+- [v3 release-readiness evidence](docs/v3-release-readiness.md)
 
 The project keeps simulation, input, presentation and desktop integration separated so future visual work does not accidentally rewrite the game itself. The supported desktop runtime is SDL3 + QuickJS; the legacy Electron preference importer exists only to migrate existing 2.1 user settings.
 

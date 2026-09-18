@@ -2,16 +2,28 @@
 
 ## Status
 
-Phase 6 starts from `v3-restart` commit
-`58462e3fc8d26cdba4ab78727447da5c6155d75e`, where Phase 5 was integrated
-after exact-head `NATIVE_PARITY = PASS`.
+Phase 6 is complete and integrated into `v3-restart`.
 
-The objective is to turn the accepted SDL3 + QuickJS desktop architecture into
-a reproducible release candidate. This phase does not change the package
-version and does not authorize promotion to `main`, tag creation, GitHub
-Release publication, deployment, or distribution.
+The exact task head
+`1c091c945c4fe94412c2fe3969a17399b32b2939` passed
+`RELEASE_READY=PASS` before PR #90 was squash-merged. The integrated
+`v3-restart` commit is
+`0a84f0a010ab5ce2626d5e8ad06b8a036400b4b2`.
 
-Gate: `RELEASE_READY`.
+The validated Phase 6 candidate measured `9,419,256` bytes (~8.98 MiB) with
+AppImage SHA-256
+`e504eaa3a3efbd3840fb4c693b1f9dc496db19ebe5122b57bd56dc4d41961fc1`.
+Two independent builds were byte-identical and Debian 12, Ubuntu 22.04,
+Ubuntu 24.04, Fedora 44 and openSUSE Leap 16.0 all passed the exact candidate
+matrix.
+
+Phase 6 deliberately did not change the package version and did not authorize
+promotion to `main`, tag creation, GitHub Release publication, deployment or
+distribution.
+
+The current post-`RELEASE_READY` requirement is a fresh integrated candidate
+plus the human acceptance pass in [v3 Manual AppImage QA](v3-manual-qa.md)
+before any `main` promotion is considered.
 
 ## Release architecture
 
@@ -83,9 +95,10 @@ normalizes AppDir timestamps before SquashFS creation. Machine-readable
 `provenance.json` records the source head, source epoch, architecture,
 package/compression type and pinned release toolchain inputs.
 
-A final exact-head hash belongs in PR/CI evidence rather than this tracked file,
-because embedding a containing commit SHA here would create a new unvalidated
-head.
+Phase 6 exact-head evidence is now historical and may be recorded here because
+the validated task head and its later squash-merge commit are both fixed. New
+release-candidate evidence must still be tied to the exact head that produced
+the artifact.
 
 ## Dependency, security and license closure
 
@@ -162,6 +175,15 @@ Phase 6 itself does not:
 11. the final AppImage remains at or below `30 MiB`;
 12. exact artifact, bundle, host, provenance and core-trace hashes are recorded.
 
-Passing `RELEASE_READY` still does not authorize merge of the Phase 6 PR,
-promotion to `main`, versioning, tagging, release publication, or
-distribution.
+Phase 6 passed this gate and was integrated into `v3-restart`.
+
+For post-Phase-6 candidates, this workflow remains the durable automated
+release-candidate gate, but its metadata check is no longer hard-coded to
+`2.1.0`: package and lock versions must agree and matching release notes must
+exist.
+
+Automated readiness is not the final pre-`main` decision. A current AppImage
+must also pass the manual checklist in [v3 Manual AppImage QA](v3-manual-qa.md).
+
+Neither automated readiness nor manual QA authorizes promotion to `main`,
+tagging, GitHub Release publication or public distribution.
