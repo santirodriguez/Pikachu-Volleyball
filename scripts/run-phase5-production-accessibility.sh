@@ -141,3 +141,4 @@ done
   echo "status_sha256=$(sha256sum "$STATUS_LOG" | awk '{print $1}')"
   echo 'native_quit_process_exit=PASS'
 } | tee "$EVIDENCE_DIR/production-atspi-summary.txt"
+cat "$EVIDENCE_DIR/production-atspi-summary.txt" >> "$EVIDENCE_DIR/summary.txt"

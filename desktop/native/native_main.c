@@ -480,7 +480,7 @@ static bool js_handle_accessibility_action(NativeRuntime *state,
   if (!ok) return false;
   int accepted = JS_ToBool(state->context, result);
   JS_FreeValue(state->context, result);
-  return accepted >= 0;
+  return accepted == 1;
 }
 
 static bool js_set_locale(NativeRuntime *state, const char *locale) {
