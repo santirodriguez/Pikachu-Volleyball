@@ -83,7 +83,7 @@ const CONTROL_LAYOUT = Object.freeze({
   height: 20,
   step: 22,
   resetY: 241,
-  resetAllY: 258,
+  resetAllY: 260,
 });
 
 const MODAL_ACCEPT_LAYOUT = Object.freeze({

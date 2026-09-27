@@ -437,7 +437,7 @@ test('Phase 1 native menu keeps geometry state-owned and readable', () => {
   assert.match(state, /secondaryLabel: valueLabel/);
   assert.match(state, /groupLabel/);
   assert.match(state, /selected: selectedNavIndex === index/);
-  assert.match(state, /resetAllY: 258/);
+  assert.match(state, /resetAllY: 260/);
   assert.match(renderer, /secondary_label/);
   assert.match(renderer, /group_label/);
   assert.match(renderer, /is_nav && selected/);
