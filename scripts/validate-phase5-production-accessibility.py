@@ -6,7 +6,7 @@ import time
 
 import pyatspi
 
-WINDOW_NAME = "Pikachu Volleyball Native"
+WINDOW_NAME = "Pikachu Volleyball for Linux"
 TIMEOUT_SECONDS = 20.0
 
 

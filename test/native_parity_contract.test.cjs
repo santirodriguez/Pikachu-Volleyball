@@ -404,6 +404,9 @@ test('Phase 1 uses the Linux display name while preserving compatibility identit
   const packaging = read('scripts/build-native-appimage.sh');
   const strings = read('src/resources/js/integrated_menu_strings.js');
   const readme = read('README.md');
+  const productionAccessibility = read(
+    'scripts/validate-phase5-production-accessibility.py'
+  );
 
   assert.match(host, /kWindowTitle = "Pikachu Volleyball for Linux"/);
   assert.match(
@@ -416,6 +419,10 @@ test('Phase 1 uses the Linux display name while preserving compatibility identit
   assert.match(packaging, /Pikachu-Volleyball-Native-x86_64\.AppImage/);
   assert.match(strings, /PRODUCT_NAME = 'Pikachu Volleyball for Linux'/);
   assert.match(readme, /<h1 align="center">Pikachu Volleyball for Linux<\/h1>/);
+  assert.match(
+    productionAccessibility,
+    /WINDOW_NAME = "Pikachu Volleyball for Linux"/
+  );
 
   for (const locale of ['en', 'es-ar', 'ca', 'ko', 'zh']) {
     const manifest = JSON.parse(read(`src/${locale}/manifest.json`));
