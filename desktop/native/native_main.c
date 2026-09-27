@@ -1313,8 +1313,8 @@ static bool run_self_test(NativeRuntime *state) {
 
   if (!js_handle_key(state, "KeyP", true, false) ||
       !js_handle_key(state, "KeyP", false, false) ||
-      !js_handle_pointer(state, 20.0, 103.0, true) ||
-      !js_handle_pointer(state, 160.0, 60.0, true) ||
+      !js_handle_pointer(state, 20.0, 126.0, true) ||
+      !js_handle_pointer(state, 160.0, 90.0, true) ||
       !js_get_string(state, "getStateJson", json, sizeof(json)) ||
       !contains(json, "\"winningScore\":15")) {
     fprintf(stderr, "Native pointer menu path failed\n");
