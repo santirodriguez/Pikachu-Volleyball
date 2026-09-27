@@ -2,7 +2,7 @@
 
 import menuLogicModule from './menu_logic.cjs';
 import controlBindingsModule from './control_bindings.cjs';
-import { getIntegratedMenuStrings } from './integrated_menu_strings.js';
+import { PRODUCT_NAME, getIntegratedMenuStrings } from './integrated_menu_strings.js';
 
 const {
   SUPPORTED_LOCALES,
@@ -60,17 +60,30 @@ const SETTING_VALUES = Object.freeze({
 });
 
 const NAV_LAYOUT = Object.freeze({
-  x: 12,
-  y: 54,
-  width: 132,
-  height: 22,
+  x: 14,
+  y: 70,
+  width: 130,
+  height: 23,
+  step: 24,
 });
 
 const PANEL_LAYOUT = Object.freeze({
-  x: 154,
-  y: 54,
-  width: 266,
-  height: 14,
+  x: 158,
+  y: 84,
+  width: 252,
+  height: 26,
+  step: 31,
+});
+
+const CONTROL_LAYOUT = Object.freeze({
+  player1X: 158,
+  player2X: 288,
+  y: 86,
+  width: 122,
+  height: 20,
+  step: 22,
+  resetY: 241,
+  resetAllY: 258,
 });
 
 const MODAL_ACCEPT_LAYOUT = Object.freeze({
@@ -136,7 +149,7 @@ function createItem({
     focused,
     disabled,
     x: layout.x,
-    y: layout.y + index * layout.height,
+    y: layout.y + index * (layout.step || layout.height),
     width: layout.width,
     height: layout.height,
   };
@@ -351,7 +364,7 @@ export function createNativeMenuState(commands, initialLocale = 'en') {
         index,
         layout: NAV_LAYOUT,
         focused: mode === 'nav' && selectedNavIndex === index,
-        meta: { navId: id },
+        meta: { navId: id, selected: selectedNavIndex === index },
       })
     );
   }
@@ -400,11 +413,15 @@ export function createNativeMenuState(commands, initialLocale = 'en') {
         }
       );
     } else if (id === 'controls') {
+      const playerRows = { 1: 0, 2: 0 };
       for (const definition of CONTROL_BINDING_DEFINITIONS) {
+        const row = playerRows[definition.player]++;
         definitions.push({
           id: `control:${definition.id}`,
           kind: 'control',
           bindingId: definition.id,
+          player: definition.player,
+          row,
           label:
             copy.controls.actions[definition.id] || definition.id,
           value:
@@ -510,18 +527,66 @@ export function createNativeMenuState(commands, initialLocale = 'en') {
         valueLabel = definition.value;
       }
 
-      const label = valueLabel
+      const accessibilityLabel = valueLabel
         ? `${definition.label}: ${valueLabel}`
         : definition.label;
+      let layout = PANEL_LAYOUT;
+      let itemIndex = index;
+      let groupLabel = '';
+
+      if (definition.kind === 'control') {
+        const playerOne = definition.player === 1;
+        layout = {
+          x: playerOne ? CONTROL_LAYOUT.player1X : CONTROL_LAYOUT.player2X,
+          y: CONTROL_LAYOUT.y + definition.row * CONTROL_LAYOUT.step,
+          width: CONTROL_LAYOUT.width,
+          height: CONTROL_LAYOUT.height,
+        };
+        itemIndex = 0;
+        if (definition.row === 0) {
+          groupLabel = playerOne
+            ? copy.controls.player1
+            : copy.controls.player2;
+        }
+      } else if (definition.kind === 'control-reset') {
+        if (definition.scope === 'all') {
+          layout = {
+            x: CONTROL_LAYOUT.player1X,
+            y: CONTROL_LAYOUT.resetAllY,
+            width:
+              CONTROL_LAYOUT.player2X +
+              CONTROL_LAYOUT.width -
+              CONTROL_LAYOUT.player1X,
+            height: 18,
+          };
+        } else {
+          layout = {
+            x:
+              definition.scope === 'player1'
+                ? CONTROL_LAYOUT.player1X
+                : CONTROL_LAYOUT.player2X,
+            y: CONTROL_LAYOUT.resetY,
+            width: CONTROL_LAYOUT.width,
+            height: 18,
+          };
+        }
+        itemIndex = 0;
+      }
+
       return createItem({
         nodeId: 1000 + index,
         id: definition.id,
         kind: definition.kind,
-        label,
-        index,
-        layout: PANEL_LAYOUT,
+        label: accessibilityLabel,
+        index: itemIndex,
+        layout,
         focused: mode === 'panel' && panelIndex === index,
-        meta: definition,
+        meta: {
+          ...definition,
+          displayLabel: definition.label,
+          secondaryLabel: valueLabel,
+          groupLabel,
+        },
       });
     });
   }
@@ -578,9 +643,13 @@ export function createNativeMenuState(commands, initialLocale = 'en') {
       locale,
       colorScheme: settings.colorScheme === 'dark' ? 'dark' : 'light',
       mode,
+      productName: PRODUCT_NAME,
       title: copy.paused,
+      panelKicker: section.kicker || '',
       panelTitle: section.title || copy.nav[currentNavId()],
       panelBody: section.body || '',
+      panelPoster: section.poster || '',
+      panelHelp: section.help || '',
       status: status || copy.status.ready,
       navItems,
       panelItems,

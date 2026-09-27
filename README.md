@@ -2,7 +2,7 @@
   <img src="src/resources/assets/images/IDI_PIKAICON-1_gap_filled_192.png" width="96" alt="Pikachu Volleyball icon">
 </p>
 
-<h1 align="center">Pikachu Volleyball 3.0</h1>
+<h1 align="center">Pikachu Volleyball for Linux</h1>
 
 <p align="center">
   <strong>A tiny beach-volleyball classic, carefully brought into a modern native Linux desktop.</strong>

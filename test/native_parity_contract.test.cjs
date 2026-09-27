@@ -318,7 +318,7 @@ test('native stabilization covers interactive audio, hyper-ball rendering, Escap
     /SDL_LOGICAL_PRESENTATION_DISABLED/
   );
   assert.match(menuRenderer, /TTF_SetFontSize/);
-  assert.match(menuRenderer, /PIKACHU VOLLEYBALL/);
+  assert.match(menuRenderer, /product_name/);
   assert.match(menuRenderer, /117, 201, 238/);
   assert.match(menuRenderer, /247, 220, 82/);
   assert.match(menuRenderer, /189, 67, 56/);
@@ -393,4 +393,59 @@ test('native confirmation actions remain horizontally inside the modal card', ()
   assert.match(host, /PV_NATIVE_MENU_MODAL_FRAMEBUFFER_PATH/);
   assert.match(host, /native_menu_modal_layout=PASS/);
   assert.match(packaging, /native-menu-modal-framebuffer\.bmp/);
+});
+
+
+test('Phase 1 uses the Linux display name while preserving compatibility identity', () => {
+  const productName = 'Pikachu Volleyball for Linux';
+  const host = read('desktop/native/native_main.c');
+  const accessibility = read('desktop/native/native_accessibility.c');
+  const startup = read('desktop/native/native_startup.c');
+  const packaging = read('scripts/build-native-appimage.sh');
+  const strings = read('src/resources/js/integrated_menu_strings.js');
+  const readme = read('README.md');
+
+  assert.match(host, /kWindowTitle = "Pikachu Volleyball for Linux"/);
+  assert.match(
+    host,
+    /SDL_GetPrefPath\("santirodriguez", "Pikachu Volleyball"\)/
+  );
+  assert.match(accessibility, /Pikachu Volleyball for Linux/);
+  assert.match(startup, /Pikachu Volleyball for Linux/);
+  assert.match(packaging, /Name=Pikachu Volleyball for Linux/);
+  assert.match(packaging, /Pikachu-Volleyball-Native-x86_64\.AppImage/);
+  assert.match(strings, /PRODUCT_NAME = 'Pikachu Volleyball for Linux'/);
+  assert.match(readme, /<h1 align="center">Pikachu Volleyball for Linux<\/h1>/);
+
+  for (const locale of ['en', 'es-ar', 'ca', 'ko', 'zh']) {
+    const manifest = JSON.parse(read(`src/${locale}/manifest.json`));
+    const html = read(`src/${locale}/index.html`);
+    assert.equal(manifest.name, productName);
+    assert.match(html, /<title>Pikachu Volleyball for Linux<\/title>/);
+    assert.match(
+      html,
+      /apple-mobile-web-app-title" content="Pikachu Volleyball for Linux"/
+    );
+  }
+});
+
+test('Phase 1 native menu keeps geometry state-owned and readable', () => {
+  const state = read('src/resources/js/native_menu_state.js');
+  const renderer = read('desktop/native/native_menu_renderer.c');
+  const css = read('src/resources/integrated-menu.css');
+
+  assert.match(state, /secondaryLabel: valueLabel/);
+  assert.match(state, /groupLabel/);
+  assert.match(state, /selected: selectedNavIndex === index/);
+  assert.match(state, /resetAllY: 258/);
+  assert.match(renderer, /secondary_label/);
+  assert.match(renderer, /group_label/);
+  assert.match(renderer, /is_nav && selected/);
+  assert.match(
+    renderer,
+    /title, 18, 42, 120, 7\.6f, palette->nav_text/
+  );
+  assert.match(css, /--pv-nav-text/);
+  assert.match(css, /\.pv-menu-resume-card/);
+  assert.match(css, /overflow-wrap: anywhere/);
 });

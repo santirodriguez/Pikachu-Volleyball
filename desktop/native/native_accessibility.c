@@ -285,7 +285,7 @@ static accesskit_tree_update *build_tree_locked(
   const int width = snapshot->window_width;
   const int height = snapshot->window_height;
   accesskit_node *root = accesskit_node_new(ACCESSKIT_ROLE_WINDOW);
-  accesskit_node_set_label(root, "Pikachu Volleyball Native");
+  accesskit_node_set_label(root, "Pikachu Volleyball for Linux");
   accesskit_rect root_bounds = {0.0, 0.0, (double)width, (double)height};
   accesskit_node_set_bounds(root, root_bounds);
   if (snapshot->visible) accesskit_node_push_child(root, MENU_DIALOG_ID);

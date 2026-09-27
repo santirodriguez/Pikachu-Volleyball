@@ -26,7 +26,7 @@
 #define LOGICAL_WIDTH 432
 #define LOGICAL_HEIGHT 304
 
-static const char *kWindowTitle = "Pikachu Volleyball Native";
+static const char *kWindowTitle = "Pikachu Volleyball for Linux";
 
 typedef struct NativeRuntime {
   JSRuntime *runtime;

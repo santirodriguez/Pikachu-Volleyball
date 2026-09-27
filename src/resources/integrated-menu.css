@@ -15,7 +15,7 @@ html.integrated-menu-enabled #game-canvas-container {
 }
 
 .pv-menu-overlay {
-  --pv-menu-font-size: clamp(10px, calc(var(--canvas-width) / 46), 17px);
+  --pv-menu-font-size: clamp(13px, calc(var(--canvas-width) / 44), 18px);
   position: absolute;
   inset: 0;
   z-index: 50;
@@ -25,7 +25,7 @@ html.integrated-menu-enabled #game-canvas-container {
   height: var(--canvas-height);
   overflow: hidden;
   color: #fff8d7;
-  font-family: 'Trebuchet MS', Arial, sans-serif;
+  font-family: Inter, 'Segoe UI', system-ui, sans-serif;
   font-size: var(--pv-menu-font-size);
   background:
     linear-gradient(180deg, rgba(12, 35, 52, 0.34), rgba(7, 20, 31, 0.78)),
@@ -828,5 +828,195 @@ html.integrated-menu-enabled #game-canvas-container {
 
   .pv-control-reset-actions {
     grid-template-columns: 1fr;
+  }
+}
+
+
+/* Readable theme roles, durable selection and wrapping. */
+.pv-menu-overlay {
+  --pv-shell-bg: linear-gradient(180deg, #1b4e70 0%, #12344e 43%, #0d293f 100%);
+  --pv-shell-text: #fff8d7;
+  --pv-nav-bg: rgba(5, 23, 35, 0.78);
+  --pv-nav-text: #eaf8ff;
+  --pv-detail-bg: #75c9ee;
+  --pv-detail-text: #102331;
+  --pv-footer-bg: rgba(5, 20, 31, 0.72);
+  --pv-footer-text: #ccefff;
+}
+
+html[data-color-scheme='light'] .pv-menu-overlay {
+  --pv-shell-bg: linear-gradient(180deg, #ddf6ff 0%, #c7edf9 48%, #b5e4f5 100%);
+  --pv-shell-text: #143b57;
+  --pv-nav-bg: rgba(255, 248, 215, 0.94);
+  --pv-nav-text: #143b57;
+  --pv-detail-bg: #caeffa;
+  --pv-detail-text: #102331;
+  --pv-footer-bg: #143b57;
+  --pv-footer-text: #eaf8ff;
+}
+
+.pv-menu-shell {
+  color: var(--pv-shell-text);
+  background: var(--pv-shell-bg);
+}
+
+.pv-menu-header h2 {
+  color: var(--pv-shell-text);
+}
+
+.pv-menu-eyebrow {
+  max-width: 28em;
+  font-size: 0.72em;
+  line-height: 1.2;
+  white-space: normal;
+}
+
+.pv-menu-nav-item {
+  color: var(--pv-nav-text);
+  background: var(--pv-nav-bg);
+  font-size: 0.86em;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.pv-menu-nav-item.is-selected {
+  color: #162331;
+}
+
+.pv-menu-detail {
+  color: var(--pv-detail-text);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.2), transparent 25%),
+    var(--pv-detail-bg);
+}
+
+.pv-menu-panel-heading p {
+  font-size: 0.84em;
+  line-height: 1.38;
+}
+
+.pv-menu-setting,
+.pv-menu-language-grid button,
+.pv-menu-primary-action,
+.pv-menu-secondary-action,
+.pv-menu-modal-actions button {
+  font-size: 0.8em;
+  line-height: 1.2;
+}
+
+.pv-menu-about-copy,
+.pv-menu-about-link {
+  font-size: 0.74em;
+}
+
+.pv-menu-warning,
+.pv-menu-poster {
+  font-size: 0.8em;
+}
+
+.pv-menu-footer {
+  background: var(--pv-footer-bg);
+}
+
+.pv-menu-hints {
+  color: var(--pv-footer-text);
+  font-size: 0.66em;
+}
+
+.pv-menu-status {
+  color: #f4d44d;
+  font-size: 0.66em;
+  line-height: 1.25;
+}
+
+.pv-menu-modal-card p {
+  font-size: 0.84em;
+}
+
+.pv-menu-resume-card {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  margin-top: 0.82em;
+  border: 2px solid #17384b;
+  padding: 0.72em;
+  color: #162331;
+  background:
+    repeating-linear-gradient(
+      -45deg,
+      rgba(255, 255, 255, 0.16) 0 6px,
+      transparent 6px 12px
+    ),
+    #f4d44d;
+  box-shadow: 4px 4px 0 #bd4338;
+  gap: 0.42em;
+}
+
+.pv-menu-resume-card > strong {
+  font-size: 0.86em;
+  overflow-wrap: anywhere;
+}
+
+.pv-menu-resume-card > span {
+  font-size: 0.74em;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+
+.pv-menu-resume-card > p {
+  margin: 0;
+  font-size: 0.74em;
+  font-weight: 750;
+  line-height: 1.35;
+}
+
+.pv-menu-resume-action {
+  margin-top: 0.16em;
+  color: #fff8d7;
+  background: #143b57;
+}
+
+.pv-control-player h4 {
+  font-size: 0.72em;
+}
+
+.pv-control-binding-copy small {
+  overflow: visible;
+  font-size: 0.66em;
+  line-height: 1.2;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.pv-control-binding-copy strong {
+  overflow: visible;
+  font-size: 0.82em;
+  line-height: 1.2;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.pv-control-binding-change {
+  font-size: 0.58em;
+}
+
+.pv-control-reset-actions button,
+.pv-control-fixed-keys {
+  font-size: 0.62em;
+  line-height: 1.25;
+}
+
+@media (max-width: 720px), (max-height: 560px) {
+  .pv-menu-footer {
+    grid-template-columns: 1fr;
+    gap: 0.3em;
+  }
+
+  .pv-menu-status {
+    display: block;
+    max-width: none;
+    text-align: left;
   }
 }

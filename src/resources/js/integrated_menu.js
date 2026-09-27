@@ -3,7 +3,7 @@
 import inputActionsModule from './input_actions.cjs';
 import menuLogicModule from './menu_logic.cjs';
 import controlBindingsModule from './control_bindings.cjs';
-import { getIntegratedMenuStrings } from './integrated_menu_strings.js';
+import { PRODUCT_NAME, getIntegratedMenuStrings } from './integrated_menu_strings.js';
 
 const { shouldHandlePauseShortcut } = inputActionsModule;
 const { wrapIndex, isMenuConfirmKey } = menuLogicModule;
@@ -66,7 +66,7 @@ export function setUpIntegratedMenu(commands) {
             aria-hidden="true"
           />
           <div>
-            <p class="pv-menu-eyebrow">PIKACHU VOLLEYBALL</p>
+            <p class="pv-menu-eyebrow">${PRODUCT_NAME}</p>
             <h2 id="pv-menu-title">${strings.paused}</h2>
           </div>
         </div>
@@ -217,6 +217,10 @@ export function setUpIntegratedMenu(commands) {
         renderPanel();
         focusPanelControl(returnIndex);
       });
+    });
+
+    detail.querySelector('[data-command="continue"]')?.addEventListener('click', () => {
+      closeMenu(true);
     });
 
     detail.querySelector('[data-command="restart"]')?.addEventListener('click', () => {
@@ -803,7 +807,12 @@ function getPanelMarkup(id, strings, settings) {
       strings.continue.title,
       strings.continue.body
     )}
-      <div class="pv-menu-poster">${strings.continue.poster}</div>`;
+      <div class="pv-menu-resume-card">
+        <strong>${PRODUCT_NAME}</strong>
+        <span>${strings.continue.poster}</span>
+        <p>${strings.continue.help}</p>
+        <button type="button" class="pv-menu-primary-action pv-menu-resume-action" data-command="continue">${strings.continue.action}</button>
+      </div>`;
   }
   if (id === 'restart') {
     return `${panelHeading(
