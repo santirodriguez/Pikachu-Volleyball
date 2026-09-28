@@ -7,6 +7,8 @@ const {
   MENU_CONFIRM_KEYS,
   wrapIndex,
   isMenuConfirmKey,
+  shouldActivateMenuConfirm,
+  menuTabDirection,
   normalizeLocale,
   buildLocaleUrl,
 } = require('../src/resources/js/menu_logic.cjs');
@@ -29,6 +31,14 @@ test('accepts every approved menu confirmation key', () => {
     'ControlLeft',
   ]);
   assert.equal(isMenuConfirmKey('Space'), false);
+});
+
+test('requires a fresh confirmation press and keeps Tab direction explicit', () => {
+  assert.equal(shouldActivateMenuConfirm('Enter', false), true);
+  assert.equal(shouldActivateMenuConfirm('KeyZ', true), false);
+  assert.equal(shouldActivateMenuConfirm('Space', false), false);
+  assert.equal(menuTabDirection(false), 1);
+  assert.equal(menuTabDirection(true), -1);
 });
 
 test('normalizes document language codes to built locales', () => {

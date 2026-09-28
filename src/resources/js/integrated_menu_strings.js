@@ -6,6 +6,9 @@ const EN = {
   paused: 'PAUSED',
   chip: 'LINUX · STILL SPIKING',
   trigger: 'MENU',
+  navigationLabel: 'Pause menu',
+  backAction: 'Back to sections',
+  launcherError: 'Unable to open the menu. Try again.',
   nav: {
     continue: 'Continue',
     restart: 'Restart Match',
@@ -127,6 +130,9 @@ const ES = {
   paused: 'PAUSA',
   chip: 'LINUX · TODAVÍA REMATANDO',
   trigger: 'MENÚ',
+  navigationLabel: 'Menú de pausa',
+  backAction: 'Volver a las secciones',
+  launcherError: 'No se pudo abrir el menú. Probá de nuevo.',
   nav: {
     continue: 'Continuar',
     restart: 'Reiniciar partido',
@@ -140,7 +146,7 @@ const ES = {
   continue: {
     kicker: 'PARTIDO',
     title: '¿Volvemos al rally?',
-    body: 'Retoma exactamente el partido, el puntaje y la configuración actual.',
+    body: 'Retomá exactamente el partido, el puntaje y la configuración actual.',
     poster: 'QUE SIGA EL RALLY',
     action: 'Volver al partido',
     help: 'Movete con tus teclas configuradas · Golpe fuerte ataca · P abre este menú.',
@@ -202,7 +208,7 @@ const ES = {
   quit: {
     kicker: 'ESCRITORIO',
     title: 'Salir del juego',
-    body: 'Cierra el AppImage y vuelve a un mundo con menos Pikachus voladores.',
+    body: 'Cerrá el AppImage y volvé a un mundo con menos Pikachus voladores.',
     warning: 'El partido actual terminará.',
     action: 'Salir ahora',
   },
@@ -227,6 +233,9 @@ const KO = {
   paused: '일시 정지',
   chip: 'LINUX · 아직도 스파이크 중',
   trigger: '메뉴',
+  navigationLabel: '일시 정지 메뉴',
+  backAction: '메뉴 항목으로 돌아가기',
+  launcherError: '메뉴를 열 수 없습니다. 다시 시도하세요.',
   nav: { continue: '계속', restart: '경기 다시 시작', match: '경기 설정', controls: '조작', audio: '오디오 및 그래픽', language: '언어', about: '정보', quit: '종료' },
   continue: { kicker: '경기', title: '랠리로 돌아갈까요?', body: '현재 점수와 설정 그대로 경기를 이어갑니다.', poster: '랠리를 계속하세요', action: '경기 계속', help: '설정한 키로 이동 · 파워 히트로 공격 · P 키로 이 메뉴 열기.' },
   restart: { kicker: '경기', title: '경기 다시 시작', body: '선택한 옵션을 유지한 채 현재 대전을 처음부터 시작합니다.', warning: '점수와 라운드 진행 상황이 초기화됩니다.', action: '지금 다시 시작' },
@@ -246,6 +255,9 @@ const ZH = {
   paused: '已暂停',
   chip: 'LINUX · 仍在扣杀',
   trigger: '菜单',
+  navigationLabel: '暂停菜单',
+  backAction: '返回菜单栏目',
+  launcherError: '无法打开菜单。请重试。',
   nav: { continue: '继续', restart: '重新开始比赛', match: '比赛设置', controls: '控制', audio: '音频与画面', language: '语言', about: '关于', quit: '退出' },
   continue: { kicker: '比赛', title: '回到对局？', body: '以当前比分和设置继续比赛。', poster: '继续回合', action: '继续比赛', help: '使用已配置按键移动 · 强力击球进行攻击 · P 打开此菜单。' },
   restart: { kicker: '比赛', title: '重新开始比赛', body: '保留已选设置并重新开始当前对阵。', warning: '比分与回合进度将被清除。', action: '立即重新开始' },
@@ -426,6 +438,7 @@ const ABOUT_COPY = Object.freeze({
       '<strong>Pikachu Volleyball (1997)</strong> — SACHI SOFT / SAWAYAKAN Programmers and Satoshi Takenouchi. Thanks for creating the small, unforgettable classic that started it all.',
     reverse:
       '<a href="https://github.com/gorisanson/pikachu-volleyball" target="_blank" rel="noopener"><strong>JavaScript reverse-engineering reimplementation</strong></a> — Kyutae Lee. Thanks for the painstaking work that kept the game alive on the web and made this edition possible.',
+    reverseLink: 'JavaScript reverse-engineering reimplementation',
     fork: 'This edition is simply my way of caring for a game I remember fondly.',
     website: 'Visit santiagorodriguez.com',
     source: 'View source on GitHub',
@@ -440,6 +453,7 @@ const ABOUT_COPY = Object.freeze({
       '<strong>Pikachu Volleyball (1997)</strong> — SACHI SOFT / SAWAYAKAN Programmers y Satoshi Takenouchi. Gracias por crear el pequeño e inolvidable clásico que empezó todo.',
     reverse:
       '<a href="https://github.com/gorisanson/pikachu-volleyball" target="_blank" rel="noopener"><strong>Reimplementación en JavaScript mediante ingeniería inversa</strong></a> — Kyutae Lee. Gracias por el trabajo minucioso que mantuvo vivo el juego en la web e hizo posible esta edición.',
+    reverseLink: 'Reimplementación en JavaScript mediante ingeniería inversa',
     fork: 'Esta edición es, simplemente, mi manera de cuidar un juego que recuerdo con mucho cariño.',
     website: 'Visitar santiagorodriguez.com',
     source: 'Ver código en GitHub',
@@ -454,6 +468,7 @@ const ABOUT_COPY = Object.freeze({
       '<strong>Pikachu Volleyball (1997)</strong> — SACHI SOFT / SAWAYAKAN Programmers와 Satoshi Takenouchi. 이 모든 것의 시작이 된 작지만 잊을 수 없는 고전을 만들어 주셔서 감사합니다.',
     reverse:
       '<a href="https://github.com/gorisanson/pikachu-volleyball" target="_blank" rel="noopener"><strong>JavaScript 리버스 엔지니어링 재구현</strong></a> — Kyutae Lee. 웹에서 이 게임을 이어 가고 이번 에디션을 가능하게 한 세심한 작업에 감사드립니다.',
+    reverseLink: 'JavaScript 리버스 엔지니어링 재구현',
     fork: '이 에디션은 좋은 추억으로 간직한 게임을 조심스럽게 돌보는 저만의 작은 방식일 뿐입니다.',
     website: 'santiagorodriguez.com 방문',
     source: 'GitHub 소스 보기',
@@ -468,6 +483,7 @@ const ABOUT_COPY = Object.freeze({
       '<strong>Pikachu Volleyball (1997)</strong> — SACHI SOFT / SAWAYAKAN Programmers 与 Satoshi Takenouchi。感谢你们创造了这个小巧却令人难忘的经典，一切由此开始。',
     reverse:
       '<a href="https://github.com/gorisanson/pikachu-volleyball" target="_blank" rel="noopener"><strong>JavaScript 逆向工程重实现</strong></a> — Kyutae Lee。感谢这项细致工作，让游戏在网页上延续，也让这个版本成为可能。',
+    reverseLink: 'JavaScript 逆向工程重实现',
     fork: '这个版本只是我珍惜一款童年游戏、认真照看它的一种方式。',
     website: '访问 santiagorodriguez.com',
     source: '在 GitHub 查看源码',
@@ -482,6 +498,7 @@ const ABOUT_COPY = Object.freeze({
       '<strong>Pikachu Volleyball (1997)</strong> — SACHI SOFT / SAWAYAKAN Programmers i Satoshi Takenouchi. Gràcies per crear el petit clàssic inoblidable que ho va començar tot.',
     reverse:
       '<a href="https://github.com/gorisanson/pikachu-volleyball" target="_blank" rel="noopener"><strong>Reimplementació JavaScript mitjançant enginyeria inversa</strong></a> — Kyutae Lee. Gràcies per la feina minuciosa que va mantenir el joc viu al web i va fer possible aquesta edició.',
+    reverseLink: 'Reimplementació JavaScript mitjançant enginyeria inversa',
     fork: 'Aquesta edició és, simplement, la meva manera de cuidar un joc que recordo amb molt d’afecte.',
     website: 'Visita santiagorodriguez.com',
     source: 'Veure el codi a GitHub',
@@ -493,6 +510,9 @@ const CATALAN = Object.freeze({
   paused: 'EN PAUSA',
   chip: 'LINUX · ENCARA REMATANT',
   trigger: 'MENÚ',
+  navigationLabel: 'Menú de pausa',
+  backAction: 'Tornar a les seccions',
+  launcherError: "No s'ha pogut obrir el menú. Torna-ho a provar.",
   nav: {
     continue: 'Continuar',
     restart: 'Reiniciar el partit',
@@ -614,10 +634,10 @@ const THEME_COPY = Object.freeze({
 
 const QUICK_REMATCH_COPY = Object.freeze({
   en: 'Press Power Hit for a quick rematch',
-  'es-ar': 'Pulsa Power Hit para revancha rápida',
-  ca: 'Press Power Hit for a quick rematch',
+  'es-ar': 'Presioná Golpe fuerte para una revancha rápida',
+  ca: 'Prem Cop potent per jugar una revenja ràpida',
   ko: '파워 히트 버튼을 누르면 바로 다시 경기할 수 있습니다',
-  zh: '按下強力擊球鍵可快速再戰一場',
+  zh: '按下强力击球键可快速再来一局',
 });
 
 const BASE_STRINGS = Object.freeze({ en: EN, 'es-ar': ES, ko: KO, zh: ZH });

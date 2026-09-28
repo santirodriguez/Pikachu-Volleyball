@@ -380,11 +380,15 @@ test('native confirmation actions remain horizontally inside the modal card', ()
 
   assert.match(
     menuState,
-    /MODAL_ACCEPT_LAYOUT[\s\S]*x: 106,[\s\S]*y: 188,[\s\S]*height: 22/
+    /MODAL_LAYOUT[\s\S]*x: 80,[\s\S]*y: 89,[\s\S]*width: 272,[\s\S]*height: 132/
   );
   assert.match(
     menuState,
-    /MODAL_CANCEL_LAYOUT[\s\S]*x: 222,[\s\S]*y: 188,[\s\S]*height: 22/
+    /MODAL_ACCEPT_LAYOUT[\s\S]*x: MODAL_LAYOUT\.x \+ 26,[\s\S]*y: MODAL_LAYOUT\.y \+ 99,[\s\S]*height: 22/
+  );
+  assert.match(
+    menuState,
+    /MODAL_CANCEL_LAYOUT[\s\S]*x: MODAL_LAYOUT\.x \+ 142,[\s\S]*y: MODAL_LAYOUT\.y \+ 99,[\s\S]*height: 22/
   );
   assert.match(
     menuState,

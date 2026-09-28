@@ -28,7 +28,6 @@ function prepareIntegratedMenuShell() {
   document.documentElement.classList.add('integrated-menu-enabled');
   const stylesheets = [
     ['integrated-menu-stylesheet', '../resources/integrated-menu.css'],
-    ['phase3-menu-stylesheet', '../resources/phase3-menu.css'],
   ];
   for (const [id, href] of stylesheets) {
     if (document.getElementById(id) !== null) continue;

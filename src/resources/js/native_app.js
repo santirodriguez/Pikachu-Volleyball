@@ -110,11 +110,19 @@ function createMenuCommands() {
     resetDefaults,
     isMatchInProgress: () => requireApplication().core.isMatchInProgress(),
     requestPlatformCommand,
+    persistLocale: () => {
+      requireApplication().preferencesDirty = true;
+      return true;
+    },
   });
 }
 
 export function initialize(serializedPreferences = '{}', initialLocale = 'en') {
-  const normalized = normalizeNativePreferences(serializedPreferences);
+  const normalized = normalizeNativePreferences(
+    serializedPreferences,
+    'light',
+    initialLocale
+  );
   const settings = normalized.settings;
   const controlBindings = normalized.controlBindings;
   const renderState = createNativeRenderState(settings.graphic);
@@ -142,7 +150,7 @@ export function initialize(serializedPreferences = '{}', initialLocale = 'en') {
   };
   application.menuState = createNativeMenuState(
     createMenuCommands(),
-    initialLocale
+    normalized.locale
   );
   return true;
 }
@@ -268,7 +276,11 @@ export function drainAudioCommands() {
 
 export function getPersistedPreferencesJson() {
   const active = requireApplication();
-  return serializeNativePreferences(active.settings, active.controlBindings);
+  return serializeNativePreferences(
+    active.settings,
+    active.controlBindings,
+    active.menuState.getLocale()
+  );
 }
 
 export function setSetting(name, value) {

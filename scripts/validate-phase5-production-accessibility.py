@@ -119,6 +119,11 @@ def main():
     window = require_single(WINDOW_NAME)
     assert_role(window, "frame") if "frame" in role_name(window).lower() else assert_role(window, "window")
 
+    trigger = require_single("P · MENU")
+    assert_role(trigger, "button")
+    focus(trigger)
+    click(trigger)
+
     status = require_single("Game paused. Choose an action.")
     assert_role(status, "status")
 
@@ -126,6 +131,9 @@ def main():
     assert_role(restart, "button")
     focus(restart)
     click(restart)
+    restart_now = require_single("Restart now")
+    focus(restart_now)
+    click(restart_now)
 
     dialog = require_single("Are you sure?")
     assert_role(dialog, "dialog")

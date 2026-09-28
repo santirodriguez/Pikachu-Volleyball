@@ -6,7 +6,11 @@ import controlBindingsModule from './control_bindings.cjs';
 import { PRODUCT_NAME, getIntegratedMenuStrings } from './integrated_menu_strings.js';
 
 const { shouldHandlePauseShortcut } = inputActionsModule;
-const { wrapIndex, isMenuConfirmKey } = menuLogicModule;
+const {
+  wrapIndex,
+  shouldActivateMenuConfirm,
+  menuTabDirection,
+} = menuLogicModule;
 const { formatKeyboardCode } = controlBindingsModule;
 
 const LANGUAGES = Object.freeze([
@@ -46,7 +50,9 @@ export function setUpIntegratedMenu(commands) {
   let mode = 'nav';
   let pendingConfirmation = null;
   let modalContext = 'standard';
+  let modalReturn = null;
   let controlCapture = null;
+  const backgroundState = new Map();
 
   const overlay = document.createElement('section');
   overlay.id = 'pv-menu-overlay';
@@ -73,7 +79,7 @@ export function setUpIntegratedMenu(commands) {
         <span class="pv-menu-chip">${strings.chip}</span>
       </header>
       <div class="pv-menu-body">
-        <nav class="pv-menu-nav" aria-label="Pause menu">
+        <nav class="pv-menu-nav" aria-label="${strings.navigationLabel}">
           ${navIds
             .map(
               (id, index) => `
@@ -82,7 +88,7 @@ export function setUpIntegratedMenu(commands) {
                   class="pv-menu-nav-item"
                   data-nav-index="${index}"
                   data-nav-id="${id}"
-                  aria-selected="false"
+                  aria-current="false"
                 >
                   <span class="pv-menu-cursor" aria-hidden="true">▶</span>
                   <span>${strings.nav[id]}</span>
@@ -91,14 +97,23 @@ export function setUpIntegratedMenu(commands) {
             )
             .join('')}
         </nav>
-        <section id="pv-menu-detail" class="pv-menu-detail" aria-live="polite"></section>
+        <section id="pv-menu-detail" class="pv-menu-detail"></section>
       </div>
       <footer class="pv-menu-footer">
         <div id="pv-menu-hints" class="pv-menu-hints"></div>
-        <p id="pv-menu-status" class="pv-menu-status">${strings.status.ready}</p>
+        <p id="pv-menu-status" class="pv-menu-status" role="status" aria-live="polite" aria-atomic="true">${strings.status.ready}</p>
       </footer>
     </div>
-    <div id="pv-menu-modal" class="pv-menu-modal" role="alertdialog" aria-modal="true" hidden>
+    <div
+      id="pv-menu-modal"
+      class="pv-menu-modal"
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="pv-menu-modal-title"
+      aria-describedby="pv-menu-modal-message"
+      tabindex="-1"
+      hidden
+    >
       <div class="pv-menu-modal-card">
         <span class="pv-menu-kicker pv-menu-kicker-danger">!</span>
         <h3 id="pv-menu-modal-title">${strings.confirmation.title}</h3>
@@ -164,7 +179,7 @@ export function setUpIntegratedMenu(commands) {
     navButtons.forEach((button, index) => {
       const selected = index === selectedNavIndex;
       button.classList.toggle('is-selected', selected);
-      button.setAttribute('aria-selected', selected ? 'true' : 'false');
+      button.setAttribute('aria-current', selected ? 'page' : 'false');
       button.tabIndex = selected ? 0 : -1;
     });
     if (focus) navButtons[selectedNavIndex]?.focus();
@@ -187,29 +202,57 @@ export function setUpIntegratedMenu(commands) {
   function renderPanel() {
     if (detail === null) return;
     const id = currentNavId();
-    detail.innerHTML = getPanelMarkup(id, strings, commands.getSettings());
+    detail.innerHTML = `${getPanelMarkup(
+      id,
+      strings,
+      commands.getSettings()
+    )}
+      <button
+        type="button"
+        class="pv-menu-secondary-action pv-menu-back-action"
+        data-command="back"
+      >← ${strings.backAction}</button>`;
     wirePanelControls();
+  }
+
+  function interactionBlocked() {
+    return mode === 'modal' || mode === 'capture';
+  }
+
+  function returnToNavigation() {
+    if (interactionBlocked()) return;
+    mode = 'nav';
+    renderNavigation({ focus: true });
+    setHints(false);
   }
 
   function wirePanelControls() {
     if (detail === null) return;
 
     detail.querySelectorAll('[data-setting]').forEach((button) => {
-      button.addEventListener('click', () => cycleSetting(button, 1));
+      button.addEventListener('click', () => {
+        if (interactionBlocked()) return;
+        cycleSetting(button, 1);
+      });
     });
 
     detail.querySelectorAll('[data-locale]').forEach((button) => {
-      button.addEventListener('click', () => applyLanguage(button.dataset.locale));
+      button.addEventListener('click', () => {
+        if (interactionBlocked()) return;
+        applyLanguage(button.dataset.locale);
+      });
     });
 
     detail.querySelectorAll('[data-control-id]').forEach((button) => {
       button.addEventListener('click', () => {
+        if (interactionBlocked()) return;
         startControlCapture(button.dataset.controlId);
       });
     });
 
     detail.querySelectorAll('[data-control-reset]').forEach((button) => {
       button.addEventListener('click', () => {
+        if (interactionBlocked()) return;
         const returnIndex = panelControlIndex;
         commands.resetControlBindingScope(button.dataset.controlReset);
         confirmationSound();
@@ -219,11 +262,17 @@ export function setUpIntegratedMenu(commands) {
       });
     });
 
+    detail.querySelector('[data-command="back"]')?.addEventListener('click', () => {
+      returnToNavigation();
+    });
+
     detail.querySelector('[data-command="continue"]')?.addEventListener('click', () => {
+      if (interactionBlocked()) return;
       closeMenu(true);
     });
 
     detail.querySelector('[data-command="restart"]')?.addEventListener('click', () => {
+      if (interactionBlocked()) return;
       showConfirmation(strings.restart.warning, () => {
         commands.restartMatch();
         closeMenu(false);
@@ -231,6 +280,7 @@ export function setUpIntegratedMenu(commands) {
     });
 
     detail.querySelector('[data-command="reset-defaults"]')?.addEventListener('click', () => {
+      if (interactionBlocked()) return;
       commands.resetDefaults();
       confirmationSound();
       setStatus(strings.status.defaults);
@@ -238,6 +288,7 @@ export function setUpIntegratedMenu(commands) {
     });
 
     detail.querySelector('[data-command="quit"]')?.addEventListener('click', () => {
+      if (interactionBlocked()) return;
       showConfirmation(strings.quit.warning, async () => {
         const didQuit = await commands.quit();
         if (!didQuit) {
@@ -273,6 +324,10 @@ export function setUpIntegratedMenu(commands) {
       );
     });
     controls[panelControlIndex].focus();
+    controls[panelControlIndex].scrollIntoView?.({
+      block: 'nearest',
+      inline: 'nearest',
+    });
     setHints(true);
     if (playSound) navigationSound();
   }
@@ -389,7 +444,7 @@ export function setUpIntegratedMenu(commands) {
       }),
       false
     );
-    shell?.focus();
+    modal?.focus();
     confirmationSound();
   }
 
@@ -418,6 +473,12 @@ export function setUpIntegratedMenu(commands) {
     }
 
     controlCapture.candidateCode = event.code;
+    modalReturn = {
+      mode: 'panel',
+      selectedNavIndex,
+      panelControlIndex: controlCapture.returnIndex,
+      focus: document.activeElement,
+    };
     modalContext = 'control-confirm';
     mode = 'modal';
     showModal(
@@ -446,6 +507,7 @@ export function setUpIntegratedMenu(commands) {
       return;
     }
     clearModal();
+    modalReturn = null;
     controlCapture = null;
     mode = 'panel';
     setStatus(strings.controls.saved);
@@ -457,10 +519,49 @@ export function setUpIntegratedMenu(commands) {
   function cancelControlCapture() {
     const returnIndex = controlCapture?.returnIndex || 0;
     clearModal();
+    modalReturn = null;
     controlCapture = null;
     mode = 'panel';
     renderPanel();
     focusPanelControl(returnIndex);
+  }
+
+  function setInert(element, inert) {
+    if (!element) return;
+    element.toggleAttribute('inert', inert);
+    if (inert) {
+      element.setAttribute('aria-hidden', 'true');
+    } else {
+      element.removeAttribute('aria-hidden');
+    }
+  }
+
+  function setBackgroundInert(inert) {
+    const siblings = Array.from(container.children).filter(
+      (element) => element !== overlay
+    );
+    if (inert) {
+      backgroundState.clear();
+      for (const element of siblings) {
+        backgroundState.set(element, {
+          inert: element.hasAttribute('inert'),
+          ariaHidden: element.getAttribute('aria-hidden'),
+        });
+        setInert(element, true);
+      }
+      return;
+    }
+
+    for (const [element, state] of backgroundState) {
+      element.toggleAttribute('inert', state.inert);
+      if (state.ariaHidden === null) element.removeAttribute('aria-hidden');
+      else element.setAttribute('aria-hidden', state.ariaHidden);
+    }
+    backgroundState.clear();
+  }
+
+  function setModalBackgroundInert(inert) {
+    setInert(shell, inert);
   }
 
   function setModalMessage(message) {
@@ -476,14 +577,21 @@ export function setUpIntegratedMenu(commands) {
     setModalMessage(message);
     setModalActionsVisible(showActions);
     if (modal !== null) modal.hidden = false;
+    setModalBackgroundInert(true);
   }
 
   function showConfirmation(message, callback) {
+    modalReturn = {
+      mode,
+      selectedNavIndex,
+      panelControlIndex,
+      focus: document.activeElement,
+    };
     pendingConfirmation = callback;
     modalContext = 'standard';
     mode = 'modal';
     showModal(strings.confirmation.title, message, true);
-    overlay.querySelector('[data-modal-action="accept"]')?.focus();
+    overlay.querySelector('[data-modal-action="cancel"]')?.focus();
     confirmationSound();
   }
 
@@ -492,10 +600,30 @@ export function setUpIntegratedMenu(commands) {
     modalContext = 'standard';
     if (modal !== null) modal.hidden = true;
     setModalActionsVisible(true);
+    setModalBackgroundInert(false);
   }
 
   function closeConfirmation() {
+    const returnState = modalReturn;
+    modalReturn = null;
     clearModal();
+
+    if (returnState) {
+      selectedNavIndex = returnState.selectedNavIndex;
+      panelControlIndex = returnState.panelControlIndex;
+      mode = returnState.mode;
+      renderNavigation();
+      if (
+        returnState.focus &&
+        returnState.focus.isConnected &&
+        typeof returnState.focus.focus === 'function'
+      ) {
+        returnState.focus.focus();
+        setHints(mode === 'panel');
+        return;
+      }
+    }
+
     mode = 'nav';
     renderNavigation({ focus: true });
     setHints(false);
@@ -525,6 +653,7 @@ export function setUpIntegratedMenu(commands) {
   function openMenu() {
     if (!overlay.hidden) return;
     commands.setPaused(true);
+    setBackgroundInert(true);
     overlay.hidden = false;
     trigger.hidden = true;
     mode = 'nav';
@@ -539,10 +668,12 @@ export function setUpIntegratedMenu(commands) {
 
   function closeMenu(resumeMatch = true) {
     clearModal();
+    modalReturn = null;
     controlCapture = null;
     mode = 'nav';
     overlay.hidden = true;
     trigger.hidden = false;
+    setBackgroundInert(false);
     if (resumeMatch) commands.setPaused(false);
     commands.resetInputs();
     trigger.focus();
@@ -568,7 +699,7 @@ export function setUpIntegratedMenu(commands) {
           true
         );
       }
-    } else if (isMenuConfirmKey(event.code)) {
+    } else if (shouldActivateMenuConfirm(event.code, event.repeat)) {
       const control = controls[panelControlIndex];
       if (control?.dataset.setting) {
         cycleSetting(control, 1);
@@ -585,11 +716,21 @@ export function setUpIntegratedMenu(commands) {
   function handleModalKey(event) {
     const actions = Array.from(
       overlay.querySelectorAll('[data-modal-action]')
-    );
+    ).filter((action) => !action.closest('[hidden]'));
     const focusedIndex = Math.max(0, actions.indexOf(document.activeElement));
-    if (event.code === 'ArrowLeft' || event.code === 'ArrowRight') {
+
+    if (event.code === 'Tab') {
+      if (actions.length > 0) {
+        actions[
+          wrapIndex(
+            focusedIndex + menuTabDirection(event.shiftKey),
+            actions.length
+          )
+        ]?.focus();
+      }
+    } else if (event.code === 'ArrowLeft' || event.code === 'ArrowRight') {
       actions[wrapIndex(focusedIndex + 1, actions.length)]?.focus();
-    } else if (isMenuConfirmKey(event.code)) {
+    } else if (shouldActivateMenuConfirm(event.code, event.repeat)) {
       if (document.activeElement?.dataset.modalAction === 'cancel') {
         cancelModalAction();
       } else {
@@ -600,16 +741,52 @@ export function setUpIntegratedMenu(commands) {
     }
   }
 
+  function handleMenuTab(event) {
+    const direction = menuTabDirection(event.shiftKey);
+    if (mode === 'panel') {
+      const controls = getPanelControls();
+      if (controls.length === 0) {
+        mode = 'nav';
+        renderNavigation({ focus: true });
+        setHints(false);
+        return;
+      }
+
+      const nextIndex = panelControlIndex + direction;
+      if (nextIndex >= 0 && nextIndex < controls.length) {
+        focusPanelControl(nextIndex);
+      } else {
+        mode = 'nav';
+        renderNavigation({ focus: true });
+        setHints(false);
+      }
+      return;
+    }
+
+    if (!event.shiftKey) {
+      const controls = getPanelControls();
+      if (controls.length > 0) {
+        focusPanelControl(0);
+        return;
+      }
+    }
+
+    selectNav(selectedNavIndex + direction, { focus: true });
+  }
+
   navButtons.forEach((button, index) => {
     button.addEventListener('mouseenter', () => {
+      if (interactionBlocked()) return;
       if (selectedNavIndex !== index) {
         selectNav(index, { playSound: true });
       }
     });
     button.addEventListener('focus', () => {
+      if (interactionBlocked()) return;
       if (mode === 'nav' && selectedNavIndex !== index) selectNav(index);
     });
     button.addEventListener('click', () => {
+      if (interactionBlocked()) return;
       selectNav(index);
       if (button.dataset.navId === 'continue') activateNavItem();
     });
@@ -653,8 +830,10 @@ export function setUpIntegratedMenu(commands) {
         return;
       }
 
-      if (event.code !== 'Tab') consumeMenuEvent(event);
-      if (mode === 'panel') {
+      consumeMenuEvent(event);
+      if (event.code === 'Tab') {
+        handleMenuTab(event);
+      } else if (mode === 'panel') {
         handlePanelKey(event);
       } else if (event.code === 'ArrowDown') {
         selectNav(selectedNavIndex + 1, {
@@ -666,7 +845,7 @@ export function setUpIntegratedMenu(commands) {
           focus: true,
           playSound: true,
         });
-      } else if (isMenuConfirmKey(event.code)) {
+      } else if (shouldActivateMenuConfirm(event.code, event.repeat)) {
         activateNavItem();
       } else if (event.code === 'Escape') {
         closeMenu(true);
@@ -678,7 +857,7 @@ export function setUpIntegratedMenu(commands) {
   window.addEventListener(
     'keyup',
     (event) => {
-      if (!overlay.hidden && event.code !== 'Tab') consumeMenuEvent(event);
+      if (!overlay.hidden) consumeMenuEvent(event);
     },
     true
   );

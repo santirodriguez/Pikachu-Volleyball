@@ -29,7 +29,7 @@ test('native preferences accept migration wrapper and sanitize through shared ru
     },
   });
 
-  const result = normalizeNativePreferences(serialized);
+  const result = normalizeNativePreferences(serialized, 'light', 'en-US');
   assert.deepEqual(result.settings, {
     graphic: 'soft',
     bgm: 'off',
@@ -39,6 +39,7 @@ test('native preferences accept migration wrapper and sanitize through shared ru
     colorScheme: 'dark',
   });
   assert.equal(result.controlBindings['p1.left'], 'KeyA');
+  assert.equal(result.locale, 'en');
 });
 
 test('native preferences fail closed to shared defaults for invalid values', () => {
@@ -59,9 +60,35 @@ test('native preferences fail closed to shared defaults for invalid values', () 
     result.controlBindings,
     controlsModule.DEFAULT_CONTROL_BINDINGS
   );
+  assert.equal(result.locale, 'en');
 });
 
-test('native preferences serialize exactly the seven accepted persisted keys', () => {
+test('native preferences persist an optional locale and fall back to system locale', () => {
+  const fresh = normalizeNativePreferences('{}', 'light', 'ca-ES');
+  assert.equal(fresh.locale, 'ca');
+
+  const persisted = normalizeNativePreferences(
+    JSON.stringify({
+      schema: 1,
+      values: { 'pv-native-locale': 'es-ar' },
+    }),
+    'light',
+    'ko-KR'
+  );
+  assert.equal(persisted.locale, 'es-ar');
+
+  const invalid = normalizeNativePreferences(
+    JSON.stringify({
+      schema: 1,
+      values: { 'pv-native-locale': 'not-a-locale' },
+    }),
+    'light',
+    'ko-KR'
+  );
+  assert.equal(invalid.locale, 'ko');
+});
+
+test('native preferences serialize the existing keys plus optional locale', () => {
   const serialized = serializeNativePreferences(
     {
       graphic: 'soft',
@@ -74,13 +101,15 @@ test('native preferences serialize exactly the seven accepted persisted keys', (
     {
       ...controlsModule.DEFAULT_CONTROL_BINDINGS,
       'p2.left': 'KeyJ',
-    }
+    },
+    'ca'
   );
   const parsed = JSON.parse(serialized);
   assert.equal(parsed.schema, 1);
   assert.deepEqual(Object.keys(parsed.values).sort(), [
     'colorScheme',
     'pv-control-bindings-v1',
+    'pv-native-locale',
     'pv-offline-bgm',
     'pv-offline-graphic',
     'pv-offline-sfx',
@@ -89,6 +118,7 @@ test('native preferences serialize exactly the seven accepted persisted keys', (
   ]);
   assert.equal(parsed.values['pv-offline-graphic'], 'soft');
   assert.equal(parsed.values['pv-offline-winningScore'], '5');
+  assert.equal(parsed.values['pv-native-locale'], 'ca');
   assert.equal(
     JSON.parse(parsed.values['pv-control-bindings-v1']).bindings['p2.left'],
     'KeyJ'

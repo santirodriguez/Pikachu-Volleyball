@@ -2,6 +2,7 @@
 
 const settingsModule = require('./settings_store.cjs');
 const controlsModule = require('./control_bindings.cjs');
+const menuModule = require('./menu_logic.cjs');
 
 const {
   STORAGE_KEYS,
@@ -14,6 +15,9 @@ const {
   parseControlBindings,
   serializeControlBindings,
 } = controlsModule;
+const { SUPPORTED_LOCALES, normalizeLocale } = menuModule;
+
+const NATIVE_LOCALE_STORAGE_KEY = 'pv-native-locale';
 
 function isPlainObject(value) {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value));
@@ -33,7 +37,15 @@ function parseDocument(serialized) {
   }
 }
 
-function normalizeNativePreferences(serialized, systemColorScheme = 'light') {
+function sanitizeNativeLocale(value) {
+  return SUPPORTED_LOCALES.includes(value) ? value : null;
+}
+
+function normalizeNativePreferences(
+  serialized,
+  systemColorScheme = 'light',
+  systemLocale = 'en'
+) {
   const values = parseDocument(serialized);
   const settings = {};
   for (const [name, defaultValue] of Object.entries(DEFAULT_SETTINGS)) {
@@ -49,10 +61,13 @@ function normalizeNativePreferences(serialized, systemColorScheme = 'light') {
     controlBindings: parseControlBindings(
       values[CONTROL_BINDING_STORAGE_KEY]
     ),
+    locale:
+      sanitizeNativeLocale(values[NATIVE_LOCALE_STORAGE_KEY]) ||
+      normalizeLocale(systemLocale),
   };
 }
 
-function serializeNativePreferences(settings, controlBindings) {
+function serializeNativePreferences(settings, controlBindings, locale) {
   const values = {};
   for (const [name, defaultValue] of Object.entries(DEFAULT_SETTINGS)) {
     values[STORAGE_KEYS[name]] =
@@ -64,6 +79,11 @@ function serializeNativePreferences(settings, controlBindings) {
   values[CONTROL_BINDING_STORAGE_KEY] =
     serializeControlBindings(controlBindings);
 
+  const sanitizedLocale = sanitizeNativeLocale(locale);
+  if (sanitizedLocale !== null) {
+    values[NATIVE_LOCALE_STORAGE_KEY] = sanitizedLocale;
+  }
+
   return JSON.stringify({
     schema: 1,
     values,
@@ -71,6 +91,8 @@ function serializeNativePreferences(settings, controlBindings) {
 }
 
 module.exports = {
+  NATIVE_LOCALE_STORAGE_KEY,
+  sanitizeNativeLocale,
   normalizeNativePreferences,
   serializeNativePreferences,
 };

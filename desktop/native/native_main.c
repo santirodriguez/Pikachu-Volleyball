@@ -432,19 +432,27 @@ static bool initialize_javascript(NativeRuntime *state,
   return initialized == 1;
 }
 
-static bool js_handle_key(NativeRuntime *state, const char *code, bool is_down,
-                          bool repeat) {
-  JSValue arguments[3] = {
+static bool js_handle_key_with_mod(NativeRuntime *state, const char *code,
+                                   bool is_down, bool repeat,
+                                   bool shift_key) {
+  JSValue arguments[4] = {
       JS_NewString(state->context, code),
       JS_NewBool(state->context, is_down),
       JS_NewBool(state->context, repeat),
+      JS_NewBool(state->context, shift_key),
   };
-  JSValueConst const_arguments[3] = {arguments[0], arguments[1], arguments[2]};
-  bool ok = call_api(state, "handleKey", 3, const_arguments, NULL);
-  for (size_t index = 0; index < 3; index += 1) {
+  JSValueConst const_arguments[4] = {
+      arguments[0], arguments[1], arguments[2], arguments[3]};
+  bool ok = call_api(state, "handleKey", 4, const_arguments, NULL);
+  for (size_t index = 0; index < 4; index += 1) {
     JS_FreeValue(state->context, arguments[index]);
   }
   return ok;
+}
+
+static bool js_handle_key(NativeRuntime *state, const char *code, bool is_down,
+                          bool repeat) {
+  return js_handle_key_with_mod(state, code, is_down, repeat, false);
 }
 
 static bool js_handle_pointer(NativeRuntime *state, double x, double y,
@@ -1046,7 +1054,9 @@ static bool dispatch_key_event(NativeRuntime *state, const SDL_KeyboardEvent *ev
   const char *code =
       scancode_to_code(event->scancode, code_buffer, sizeof(code_buffer));
   if (!code) return true;
-  return js_handle_key(state, code, is_down, event->repeat);
+  return js_handle_key_with_mod(
+      state, code, is_down, event->repeat,
+      (event->mod & SDL_KMOD_SHIFT) != 0);
 }
 
 static bool contains(const char *text, const char *needle) {
@@ -1190,6 +1200,29 @@ static bool run_self_test(NativeRuntime *state) {
     return false;
   }
   printf("native_escape_recovery=PASS\n");
+
+  if (!js_handle_key(state, "KeyP", true, false) ||
+      !js_handle_key(state, "KeyP", false, false) ||
+      !js_handle_key(state, "ArrowDown", true, false) ||
+      !js_handle_key(state, "ArrowDown", false, false) ||
+      !js_handle_key(state, "Enter", true, false) ||
+      !js_get_string(state, "getMenuFrameJson", json, sizeof(json)) ||
+      !contains(json, "\"modal\":{") ||
+      !contains(json, "\"focused\":true,\"hovered\":false,\"disabled\":false,\"x\":222") ||
+      !js_handle_key(state, "Enter", true, true) ||
+      !js_get_string(state, "getMenuFrameJson", json, sizeof(json)) ||
+      !contains(json, "\"modal\":{") ||
+      !js_handle_key_with_mod(state, "Tab", true, false, true) ||
+      !js_get_string(state, "getMenuFrameJson", json, sizeof(json)) ||
+      !contains(json, "\"focused\":true,\"hovered\":false,\"disabled\":false,\"x\":106") ||
+      !js_handle_key(state, "Escape", true, false) ||
+      !js_handle_key(state, "Escape", false, false) ||
+      !js_handle_key(state, "KeyP", true, false) ||
+      !js_handle_key(state, "KeyP", false, false)) {
+    fprintf(stderr, "Native modal fresh-confirm/Tab contract failed\n");
+    return false;
+  }
+  printf("native_menu_modal_input=PASS\n");
 
   const char *custom_preferences =
       "{\"pv-offline-speed\":\"fast\","
@@ -1335,14 +1368,49 @@ static bool run_self_test(NativeRuntime *state) {
   }
   printf("native_locale_menu=PASS\n");
 
+  if (!js_set_locale(state, "ca") ||
+      !persist_preferences_if_dirty(state)) {
+    fprintf(stderr, "Native locale preference did not become dirty\n");
+    return false;
+  }
+  size_t locale_preferences_length = 0;
+  char *locale_preferences =
+      read_text_file(state->preferences_path, &locale_preferences_length);
+  if (!locale_preferences ||
+      !contains(locale_preferences, "\"pv-native-locale\":\"ca\"")) {
+    free(locale_preferences);
+    fprintf(stderr, "Native locale preference was not serialized\n");
+    return false;
+  }
+  JSValue locale_argument = JS_NewStringLen(
+      state->context, locale_preferences, locale_preferences_length);
+  JSValue fallback_locale_argument = JS_NewString(state->context, "en");
+  JSValueConst locale_arguments[] = {locale_argument, fallback_locale_argument};
+  JSValue locale_result;
+  bool locale_initialized =
+      call_api(state, "initialize", 2, locale_arguments, &locale_result);
+  JS_FreeValue(state->context, locale_argument);
+  JS_FreeValue(state->context, fallback_locale_argument);
+  free(locale_preferences);
+  if (!locale_initialized) return false;
+  int locale_initialized_value = JS_ToBool(state->context, locale_result);
+  JS_FreeValue(state->context, locale_result);
+  if (locale_initialized_value != 1 ||
+      !js_get_string(state, "getStateJson", json, sizeof(json)) ||
+      !contains(json, "\"locale\":\"ca\"")) {
+    fprintf(stderr, "Native persisted locale did not override system locale\n");
+    return false;
+  }
+  printf("native_locale_persistence=PASS\n");
+
   if (!js_handle_key(state, "KeyP", true, false) ||
-      !js_handle_key(state, "KeyP", false, false) ||
-      !js_handle_key(state, "KeyP", true, false) ||
       !js_handle_key(state, "KeyP", false, false) ||
       !js_handle_key(state, "ArrowUp", true, false) ||
       !js_handle_key(state, "ArrowUp", false, false) ||
       !js_handle_key(state, "Enter", true, false) ||
       !js_handle_key(state, "Enter", false, false) ||
+      !js_handle_key(state, "ArrowLeft", true, false) ||
+      !js_handle_key(state, "ArrowLeft", false, false) ||
       !js_handle_key(state, "Enter", true, false) ||
       !js_handle_key(state, "Enter", false, false)) {
     fprintf(stderr, "Native Quit menu keyboard path failed\n");
@@ -1647,11 +1715,8 @@ int main(int argc, char **argv) {
     return ok ? 0 : 1;
   }
 
-  if (a11y_test &&
-      (!js_handle_key(&state, "KeyP", true, false) ||
-       !js_handle_key(&state, "KeyP", false, false))) {
-    destroy_runtime(&state);
-    return 2;
+  if (a11y_test) {
+    printf("native_accessibility_test_mode=PASS\n");
   }
 
   bool quit = false;
@@ -1668,6 +1733,15 @@ int main(int argc, char **argv) {
         }
       } else if (event.type == SDL_EVENT_KEY_UP) {
         if (!dispatch_key_event(&state, &event.key, false)) {
+          destroy_runtime(&state);
+          return 2;
+        }
+      } else if (event.type == SDL_EVENT_MOUSE_MOTION) {
+        SDL_Event logical_event = event;
+        if (!SDL_ConvertEventToRenderCoordinates(state.renderer,
+                                                 &logical_event) ||
+            !js_handle_pointer(&state, logical_event.motion.x,
+                               logical_event.motion.y, false)) {
           destroy_runtime(&state);
           return 2;
         }

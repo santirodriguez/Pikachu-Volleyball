@@ -352,6 +352,7 @@ static bool render_item(NativeMenuRenderer *menu, SDL_Renderer *renderer,
   bool focused = false;
   bool disabled = false;
   bool selected = false;
+  bool hovered = false;
   if (!get_double(context, item, "x", &x) ||
       !get_double(context, item, "y", &y) ||
       !get_double(context, item, "width", &width) ||
@@ -366,6 +367,12 @@ static bool render_item(NativeMenuRenderer *menu, SDL_Renderer *renderer,
     if (converted >= 0) selected = converted != 0;
   }
   JS_FreeValue(context, selected_value);
+  JSValue hovered_value = JS_GetPropertyStr(context, item, "hovered");
+  if (!JS_IsException(hovered_value) && !JS_IsUndefined(hovered_value)) {
+    int converted = JS_ToBool(context, hovered_value);
+    if (converted >= 0) hovered = converted != 0;
+  }
+  JS_FreeValue(context, hovered_value);
 
   char *label = get_string(context, item, "label");
   char *kind = get_string(context, item, "kind");
@@ -388,12 +395,28 @@ static bool render_item(NativeMenuRenderer *menu, SDL_Renderer *renderer,
   bool is_nav = strcmp(kind, "nav") == 0;
   bool is_modal = strcmp(kind, "modal") == 0;
   bool is_control = strcmp(kind, "control") == 0;
-  SDL_Color fill = is_nav ? palette->nav_panel : palette->item_fill;
-  SDL_Color border = is_nav ? palette->shell_inner : palette->item_border;
-  SDL_Color text_color = is_nav ? palette->nav_text : palette->item_text;
-  float font_size = is_nav ? 6.8f : (is_modal ? 6.7f : (is_control ? 6.0f : 6.3f));
+  bool is_trigger = strcmp(kind, "trigger") == 0;
+  SDL_Color fill =
+      is_trigger ? palette->footer
+                 : (is_nav ? palette->nav_panel : palette->item_fill);
+  SDL_Color border =
+      is_trigger ? palette->accent_yellow
+                 : (is_nav ? palette->shell_inner : palette->item_border);
+  SDL_Color text_color =
+      is_trigger ? palette->cream
+                 : (is_nav ? palette->nav_text : palette->item_text);
+  if (is_trigger) fill.a = 160;
+  float font_size =
+      is_trigger ? 5.8f
+                 : (is_nav ? 6.8f
+                           : (is_modal ? 6.7f
+                                       : (is_control ? 6.0f : 6.3f)));
 
   if (is_nav && selected && !focused) border = palette->accent_yellow;
+  if (hovered && !focused) {
+    border = palette->accent_cyan;
+    if (is_trigger) fill = palette->shell;
+  }
   if (is_modal && !focused) {
     if (strcmp(id, "modal:accept") == 0) {
       fill = palette->accent_red;
@@ -494,7 +517,8 @@ static bool render_menu_chrome(NativeMenuRenderer *menu,
                                const char *panel_body,
                                const char *panel_poster,
                                const char *panel_help,
-                               const char *status) {
+                               const char *status,
+                               const char *navigation_hint) {
   SDL_FRect full = canvas->presentation;
   if (!set_draw_color(renderer, palette->dim) || !SDL_RenderFillRect(renderer, &full)) return false;
   if (!fill_menu_rect(renderer, canvas, 9, 11, 416, 286, palette->shell_shadow) ||
@@ -515,7 +539,8 @@ static bool render_menu_chrome(NativeMenuRenderer *menu,
       !render_menu_text(menu, renderer, canvas, panel_kicker, 164, 18, 242, 5.0f, palette->accent_red) ||
       !render_menu_text(menu, renderer, canvas, panel_title, 164, 29, 242, 8.0f, palette->detail_text) ||
       !render_menu_text(menu, renderer, canvas, panel_body, 164, 48, 242, 5.7f, palette->detail_muted) ||
-      !render_menu_text(menu, renderer, canvas, status, 18, 284, 394, 5.2f, palette->accent_yellow)) return false;
+      !render_menu_text(menu, renderer, canvas, status, 18, 284, 232, 5.0f, palette->accent_yellow) ||
+      !render_menu_text(menu, renderer, canvas, navigation_hint, 260, 284, 150, 4.8f, palette->cream)) return false;
 
   if (panel_poster[0] != '\0') {
     if (!fill_menu_rect(renderer, canvas, 164, 96, 244, 42, palette->accent_yellow) ||
@@ -533,8 +558,16 @@ static bool render_modal(NativeMenuRenderer *menu, SDL_Renderer *renderer,
                          const NativeMenuPalette *palette) {
   char *modal_title = get_string(context, modal, "title");
   char *modal_message = get_string(context, modal, "message");
+  double x = 0;
+  double y = 0;
+  double width = 0;
+  double height = 0;
   JSValue items = JS_GetPropertyStr(context, modal, "items");
-  if (!modal_title || !modal_message || JS_IsException(items)) {
+  if (!modal_title || !modal_message || JS_IsException(items) ||
+      !get_double(context, modal, "x", &x) ||
+      !get_double(context, modal, "y", &y) ||
+      !get_double(context, modal, "width", &width) ||
+      !get_double(context, modal, "height", &height)) {
     free(modal_title);
     free(modal_message);
     JS_FreeValue(context, items);
@@ -545,22 +578,25 @@ static bool render_modal(NativeMenuRenderer *menu, SDL_Renderer *renderer,
   bool ok =
       set_draw_color(renderer, palette->modal_dim) &&
       SDL_RenderFillRect(renderer, &full) &&
-      fill_menu_rect(renderer, canvas, 84, 93, 272, 132,
-                     palette->focus_shadow) &&
-      fill_menu_rect(renderer, canvas, 80, 89, 272, 132,
-                     palette->modal_panel) &&
-      outline_menu_rect(renderer, canvas, 80, 89, 272, 132, 2.0f,
-                        palette->shell_border) &&
-      outline_menu_rect(renderer, canvas, 83, 92, 266, 126, 1.0f,
+      fill_menu_rect(renderer, canvas, (float)x + 4.0f, (float)y + 4.0f,
+                     (float)width, (float)height, palette->focus_shadow) &&
+      fill_menu_rect(renderer, canvas, (float)x, (float)y, (float)width,
+                     (float)height, palette->modal_panel) &&
+      outline_menu_rect(renderer, canvas, (float)x, (float)y, (float)width,
+                        (float)height, 2.0f, palette->shell_border) &&
+      outline_menu_rect(renderer, canvas, (float)x + 3.0f, (float)y + 3.0f,
+                        (float)width - 6.0f, (float)height - 6.0f, 1.0f,
                         palette->cream) &&
-      fill_menu_rect(renderer, canvas, 95, 101, 22, 12,
-                     palette->accent_red) &&
-      render_menu_text(menu, renderer, canvas, "!", 103, 100, 0, 6.4f,
-                       palette->cream) &&
-      render_menu_text(menu, renderer, canvas, modal_title, 124, 99, 210,
-                       8.2f, palette->modal_text) &&
-      render_menu_text(menu, renderer, canvas, modal_message, 95, 118, 242,
-                       6.1f, palette->modal_text) &&
+      fill_menu_rect(renderer, canvas, (float)x + 15.0f, (float)y + 12.0f,
+                     22.0f, 12.0f, palette->accent_red) &&
+      render_menu_text(menu, renderer, canvas, "!", (float)x + 23.0f,
+                       (float)y + 11.0f, 0, 6.4f, palette->cream) &&
+      render_menu_text(menu, renderer, canvas, modal_title,
+                       (float)x + 44.0f, (float)y + 10.0f,
+                       (int)width - 62, 8.2f, palette->modal_text) &&
+      render_menu_text(menu, renderer, canvas, modal_message,
+                       (float)x + 15.0f, (float)y + 29.0f,
+                       (int)width - 30, 6.1f, palette->modal_text) &&
       render_item_array(menu, renderer, canvas, context, items, palette);
 
   free(modal_title);
@@ -672,25 +708,16 @@ bool native_menu_renderer_render(NativeMenuRenderer *menu,
                                  JSContext *context,
                                  JSValueConst frame) {
   if (!menu || !menu->initialized) return false;
+
   bool visible = false;
   if (!get_bool(context, frame, "visible", &visible)) return false;
-  if (!visible) return true;
 
   char *locale = get_string(context, frame, "locale");
   char *color_scheme = get_string(context, frame, "colorScheme");
-  char *product_name = get_string(context, frame, "productName");
-  char *title = get_string(context, frame, "title");
-  char *panel_kicker = get_string(context, frame, "panelKicker");
-  char *panel_title = get_string(context, frame, "panelTitle");
-  char *panel_body = get_string(context, frame, "panelBody");
-  char *panel_poster = get_string(context, frame, "panelPoster");
-  char *panel_help = get_string(context, frame, "panelHelp");
-  char *status = get_string(context, frame, "status");
-  if (!locale || !color_scheme || !product_name || !title || !panel_kicker ||
-      !panel_title || !panel_body || !panel_poster || !panel_help || !status) {
-    free(locale); free(color_scheme); free(product_name); free(title);
-    free(panel_kicker); free(panel_title); free(panel_body); free(panel_poster);
-    free(panel_help); free(status); return false;
+  if (!locale || !color_scheme) {
+    free(locale);
+    free(color_scheme);
+    return false;
   }
 
   NativeMenuPalette palette = menu_palette(strcmp(color_scheme, "dark") == 0);
@@ -699,42 +726,83 @@ bool native_menu_renderer_render(NativeMenuRenderer *menu,
   const char *language = locale_language_tag(locale);
   if (!TTF_SetFontLanguage(font, language) ||
       (fallback && !TTF_SetFontLanguage(fallback, language))) {
-    fprintf(stderr, "TTF_SetFontLanguage failed for %s: %s\n", locale, SDL_GetError());
-    free(locale); free(color_scheme); free(product_name); free(title);
-    free(panel_kicker); free(panel_title); free(panel_body); free(panel_poster);
-    free(panel_help); free(status); return false;
+    fprintf(stderr, "TTF_SetFontLanguage failed for %s: %s\n", locale,
+            SDL_GetError());
+    free(locale);
+    free(color_scheme);
+    return false;
   }
 
   NativeMenuCanvas canvas;
   if (!begin_menu_canvas(renderer, &canvas)) {
-    free(locale); free(color_scheme); free(product_name); free(title);
-    free(panel_kicker); free(panel_title); free(panel_body); free(panel_poster);
-    free(panel_help); free(status); return false;
+    free(locale);
+    free(color_scheme);
+    return false;
   }
 
   SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-  bool ok = render_menu_chrome(menu, renderer, &canvas, &palette, product_name,
-                               title, panel_kicker, panel_title, panel_body,
-                               panel_poster, panel_help, status);
-  JSValue nav_items = JS_GetPropertyStr(context, frame, "navItems");
-  JSValue panel_items = JS_GetPropertyStr(context, frame, "panelItems");
-  if (ok) {
-    ok = !JS_IsException(nav_items) && !JS_IsException(panel_items) &&
-         render_item_array(menu, renderer, &canvas, context, nav_items, &palette) &&
-         render_item_array(menu, renderer, &canvas, context, panel_items, &palette);
+  bool ok = true;
+
+  if (!visible) {
+    JSValue trigger = JS_GetPropertyStr(context, frame, "trigger");
+    ok = !JS_IsException(trigger) && !JS_IsNull(trigger) &&
+         !JS_IsUndefined(trigger) &&
+         render_item(menu, renderer, &canvas, context, trigger, &palette);
+    JS_FreeValue(context, trigger);
+  } else {
+    char *product_name = get_string(context, frame, "productName");
+    char *title = get_string(context, frame, "title");
+    char *panel_kicker = get_string(context, frame, "panelKicker");
+    char *panel_title = get_string(context, frame, "panelTitle");
+    char *panel_body = get_string(context, frame, "panelBody");
+    char *panel_poster = get_string(context, frame, "panelPoster");
+    char *panel_help = get_string(context, frame, "panelHelp");
+    char *status = get_string(context, frame, "status");
+    char *navigation_hint = get_string(context, frame, "navigationHint");
+
+    if (!product_name || !title || !panel_kicker || !panel_title ||
+        !panel_body || !panel_poster || !panel_help || !status ||
+        !navigation_hint) {
+      ok = false;
+    } else {
+      ok = render_menu_chrome(
+          menu, renderer, &canvas, &palette, product_name, title, panel_kicker,
+          panel_title, panel_body, panel_poster, panel_help, status,
+          navigation_hint);
+    }
+
+    JSValue nav_items = JS_GetPropertyStr(context, frame, "navItems");
+    JSValue panel_items = JS_GetPropertyStr(context, frame, "panelItems");
+    if (ok) {
+      ok = !JS_IsException(nav_items) && !JS_IsException(panel_items) &&
+           render_item_array(menu, renderer, &canvas, context, nav_items,
+                             &palette) &&
+           render_item_array(menu, renderer, &canvas, context, panel_items,
+                             &palette);
+    }
+
+    JSValue modal = JS_GetPropertyStr(context, frame, "modal");
+    if (ok && !JS_IsNull(modal) && !JS_IsUndefined(modal)) {
+      ok = render_modal(menu, renderer, &canvas, context, modal, &palette);
+    }
+
+    JS_FreeValue(context, modal);
+    JS_FreeValue(context, nav_items);
+    JS_FreeValue(context, panel_items);
+    free(product_name);
+    free(title);
+    free(panel_kicker);
+    free(panel_title);
+    free(panel_body);
+    free(panel_poster);
+    free(panel_help);
+    free(status);
+    free(navigation_hint);
   }
-  JSValue modal = JS_GetPropertyStr(context, frame, "modal");
-  if (ok && !JS_IsNull(modal) && !JS_IsUndefined(modal)) {
-    ok = render_modal(menu, renderer, &canvas, context, modal, &palette);
-  }
-  JS_FreeValue(context, modal);
-  JS_FreeValue(context, nav_items);
-  JS_FreeValue(context, panel_items);
+
   SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
   bool restored = end_menu_canvas(renderer, &canvas);
-
-  free(locale); free(color_scheme); free(product_name); free(title);
-  free(panel_kicker); free(panel_title); free(panel_body); free(panel_poster);
-  free(panel_help); free(status);
+  free(locale);
+  free(color_scheme);
   return ok && restored;
 }
