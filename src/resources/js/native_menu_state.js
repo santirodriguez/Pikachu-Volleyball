@@ -2,12 +2,13 @@
 
 import menuLogicModule from './menu_logic.cjs';
 import controlBindingsModule from './control_bindings.cjs';
-import { getIntegratedMenuStrings } from './integrated_menu_strings.js';
+import { PRODUCT_NAME, getIntegratedMenuStrings } from './integrated_menu_strings.js';
 
 const {
   SUPPORTED_LOCALES,
   wrapIndex,
-  isMenuConfirmKey,
+  shouldActivateMenuConfirm,
+  menuTabDirection,
   normalizeLocale,
 } = menuLogicModule;
 const {
@@ -60,29 +61,56 @@ const SETTING_VALUES = Object.freeze({
 });
 
 const NAV_LAYOUT = Object.freeze({
-  x: 12,
-  y: 54,
-  width: 132,
-  height: 22,
+  x: 14,
+  y: 70,
+  width: 130,
+  height: 23,
+  step: 24,
 });
 
 const PANEL_LAYOUT = Object.freeze({
-  x: 154,
-  y: 54,
-  width: 266,
-  height: 14,
+  x: 158,
+  y: 84,
+  width: 252,
+  height: 26,
+  step: 31,
+});
+
+const CONTROL_LAYOUT = Object.freeze({
+  player1X: 158,
+  player2X: 288,
+  y: 86,
+  width: 122,
+  height: 20,
+  step: 22,
+  resetY: 241,
+  resetAllY: 260,
+});
+
+const TRIGGER_LAYOUT = Object.freeze({
+  x: 190,
+  y: 5,
+  width: 52,
+  height: 18,
+});
+
+const MODAL_LAYOUT = Object.freeze({
+  x: 80,
+  y: 89,
+  width: 272,
+  height: 132,
 });
 
 const MODAL_ACCEPT_LAYOUT = Object.freeze({
-  x: 106,
-  y: 188,
+  x: MODAL_LAYOUT.x + 26,
+  y: MODAL_LAYOUT.y + 99,
   width: 104,
   height: 22,
 });
 
 const MODAL_CANCEL_LAYOUT = Object.freeze({
-  x: 222,
-  y: 188,
+  x: MODAL_LAYOUT.x + 142,
+  y: MODAL_LAYOUT.y + 99,
   width: 104,
   height: 22,
 });
@@ -124,6 +152,7 @@ function createItem({
   index,
   layout,
   focused,
+  hovered = false,
   disabled = false,
   meta = {},
 }) {
@@ -134,9 +163,10 @@ function createItem({
     kind,
     label,
     focused,
+    hovered,
     disabled,
     x: layout.x,
-    y: layout.y + index * layout.height,
+    y: layout.y + index * (layout.step || layout.height),
     width: layout.width,
     height: layout.height,
   };
@@ -151,7 +181,11 @@ export function createNativeMenuState(commands, initialLocale = 'en') {
   let status = '';
   let modal = null;
   let modalFocusIndex = 0;
+  let modalReturnMode = 'nav';
+  let modalReturnPanelIndex = 0;
   let controlCapture = null;
+  let hoveredNodeId = null;
+  let triggerFocused = false;
 
   function strings() {
     return getIntegratedMenuStrings(locale);
@@ -163,13 +197,17 @@ export function createNativeMenuState(commands, initialLocale = 'en') {
     panelIndex = 0;
     modal = null;
     modalFocusIndex = 0;
+    modalReturnMode = 'nav';
+    modalReturnPanelIndex = 0;
     controlCapture = null;
+    hoveredNodeId = null;
   }
 
   function open() {
     if (visible) return;
     visible = true;
     resetTransientState();
+    triggerFocused = false;
     commands.setPaused(true);
     commands.resetInputs();
     status = strings().status.ready;
@@ -180,11 +218,15 @@ export function createNativeMenuState(commands, initialLocale = 'en') {
     controlCapture = null;
     mode = 'nav';
     visible = false;
+    hoveredNodeId = null;
+    triggerFocused = true;
     if (resumeMatch) commands.setPaused(false);
     commands.resetInputs();
   }
 
   function showConfirmation(message, action) {
+    modalReturnMode = mode;
+    modalReturnPanelIndex = panelIndex;
     modal = {
       context: 'standard',
       title: strings().confirmation.title,
@@ -192,8 +234,9 @@ export function createNativeMenuState(commands, initialLocale = 'en') {
       action,
       showActions: true,
     };
-    modalFocusIndex = 0;
+    modalFocusIndex = 1;
     mode = 'modal';
+    hoveredNodeId = null;
   }
 
   function cancelModal() {
@@ -207,7 +250,19 @@ export function createNativeMenuState(commands, initialLocale = 'en') {
       return;
     }
     modal = null;
-    mode = 'nav';
+    mode = modalReturnMode;
+    panelIndex = modalReturnPanelIndex;
+    hoveredNodeId = null;
+  }
+
+  function updateLocale(nextLocale) {
+    const normalized = normalizeLocale(nextLocale);
+    if (!SUPPORTED_LOCALES.includes(normalized)) return false;
+    if (normalized === locale) return true;
+    locale = normalized;
+    commands.persistLocale?.(locale);
+    status = strings().status.ready;
+    return true;
   }
 
   function applyPendingAction(action) {
@@ -222,7 +277,7 @@ export function createNativeMenuState(commands, initialLocale = 'en') {
       return;
     }
     if (action.type === 'language') {
-      locale = normalizeLocale(action.locale);
+      if (!updateLocale(action.locale)) return;
       commands.restartForLocale();
       close(false);
     }
@@ -351,7 +406,8 @@ export function createNativeMenuState(commands, initialLocale = 'en') {
         index,
         layout: NAV_LAYOUT,
         focused: mode === 'nav' && selectedNavIndex === index,
-        meta: { navId: id },
+        hovered: hoveredNodeId === 100 + index,
+        meta: { navId: id, selected: selectedNavIndex === index },
       })
     );
   }
@@ -366,7 +422,14 @@ export function createNativeMenuState(commands, initialLocale = 'en') {
     const id = currentNavId();
     const definitions = [];
 
-    if (id === 'match') {
+    if (id === 'restart') {
+      definitions.push({
+        id: 'action:restart',
+        kind: 'action',
+        action: 'restart',
+        label: copy.restart.action,
+      });
+    } else if (id === 'match') {
       definitions.push(
         {
           id: 'setting:winningScore',
@@ -400,11 +463,15 @@ export function createNativeMenuState(commands, initialLocale = 'en') {
         }
       );
     } else if (id === 'controls') {
+      const playerRows = { 1: 0, 2: 0 };
       for (const definition of CONTROL_BINDING_DEFINITIONS) {
+        const row = playerRows[definition.player]++;
         definitions.push({
           id: `control:${definition.id}`,
           kind: 'control',
           bindingId: definition.id,
+          player: definition.player,
+          row,
           label:
             copy.controls.actions[definition.id] || definition.id,
           value:
@@ -488,9 +555,16 @@ export function createNativeMenuState(commands, initialLocale = 'en') {
               ? copy.about.website
               : link.id === 'source'
               ? copy.about.source
-              : 'JavaScript reverse-engineering reimplementation',
+              : copy.about.reverseLink,
         });
       }
+    } else if (id === 'quit') {
+      definitions.push({
+        id: 'action:quit',
+        kind: 'action',
+        action: 'quit',
+        label: copy.quit.action,
+      });
     }
 
     const length = definitions.length;
@@ -510,18 +584,67 @@ export function createNativeMenuState(commands, initialLocale = 'en') {
         valueLabel = definition.value;
       }
 
-      const label = valueLabel
+      const accessibilityLabel = valueLabel
         ? `${definition.label}: ${valueLabel}`
         : definition.label;
+      let layout = PANEL_LAYOUT;
+      let itemIndex = index;
+      let groupLabel = '';
+
+      if (definition.kind === 'control') {
+        const playerOne = definition.player === 1;
+        layout = {
+          x: playerOne ? CONTROL_LAYOUT.player1X : CONTROL_LAYOUT.player2X,
+          y: CONTROL_LAYOUT.y + definition.row * CONTROL_LAYOUT.step,
+          width: CONTROL_LAYOUT.width,
+          height: CONTROL_LAYOUT.height,
+        };
+        itemIndex = 0;
+        if (definition.row === 0) {
+          groupLabel = playerOne
+            ? copy.controls.player1
+            : copy.controls.player2;
+        }
+      } else if (definition.kind === 'control-reset') {
+        if (definition.scope === 'all') {
+          layout = {
+            x: CONTROL_LAYOUT.player1X,
+            y: CONTROL_LAYOUT.resetAllY,
+            width:
+              CONTROL_LAYOUT.player2X +
+              CONTROL_LAYOUT.width -
+              CONTROL_LAYOUT.player1X,
+            height: 18,
+          };
+        } else {
+          layout = {
+            x:
+              definition.scope === 'player1'
+                ? CONTROL_LAYOUT.player1X
+                : CONTROL_LAYOUT.player2X,
+            y: CONTROL_LAYOUT.resetY,
+            width: CONTROL_LAYOUT.width,
+            height: 18,
+          };
+        }
+        itemIndex = 0;
+      }
+
       return createItem({
         nodeId: 1000 + index,
         id: definition.id,
         kind: definition.kind,
-        label,
-        index,
-        layout: PANEL_LAYOUT,
+        label: accessibilityLabel,
+        index: itemIndex,
+        layout,
         focused: mode === 'panel' && panelIndex === index,
-        meta: definition,
+        hovered: hoveredNodeId === 1000 + index,
+        meta: {
+          ...definition,
+          displayLabel: definition.label,
+          secondaryLabel: valueLabel,
+          groupLabel,
+        },
       });
     });
   }
@@ -551,6 +674,7 @@ export function createNativeMenuState(commands, initialLocale = 'en') {
         index: 0,
         layout: MODAL_ACCEPT_LAYOUT,
         focused: mode === 'modal' && modalFocusIndex === 0,
+        hovered: hoveredNodeId === 9000,
         meta: { modalAction: 'accept' },
       }),
       createItem({
@@ -561,9 +685,25 @@ export function createNativeMenuState(commands, initialLocale = 'en') {
         index: 0,
         layout: MODAL_CANCEL_LAYOUT,
         focused: mode === 'modal' && modalFocusIndex === 1,
+        hovered: hoveredNodeId === 9001,
         meta: { modalAction: 'cancel' },
       }),
     ];
+  }
+
+  function buildTriggerItem() {
+    const copy = strings();
+    return createItem({
+      nodeId: 50,
+      id: 'menu-trigger',
+      kind: 'trigger',
+      label: `P · ${copy.trigger}`,
+      index: 0,
+      layout: TRIGGER_LAYOUT,
+      focused: triggerFocused,
+      hovered: hoveredNodeId === 50,
+      meta: { trigger: true },
+    });
   }
 
   function getFrame() {
@@ -578,10 +718,19 @@ export function createNativeMenuState(commands, initialLocale = 'en') {
       locale,
       colorScheme: settings.colorScheme === 'dark' ? 'dark' : 'light',
       mode,
+      productName: PRODUCT_NAME,
       title: copy.paused,
+      panelKicker: section.kicker || '',
       panelTitle: section.title || copy.nav[currentNavId()],
       panelBody: section.body || '',
+      panelPoster: section.poster || '',
+      panelHelp: section.help || '',
       status: status || copy.status.ready,
+      navigationHint:
+        mode === 'panel'
+          ? `Esc · ${copy.hints.returnToMenu}`
+          : `Tab · ${copy.hints.navigate}`,
+      trigger: visible ? null : buildTriggerItem(),
       navItems,
       panelItems,
       modal: modal
@@ -589,6 +738,10 @@ export function createNativeMenuState(commands, initialLocale = 'en') {
             title: modal.title,
             message: modal.message,
             showActions: modal.showActions,
+            x: MODAL_LAYOUT.x,
+            y: MODAL_LAYOUT.y,
+            width: MODAL_LAYOUT.width,
+            height: MODAL_LAYOUT.height,
             items: modalItems,
           }
         : null,
@@ -616,6 +769,12 @@ export function createNativeMenuState(commands, initialLocale = 'en') {
     } else if (item.kind === 'command') {
       commands.resetDefaults();
       status = strings().status.defaults;
+    } else if (item.kind === 'action') {
+      if (item.action === 'restart') {
+        showConfirmation(strings().restart.warning, { type: 'restart' });
+      } else if (item.action === 'quit') {
+        showConfirmation(strings().quit.warning, { type: 'quit' });
+      }
     } else if (item.kind === 'control') {
       startControlCapture(item.bindingId);
     } else if (item.kind === 'control-reset') {
@@ -630,7 +789,7 @@ export function createNativeMenuState(commands, initialLocale = 'en') {
           locale: item.locale,
         });
       } else {
-        locale = normalizeLocale(item.locale);
+        if (!updateLocale(item.locale)) return;
         commands.restartForLocale();
         close(false);
       }
@@ -642,11 +801,18 @@ export function createNativeMenuState(commands, initialLocale = 'en') {
     }
   }
 
-  function handleModalKey(code) {
+  function handleModalKey(code, repeat = false, shiftKey = false) {
     const items = buildModalItems();
-    if (code === 'ArrowLeft' || code === 'ArrowRight') {
+    if (code === 'Tab') {
+      if (items.length > 0) {
+        modalFocusIndex = wrapIndex(
+          modalFocusIndex + menuTabDirection(shiftKey),
+          items.length
+        );
+      }
+    } else if (code === 'ArrowLeft' || code === 'ArrowRight') {
       modalFocusIndex = wrapIndex(modalFocusIndex + 1, items.length);
-    } else if (isMenuConfirmKey(code)) {
+    } else if (shouldActivateMenuConfirm(code, repeat)) {
       if (modalFocusIndex === 1) cancelModal();
       else acceptModal();
     } else if (code === 'Escape' || code === 'KeyP') {
@@ -654,14 +820,44 @@ export function createNativeMenuState(commands, initialLocale = 'en') {
     }
   }
 
-  function handleKey(code, isDown, repeat = false) {
+  function handleTab(shiftKey = false) {
+    const direction = menuTabDirection(shiftKey);
+    if (mode === 'panel') {
+      const items = buildPanelItems();
+      if (items.length === 0) {
+        mode = 'nav';
+        return;
+      }
+      const next = panelIndex + direction;
+      if (next >= 0 && next < items.length) {
+        panelIndex = next;
+      } else {
+        mode = 'nav';
+      }
+      return;
+    }
+
+    const items = buildPanelItems();
+    if (!shiftKey && items.length > 0) {
+      mode = 'panel';
+      panelIndex = 0;
+      return;
+    }
+    selectedNavIndex = wrapIndex(
+      selectedNavIndex + direction,
+      NAV_IDS.length
+    );
+    panelIndex = 0;
+  }
+
+  function handleKey(code, isDown, repeat = false, shiftKey = false) {
     if (typeof code !== 'string' || code.length === 0) return false;
 
     if (mode === 'capture' && isDown) {
       return handleCaptureKey(code, repeat);
     }
     if (mode === 'modal' && isDown) {
-      handleModalKey(code);
+      handleModalKey(code, repeat, shiftKey);
       return true;
     }
 
@@ -674,6 +870,11 @@ export function createNativeMenuState(commands, initialLocale = 'en') {
 
     if (!visible) return false;
     if (!isDown) return true;
+
+    if (code === 'Tab') {
+      handleTab(shiftKey);
+      return true;
+    }
 
     if (mode === 'panel') {
       const items = buildPanelItems();
@@ -691,7 +892,7 @@ export function createNativeMenuState(commands, initialLocale = 'en') {
             items.length
           );
         }
-      } else if (isMenuConfirmKey(code)) {
+      } else if (shouldActivateMenuConfirm(code, repeat)) {
         activatePanelItem(items[panelIndex], 1);
       } else if (code === 'Escape') {
         mode = 'nav';
@@ -705,7 +906,7 @@ export function createNativeMenuState(commands, initialLocale = 'en') {
     } else if (code === 'ArrowUp') {
       selectedNavIndex = wrapIndex(selectedNavIndex - 1, NAV_IDS.length);
       panelIndex = 0;
-    } else if (isMenuConfirmKey(code)) {
+    } else if (shouldActivateMenuConfirm(code, repeat)) {
       activateNavItem();
     } else if (code === 'Escape') {
       close(true);
@@ -715,6 +916,10 @@ export function createNativeMenuState(commands, initialLocale = 'en') {
 
   function focusNode(nodeId) {
     const frame = getFrame();
+    if (!visible && frame.trigger?.nodeId === nodeId) {
+      triggerFocused = true;
+      return true;
+    }
     if (frame.modal) {
       const modalIndex = frame.modal.items.findIndex(
         (item) => item.nodeId === nodeId
@@ -749,6 +954,10 @@ export function createNativeMenuState(commands, initialLocale = 'en') {
 
   function activateNode(nodeId) {
     const frame = getFrame();
+    if (!visible && frame.trigger?.nodeId === nodeId) {
+      open();
+      return true;
+    }
     if (frame.modal) {
       const modalIndex = frame.modal.items.findIndex(
         (item) => item.nodeId === nodeId
@@ -765,8 +974,11 @@ export function createNativeMenuState(commands, initialLocale = 'en') {
     );
     if (navIndex >= 0) {
       selectedNavIndex = navIndex;
+      panelIndex = 0;
       mode = 'nav';
-      activateNavItem();
+      if (frame.navItems[navIndex]?.navId === 'continue') {
+        activateNavItem();
+      }
       return true;
     }
     const nextPanelIndex = frame.panelItems.findIndex(
@@ -782,31 +994,44 @@ export function createNativeMenuState(commands, initialLocale = 'en') {
   }
 
   function handlePointer(x, y, isDown) {
-    if (!visible || !isDown) return visible;
     const frame = getFrame();
+
+    if (!visible) {
+      const trigger = frame.trigger;
+      const overTrigger = Boolean(trigger && inBounds(trigger, x, y));
+      hoveredNodeId = overTrigger ? trigger.nodeId : null;
+      if (isDown && overTrigger) {
+        triggerFocused = true;
+        open();
+      }
+      return overTrigger;
+    }
+
     const items = frame.modal
       ? frame.modal.items
       : [...frame.navItems, ...frame.panelItems];
-    const item = items.find((candidate) => inBounds(candidate, x, y));
-    if (!item) return true;
+    const item = items.find((candidate) => inBounds(candidate, x, y)) || null;
+    hoveredNodeId = item?.nodeId || null;
+
+    if (!isDown || !item) return true;
+
     focusNode(item.nodeId);
+    if (item.kind === 'nav' && item.navId !== 'continue') {
+      return true;
+    }
     activateNode(item.nodeId);
     return true;
   }
 
   function handleAccessibilityAction(nodeId, action) {
-    if (!visible) return false;
+    if (!visible && nodeId !== 50) return false;
     if (action === 'focus') return focusNode(nodeId);
     if (action === 'click') return activateNode(nodeId);
     return false;
   }
 
   function setLocale(nextLocale) {
-    const normalized = normalizeLocale(nextLocale);
-    if (!SUPPORTED_LOCALES.includes(normalized)) return false;
-    locale = normalized;
-    status = strings().status.ready;
-    return true;
+    return updateLocale(nextLocale);
   }
 
   return Object.freeze({

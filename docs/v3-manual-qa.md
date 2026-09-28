@@ -2,8 +2,9 @@
 
 ## Purpose
 
-This checklist is the human acceptance pass required after automated
-`RELEASE_READY` evidence and before any promotion of the v3 line to `main`.
+This is the reusable human acceptance checklist for current Linux candidates,
+complementing automated `RELEASE_READY` evidence before merge/release decisions.
+Historical v3 restart phases are provenance, not the current branch model.
 
 Use the exact AppImage produced by the current release-candidate workflow. Do
 not substitute an older Phase 6 artifact when the branch head has changed.
@@ -24,7 +25,7 @@ session_type=wayland|x11|other
 Verify the downloaded artifact first:
 
 ```bash
-candidate="Pikachu-Volleyball-3.0.0-x86_64.AppImage"
+candidate="<exact-downloaded-candidate-filename>.AppImage"
 sha256sum "$candidate"
 chmod +x "$candidate"
 "./$candidate"
@@ -72,6 +73,14 @@ chmod +x "$candidate"
 - [ ] Pause/menu keyboard navigation works.
 - [ ] Pointer interaction works where expected.
 - [ ] Modal dialogs and focus behavior look coherent.
+- [ ] At 800×600, 1024×768, wide/maximized and available HiDPI scales, labels,
+      controls, footer and dialogs fit without overlapping hit targets.
+- [ ] Continue, Controls, About and long confirmations are readable in both themes.
+- [ ] Tab/Shift+Tab stay inside the menu/dialog; Cancel restores the originating focus.
+- [ ] Restart/Quit start on Cancel; holding a confirmation key does not accept.
+- [ ] The pointer-openable menu trigger works without obscuring gameplay.
+- [ ] Screen-reader focus, dialog labels and setting-status announcements are usable
+      in the tested desktop session (record AT and session details).
 
 ### Audio
 
@@ -94,6 +103,7 @@ Open each supported locale and inspect gameplay plus the pause/menu surface:
 - [ ] 中文.
 - [ ] Localized text fits reasonably and no obvious missing-glyph boxes appear.
 - [ ] Language change/navigation behaves as expected.
+- [ ] Selected native language survives closing/reopening with a different system locale.
 
 ### External links and security-facing behavior
 
@@ -114,15 +124,34 @@ only copy of a live profile.
 If a real legacy profile is not available, record that this item was covered by
 the deterministic automated LevelDB migration fixture only.
 
+## Companion Web / PWA checks
+
+Use the same candidate's production Web build, served over localhost or HTTPS.
+Record browser/version, viewport and actual browser zoom separately from native QA.
+
+- [ ] All five locales load, open the menu and show the current update history.
+- [ ] Keyboard and pointer navigation, modal cancellation and focus return work.
+- [ ] Compact layout and actual 200% browser zoom keep every menu action reachable.
+- [ ] Initial online load registers the service worker; a subsequent offline reload
+      still starts the cached game and opens the menu.
+- [ ] Installation and update prompts work on the tested supporting browser.
+- [ ] Menu-load failure/retry provides visible feedback and recovers pause/input.
+
 ## Result
 
 ```text
-manual_appimage_qa=PASS|FAIL
+manual_appimage_qa=PASS|FAIL|PARTIAL
 tested_commit_sha=
 tested_appimage_sha256=
+evidence_kind=user-device|work-browser|headless-ci
+checks_not_run=
 blocking_issues=
 notes=
 ```
+
+Record only checks actually performed. A user-reported smoke PASS without environment
+details is valid bounded evidence, not a completed distro/session/audio/accessibility
+matrix. Do not carry a previous candidate's PASS forward as an exact-head result.
 
 A failure in any release-blocking item returns the workstream to a focused fix,
 fresh candidate build and targeted retest.

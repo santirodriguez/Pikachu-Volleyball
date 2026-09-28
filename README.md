@@ -2,7 +2,7 @@
   <img src="src/resources/assets/images/IDI_PIKAICON-1_gap_filled_192.png" width="96" alt="Pikachu Volleyball icon">
 </p>
 
-<h1 align="center">Pikachu Volleyball 3.0</h1>
+<h1 align="center">Pikachu Volleyball for Linux</h1>
 
 <p align="center">
   <strong>A tiny beach-volleyball classic, carefully brought into a modern native Linux desktop.</strong>
@@ -14,7 +14,7 @@
 
 <p align="center">
   <a href="https://github.com/santirodriguez/pikachu-volleyball/releases"><img alt="Linux AppImage" src="https://img.shields.io/badge/Linux-AppImage-F7C948?style=for-the-badge&logo=linux&logoColor=111827"></a>
-  <img alt="Version 3.0" src="https://img.shields.io/badge/Version-3.0-E63946?style=for-the-badge">
+  <img alt="Candidate 3.0.1" src="https://img.shields.io/badge/Candidate-3.0.1-E63946?style=for-the-badge">
   <img alt="Five languages" src="https://img.shields.io/badge/Languages-5-4EA8DE?style=for-the-badge">
 </p>
 
@@ -26,8 +26,15 @@
 </p>
 
 <p align="center">
-  <img src="src/resources/assets/images/screenshot.png" alt="Pikachu Volleyball match" width="760">
+  <strong><a href="https://github.com/santirodriguez/Pikachu-Volleyball/releases/latest">Download the latest Linux AppImage · x86_64</a></strong>
 </p>
+
+<p align="center">
+  <img src="docs/screenshots/native-gameplay.png" alt="A match in the native Linux edition" width="760">
+  <img src="docs/screenshots/native-menu.png" alt="Native pause menu with keyboard hints and grouped actions" width="760">
+</p>
+
+Real native captures; [capture provenance and confirmation dialog](docs/screenshots/README.md).
 
 ## A small game with a long memory
 
@@ -56,7 +63,7 @@ This edition is simply my way of looking after a game I remember fondly. The ori
 2. Download the latest `.AppImage` for `x86_64` and `SHA256SUMS.txt`.
 3. Verify the checksum, allow the AppImage to run as a program and open it.
 
-See the concise [3.0.0 release notes](docs/releases/v3.0.0.md). Development release candidates are built by the [Release Candidate Readiness workflow](https://github.com/santirodriguez/pikachu-volleyball/actions/workflows/release-candidate-readiness.yml).
+The latest published download and this branch's candidate are separate: [3.0.1 candidate notes](docs/releases/v3.0.1.md). Development candidates come from [Release Candidate Readiness](https://github.com/santirodriguez/pikachu-volleyball/actions/workflows/release-candidate-readiness.yml); preparing a candidate does not publish a release.
 
 ## Controls
 
@@ -72,15 +79,14 @@ These are the defaults. Player controls can be changed from the in-game **Contro
 | Pause menu | `P` | `P` |
 | Practice ball reset | `B` | `B` |
 
-## Languages
+## Web / PWA
 
-<p>
-  <strong>English</strong> ·
-  <strong>Español</strong> ·
-  <strong>Català</strong> ·
-  <strong>한국어</strong> ·
-  <strong>中文</strong>
-</p>
+The same classic game is also available as a static browser build. Run it with
+`npm run start`, or serve the production `dist/` output after `npm run build:web`.
+Choose `/en/`, `/es-ar/`, `/ca/`, `/ko/` or `/zh/`. On HTTPS (or localhost),
+supported browsers can install the PWA and cache the game for offline play after
+an initial online load. Browser installation and audio behavior depend on the
+browser; the Linux AppImage remains the primary desktop download.
 
 ## Credits
 

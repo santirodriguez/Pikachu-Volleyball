@@ -39,6 +39,7 @@ typedef struct NativeAccessibilitySnapshot {
   char status[ACCESSIBLE_TEXT_LENGTH];
   char modal_title[ACCESSIBLE_TEXT_LENGTH];
   char modal_message[ACCESSIBLE_TEXT_LENGTH];
+  NativeAccessibleItem modal_bounds;
   NativeAccessibleItem items[MAX_ACCESSIBLE_ITEMS];
   size_t item_count;
   accesskit_node_id focus;
@@ -209,6 +210,25 @@ static bool build_snapshot(NativeAccessibilityImpl *impl, JSContext *context,
                   sizeof(snapshot->status))) {
     return false;
   }
+  JSValue trigger = JS_GetPropertyStr(context, frame, "trigger");
+  if (JS_IsException(trigger)) {
+    JS_FreeValue(context, trigger);
+    return false;
+  }
+  if (!JS_IsNull(trigger) && !JS_IsUndefined(trigger)) {
+    if (snapshot->item_count >= MAX_ACCESSIBLE_ITEMS ||
+        !copy_item(impl, context, trigger,
+                   &snapshot->items[snapshot->item_count])) {
+      JS_FreeValue(context, trigger);
+      return false;
+    }
+    if (snapshot->items[snapshot->item_count].focused) {
+      snapshot->focus = snapshot->items[snapshot->item_count].node_id;
+    }
+    snapshot->item_count += 1;
+  }
+  JS_FreeValue(context, trigger);
+
   if (!snapshot->visible) return true;
 
   JSValue modal = JS_GetPropertyStr(context, frame, "modal");
@@ -219,11 +239,21 @@ static bool build_snapshot(NativeAccessibilityImpl *impl, JSContext *context,
   snapshot->modal_open = !JS_IsNull(modal) && !JS_IsUndefined(modal);
   bool ok = true;
   if (snapshot->modal_open) {
+    double modal_x = 0;
+    double modal_y = 0;
+    double modal_width = 0;
+    double modal_height = 0;
     JSValue items = JS_GetPropertyStr(context, modal, "items");
     ok = get_string(context, modal, "title", snapshot->modal_title,
                     sizeof(snapshot->modal_title)) &&
          get_string(context, modal, "message", snapshot->modal_message,
                     sizeof(snapshot->modal_message)) &&
+         get_double(context, modal, "x", &modal_x) &&
+         get_double(context, modal, "y", &modal_y) &&
+         get_double(context, modal, "width", &modal_width) &&
+         get_double(context, modal, "height", &modal_height) &&
+         map_bounds(impl, modal_x, modal_y, modal_width, modal_height,
+                    &snapshot->modal_bounds) &&
          !JS_IsException(items) &&
          collect_items(impl, context, items, snapshot);
     JS_FreeValue(context, items);
@@ -270,9 +300,9 @@ static accesskit_node *build_item_node(const NativeAccessibleItem *item) {
 static accesskit_tree_update *build_tree_locked(
     const NativeAccessibilityImpl *impl, bool initial) {
   const NativeAccessibilitySnapshot *snapshot = &impl->snapshot;
-  size_t capacity = 1;
+  size_t capacity = 1 + snapshot->item_count;
   if (snapshot->visible) {
-    capacity += 2 + snapshot->item_count;
+    capacity += 2;
     if (snapshot->modal_open) capacity += 1;
   }
   accesskit_tree_update *update =
@@ -285,13 +315,26 @@ static accesskit_tree_update *build_tree_locked(
   const int width = snapshot->window_width;
   const int height = snapshot->window_height;
   accesskit_node *root = accesskit_node_new(ACCESSKIT_ROLE_WINDOW);
-  accesskit_node_set_label(root, "Pikachu Volleyball Native");
+  accesskit_node_set_label(root, "Pikachu Volleyball for Linux");
   accesskit_rect root_bounds = {0.0, 0.0, (double)width, (double)height};
   accesskit_node_set_bounds(root, root_bounds);
-  if (snapshot->visible) accesskit_node_push_child(root, MENU_DIALOG_ID);
+  if (snapshot->visible) {
+    accesskit_node_push_child(root, MENU_DIALOG_ID);
+  } else {
+    for (size_t index = 0; index < snapshot->item_count; index += 1) {
+      accesskit_node_push_child(root, snapshot->items[index].node_id);
+    }
+  }
   accesskit_tree_update_push_node(update, ROOT_ID, root);
 
-  if (!snapshot->visible) return update;
+  if (!snapshot->visible) {
+    for (size_t index = 0; index < snapshot->item_count; index += 1) {
+      accesskit_tree_update_push_node(
+          update, snapshot->items[index].node_id,
+          build_item_node(&snapshot->items[index]));
+    }
+    return update;
+  }
 
   accesskit_node *menu = accesskit_node_new(ACCESSKIT_ROLE_DIALOG);
   accesskit_node_set_label(menu, snapshot->title);
@@ -321,9 +364,7 @@ static accesskit_tree_update *build_tree_locked(
     accesskit_node_set_label(dialog, snapshot->modal_title);
     accesskit_node_set_description(dialog, snapshot->modal_message);
     accesskit_node_set_modal(dialog);
-    accesskit_rect dialog_bounds = {
-        width * 0.2, height * 0.45, width * 0.8, height * 0.92};
-    accesskit_node_set_bounds(dialog, dialog_bounds);
+    accesskit_node_set_bounds(dialog, item_rect(&snapshot->modal_bounds));
     for (size_t index = 0; index < snapshot->item_count; index += 1) {
       accesskit_node_push_child(dialog, snapshot->items[index].node_id);
     }

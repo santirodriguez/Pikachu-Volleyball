@@ -288,7 +288,7 @@ chmod 0755 "$APPDIR/AppRun"
 cat > "$APPDIR/pikachu-volleyball-native.desktop" <<'DESKTOP_ENTRY'
 [Desktop Entry]
 Type=Application
-Name=Pikachu Volleyball
+Name=Pikachu Volleyball for Linux
 Exec=pikachu-volleyball-native
 Icon=pikachu-volleyball-native
 Categories=Game;

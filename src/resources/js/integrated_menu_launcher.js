@@ -1,16 +1,9 @@
 'use strict';
 
 import inputActionsModule from './input_actions.cjs';
+import { getIntegratedMenuStrings } from './integrated_menu_strings.js';
 
 const { shouldHandlePauseShortcut } = inputActionsModule;
-
-const TRIGGER_LABELS = Object.freeze({
-  en: 'MENU',
-  'es-ar': 'MENÚ',
-  ca: 'MENÚ',
-  ko: '메뉴',
-  zh: '菜单',
-});
 
 /**
  * Mount the lightweight pause trigger and load the full menu only on first use.
@@ -23,15 +16,25 @@ export function setUpIntegratedMenuLauncher(commands) {
   addIntegratedMenuStylesheet();
   document.documentElement.classList.add('integrated-menu-enabled');
 
-  const triggerLabel =
-    TRIGGER_LABELS[commands.getCurrentLocale()] || TRIGGER_LABELS.en;
+  const strings = getIntegratedMenuStrings(commands.getCurrentLocale());
+  const triggerLabel = strings.trigger;
   const trigger = document.createElement('button');
   trigger.type = 'button';
   trigger.id = 'pv-menu-trigger';
   trigger.className = 'pv-menu-trigger';
   trigger.innerHTML = `<kbd>P</kbd> ${triggerLabel}`;
   trigger.setAttribute('aria-label', `${triggerLabel} (P)`);
+
+  const status = document.createElement('p');
+  status.id = 'pv-menu-launcher-status';
+  status.className = 'pv-menu-launcher-status';
+  status.setAttribute('role', 'status');
+  status.setAttribute('aria-live', 'polite');
+  status.setAttribute('aria-atomic', 'true');
+  status.hidden = true;
+
   container.appendChild(trigger);
+  container.appendChild(status);
 
   let loading = false;
 
@@ -60,19 +63,32 @@ export function setUpIntegratedMenuLauncher(commands) {
   function requestMenuOpen() {
     if (loading) return;
     loading = true;
+    status.hidden = true;
+    status.textContent = '';
+    trigger.removeAttribute('aria-describedby');
     commands.setPaused(true);
     trigger.hidden = true;
     detachLauncher();
     trigger.remove();
-    loadIntegratedMenu(commands).catch((error) => {
-      loading = false;
-      commands.setPaused(false);
-      commands.resetInputs();
-      if (!trigger.isConnected) container.appendChild(trigger);
-      trigger.hidden = false;
-      attachLauncher();
-      console.error('Unable to load integrated menu.', error);
-    });
+    loadIntegratedMenu(commands)
+      .then(() => {
+        status.remove();
+      })
+      .catch((error) => {
+        loading = false;
+        commands.setPaused(false);
+        commands.resetInputs();
+        if (!trigger.isConnected) {
+          container.insertBefore(trigger, status);
+        }
+        trigger.hidden = false;
+        status.textContent = strings.launcherError;
+        status.hidden = false;
+        trigger.setAttribute('aria-describedby', status.id);
+        attachLauncher();
+        trigger.focus();
+        console.error('Unable to load integrated menu.', error);
+      });
   }
 
   attachLauncher();

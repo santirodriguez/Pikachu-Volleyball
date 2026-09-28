@@ -19,6 +19,14 @@ function isMenuConfirmKey(code) {
   return MENU_CONFIRM_KEYS.includes(code);
 }
 
+function shouldActivateMenuConfirm(code, repeat = false) {
+  return isMenuConfirmKey(code) && !repeat;
+}
+
+function menuTabDirection(shiftKey = false) {
+  return shiftKey ? -1 : 1;
+}
+
 function normalizeLocale(locale) {
   const normalized = String(locale || '').toLowerCase();
   if (normalized.startsWith('es')) return 'es-ar';
@@ -60,6 +68,8 @@ module.exports = {
   MENU_CONFIRM_KEYS,
   wrapIndex,
   isMenuConfirmKey,
+  shouldActivateMenuConfirm,
+  menuTabDirection,
   normalizeLocale,
   buildLocaleUrl,
 };

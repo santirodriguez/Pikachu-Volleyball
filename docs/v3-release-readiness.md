@@ -1,29 +1,13 @@
-# Phase 6 Release Readiness
+# Native Release Readiness
 
-## Status
+## Current reusable gate
 
-Phase 6 is complete and integrated into `v3-restart`.
-
-The exact task head
-`1c091c945c4fe94412c2fe3969a17399b32b2939` passed
-`RELEASE_READY=PASS` before PR #90 was squash-merged. The integrated
-`v3-restart` commit is
-`0a84f0a010ab5ce2626d5e8ad06b8a036400b4b2`.
-
-The validated Phase 6 candidate measured `9,419,256` bytes (~8.98 MiB) with
-AppImage SHA-256
-`e504eaa3a3efbd3840fb4c693b1f9dc496db19ebe5122b57bd56dc4d41961fc1`.
-Two independent builds were byte-identical and Debian 12, Ubuntu 22.04,
-Ubuntu 24.04, Fedora 44 and openSUSE Leap 16.0 all passed the exact candidate
-matrix.
-
-Phase 6 deliberately did not change the package version and did not authorize
-promotion to `main`, tag creation, GitHub Release publication, deployment or
-distribution.
-
-The current post-`RELEASE_READY` requirement is a fresh integrated candidate
-plus the human acceptance pass in [v3 Manual AppImage QA](v3-manual-qa.md)
-before any `main` promotion is considered.
+Run the existing **Release Candidate Readiness** workflow on the exact current
+candidate branch head. Use current `main` and `AGENTS.md` as integration authority;
+the historical `v3-restart` phases below are provenance only. Record run, source
+SHA, artifact identity and measured checksum/size/startup in the candidate PR.
+Pair automated evidence with [manual QA](v3-manual-qa.md), distinguishing CI,
+Work/browser, user-device evidence and checks not performed.
 
 ## Release architecture
 
@@ -84,7 +68,7 @@ electron-builder to leave the supported dependency/tooling graph.
 
 ## Reproducibility and provenance
 
-Phase 6 requires two independent clean builds of the exact same task head.
+The current readiness workflow requires two independent clean builds of the exact same candidate head.
 
 The final AppImages must be byte-identical. The gate also compares the native
 JavaScript bundle, native host, migration importer, provenance and normalized
@@ -143,17 +127,16 @@ Linux compatibility claim.
 `.github/workflows/release-appimage.yml` now builds the native AppImage from
 the definitive checked-out source.
 
-During Phase 6 it remains version-agnostic. A future authorized release event
-must have a tag matching the then-current package version, and the final
-AppImage is rebuilt from that tag rather than promoting a temporary candidate.
+Manual workflow dispatch builds a candidate without publishing. An explicitly
+authorized release event must use a tag matching the current package version;
+the final AppImage is rebuilt from that tag rather than promoting an unrelated
+temporary candidate. Package and lock versions must agree, including the lockfile
+root package, and matching release notes and five localized update histories must
+exist. Preserve executable, desktop/icon, storage and historical asset identities
+when changing display names.
 
-Phase 6 itself does not:
-
-- change `2.1.0`;
-- create a tag;
-- create or publish a GitHub Release;
-- attach public release assets;
-- promote `v3-restart` to `main`.
+Neither candidate preparation nor these workflows authorize merge, tag creation,
+GitHub Release publication or deployment.
 
 ## RELEASE_READY gate
 
@@ -175,15 +158,35 @@ Phase 6 itself does not:
 11. the final AppImage remains at or below `30 MiB`;
 12. exact artifact, bundle, host, provenance and core-trace hashes are recorded.
 
-Phase 6 passed this gate and was integrated into `v3-restart`.
-
-For post-Phase-6 candidates, this workflow remains the durable automated
-release-candidate gate, but its metadata check is no longer hard-coded to
-`2.1.0`: package and lock versions must agree and matching release notes must
-exist.
+The workflow remains the durable automated gate for each new candidate.
+Previous green runs do not substitute for an exact-head run.
 
 Automated readiness is not the final pre-`main` decision. A current AppImage
 must also pass the manual checklist in [v3 Manual AppImage QA](v3-manual-qa.md).
 
 Neither automated readiness nor manual QA authorizes promotion to `main`,
 tagging, GitHub Release publication or public distribution.
+
+## Historical v3 restart Phase 6 evidence
+
+Phase 6 is complete and integrated into `v3-restart`.
+
+The exact task head
+`1c091c945c4fe94412c2fe3969a17399b32b2939` passed
+`RELEASE_READY=PASS` before PR #90 was squash-merged. The integrated
+`v3-restart` commit is
+`0a84f0a010ab5ce2626d5e8ad06b8a036400b4b2`.
+
+The validated Phase 6 candidate measured `9,419,256` bytes (~8.98 MiB) with
+AppImage SHA-256
+`e504eaa3a3efbd3840fb4c693b1f9dc496db19ebe5122b57bd56dc4d41961fc1`.
+Two independent builds were byte-identical and Debian 12, Ubuntu 22.04,
+Ubuntu 24.04, Fedora 44 and openSUSE Leap 16.0 all passed the exact candidate
+matrix.
+
+Phase 6 deliberately did not change the package version and did not authorize
+promotion to `main`, tag creation, GitHub Release publication, deployment or
+distribution.
+
+These immutable measurements describe that historical candidate only. They do not
+validate a later release or establish a current branching/promotion contract.
