@@ -253,6 +253,7 @@ test('Web Phase 2 contracts expose contained focus, live status and visible lazy
   assert.match(host, /SDL_EVENT_MOUSE_MOTION/);
   assert.match(validator, /require_single\("P · MENU"\)/);
   assert.match(validator, /require_single\("Restart now"\)/);
+  assert.match(validator, /require_single\("Quit now"\)/);
 });
 
 test('Phase 2 resolves the targeted locale shell gaps', () => {
