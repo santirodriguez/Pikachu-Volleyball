@@ -284,3 +284,32 @@ test('Phase 2 resolves the targeted locale shell gaps', () => {
   assert.match(chinese, /正在加载游戏资源/);
   assert.doesNotMatch(chinese, /按下強力擊球鍵/);
 });
+
+test('native application forwards Shift+Tab to the real menu state', () => {
+  const { createNativeMenuState } = loadNativeMenuState();
+  const commands = createCommands();
+  const menu = createNativeMenuState(commands.api, 'en');
+  const source = read('src/resources/js/native_app.js');
+  const handler = source
+    .slice(
+      source.indexOf('export function handleKey('),
+      source.indexOf('export function handlePointer(')
+    )
+    .replace('export function', 'function');
+  const handleKey = new Function(
+    'requireApplication',
+    `${handler}; return handleKey;`
+  )(() => ({ menuState: menu, actionStates: [] }));
+
+  handleKey('KeyP', true);
+  handleKey('KeyP', false);
+  handleKey('Tab', true, false, true);
+  let frame = menu.getFrame();
+  assert.equal(frame.mode, 'nav');
+  assert.equal(frame.navItems.find((item) => item.focused).navId, 'quit');
+  handleKey('Tab', false, false, true);
+  handleKey('Tab', true, false, false);
+  frame = menu.getFrame();
+  assert.equal(frame.mode, 'panel');
+  assert.equal(frame.panelItems.find((item) => item.focused).id, 'action:quit');
+});

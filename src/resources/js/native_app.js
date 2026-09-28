@@ -155,11 +155,11 @@ export function initialize(serializedPreferences = '{}', initialLocale = 'en') {
   return true;
 }
 
-export function handleKey(code, isDown, repeat = false) {
+export function handleKey(code, isDown, repeat = false, shiftKey = false) {
   const active = requireApplication();
   if (typeof code !== 'string' || code.length === 0) return false;
 
-  if (active.menuState.handleKey(code, isDown, repeat)) {
+  if (active.menuState.handleKey(code, isDown, repeat, shiftKey)) {
     return true;
   }
 
