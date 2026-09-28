@@ -44,7 +44,7 @@ function loadNativeMenuState() {
 }
 
 function createCommands() {
-  let settings = {
+  const settings = {
     winningScore: '15',
     speed: 'medium',
     practiceMode: false,
@@ -200,17 +200,13 @@ test('native menu Phase 2 persists locale, localizes About and shares modal boun
   assert.ok(
     about.panelItems.some(
       (item) =>
-        item.id === 'link:reverse' &&
-        item.label.includes('Reimplementació')
+        item.id === 'link:reverse' && item.label.includes('Reimplementació')
     )
   );
 
   menu.close();
   const trigger = menu.getFrame().trigger;
-  assert.equal(
-    menu.handleAccessibilityAction(trigger.nodeId, 'click'),
-    true
-  );
+  assert.equal(menu.handleAccessibilityAction(trigger.nodeId, 'click'), true);
 
   const restart = menu
     .getFrame()
@@ -277,7 +273,10 @@ test('Phase 2 resolves the targeted locale shell gaps', () => {
 
   assert.match(catalan, /Sembla que estàs jugant aquesta versió web/);
   assert.match(catalan, /Prem Cop potent per jugar una revenja ràpida/);
-  assert.doesNotMatch(catalan, /It seems that you are playing this web version/);
+  assert.doesNotMatch(
+    catalan,
+    /It seems that you are playing this web version/
+  );
 
   assert.match(chinese, /在线玩皮卡丘排球/);
   assert.match(chinese, /看起来你正在其他网站上游玩/);
