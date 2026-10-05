@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document records the stable control-remapping architecture introduced for Pikachu Volleyball 2.0. Future input changes should begin here instead of rediscovering keyboard ownership across the controller, menu and storage layers.
+This document records the stable control-remapping contract introduced in 2.0 and its current Web and SDL3 + QuickJS owners. Future input changes should begin here instead of rediscovering keyboard ownership across the controller, menu and storage layers.
 
 ## Validated Default Contract
 
@@ -58,11 +58,11 @@ Browser storage adapter. It reads and writes the versioned binding payload throu
 
 ### `src/resources/js/keyboard.js`
 
-Runtime semantic input state. `PikaKeyboard.setBindings()` replaces action mappings without replacing global event listeners or altering the simulation.
+Browser runtime semantic input state. `PikaKeyboard.setBindings()` replaces action mappings without replacing global event listeners or altering the simulation.
 
 ### `src/resources/js/game_commands.js`
 
-Operational boundary used by the menu. It applies validated bindings to both existing keyboard objects, clears held state and persists accepted changes.
+Browser operational boundary used by the DOM menu. It applies validated bindings to both existing keyboard objects, clears held state and persists accepted changes.
 
 ### `src/resources/js/integrated_menu.js`
 
@@ -76,6 +76,24 @@ User interaction only:
 6. refresh the visible binding list.
 
 The menu must never write directly to local storage or mutate keyboard internals.
+
+### Native input and menu owners
+
+`src/resources/js/input_actions.cjs` and `input_frame.cjs` translate semantic action
+state into host-neutral frame input. `native_app.js` uses those same definitions
+and `control_bindings.cjs` to rebuild both players' action states after validated
+changes, reset held state and mark preferences dirty.
+
+`native_menu_state.js` owns capture, confirmation, cancellation, player grouping,
+Tab traversal and pointer/accessibility activation. It calls the native command
+surface in `native_app.js`, never filesystem APIs or simulation internals.
+`desktop/native/native_main.c` translates SDL scancodes to the existing code names,
+clears input on focus loss and performs atomic preference I/O. The renderer and
+AccessKit consumers use the menu state's geometry rather than independent targets.
+
+Both hosts reject repeated destructive confirmation events only inside menus.
+Keep gameplay's original held-key and Power Hit behavior intact. Native Quit exits
+the process; ordinary Web play has no Quit command.
 
 ## Storage Contract
 
@@ -98,12 +116,22 @@ Payload:
 
 Missing actions, malformed JSON, obsolete versions, reserved values and duplicate assignments recover safely to defaults. Do not remove version checks when evolving the schema.
 
+Web stores this payload under the existing local-storage key. Native stores the
+same serialized binding payload inside schema 1 `values`, via
+`native_preferences.cjs`; the C host owns the `preferences.json` file and atomic
+replacement. The SDL preference identity remains `santirodriguez` /
+`Pikachu Volleyball`. The optional `pv-native-locale` value preserves an explicitly
+selected supported locale; missing/invalid values fall back to system locale.
+Locale changes retain control bindings while restarting the match. The bounded
+Electron importer is upgrade compatibility, not an active runtime. Never migrate
+IDs merely to match a new display name.
+
 ## Adding an Editable Action
 
 1. Add one definition to `CONTROL_BINDING_DEFINITIONS`.
 2. Give it a unique default `KeyboardEvent.code`.
-3. Add localized action labels to the Phase 3 menu strings.
-4. Include it in `getPlayerKeyboardConfig()` or the appropriate future input adapter.
+3. Add localized action labels to `integrated_menu_strings.js` for all five locales.
+4. Include it in `getPlayerKeyboardConfig()` and verify both the browser keyboard and native action-state adapters, including SDL scancode coverage.
 5. Add conflict, persistence, reset and runtime tests.
 6. Verify keyboard-only and mouse-only editing in the AppImage.
 
@@ -150,5 +178,6 @@ At minimum:
 - persistence through application restart;
 - language change with custom controls retained;
 - focus-loss cleanup;
-- keyboard-only editor navigation;
+- keyboard-only editor navigation, Tab/Shift+Tab containment and return focus;
+- pointer and AT-SPI capture/cancel/reset paths, with repeat-safe confirmation;
 - packaged AppImage smoke test.

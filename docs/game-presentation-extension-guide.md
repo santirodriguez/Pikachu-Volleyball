@@ -4,15 +4,17 @@
 
 This guide records the validated architecture and extension points for future title-screen, presentation and graphical work. It is intended to prevent repeated discovery work and to keep visual changes separate from the reverse-engineered gameplay model.
 
-## Validated baseline
+## Historical baseline and current contract
 
 The following behavior was verified in real-world Linux AppImage reviews during the 2.0 and 2.1 work:
 
 - Player 1 Power Hit: `Z` or `Left Shift`;
 - Player 2 Power Hit: `Enter` or `Left Control`;
 - `P` pauses and resumes the game;
-- the AppImage starts and runs correctly with the current Electron wrapper;
+- the then-current 2.x AppImage used an Electron wrapper (historical evidence only);
 - the web bundle and all five supported locale outputs pass CI.
+
+The current Linux runtime is SDL3 + QuickJS. Electron is retired except for bounded legacy preference import. Current `main`, `AGENTS.md` and regression tests govern the supported architecture.
 
 These controls are the reference baseline for future presentation work. A title-screen or graphical change must not silently modify them.
 
@@ -63,7 +65,7 @@ The shared core must remain independent of DOM, PixiJS, localStorage, Electron a
 
 `physics.js` continues to contain the reverse-engineered simulation/AI behavior. Presentation work must consume its state through the shared-core boundary rather than mutate simulation state for visual convenience.
 
-### Browser/Electron gameplay adapter
+### Browser gameplay adapter
 
 `src/resources/js/pikavolley.js`
 
@@ -162,16 +164,45 @@ Primary ownership:
 
 The integrated menu is the game page's DOM UI authority and is mounted as an HTML overlay above the canvas. It is intentionally separate from the PixiJS game presentation. Future game-screen redesigns may change the canvas content without rebuilding application commands.
 
-Use `game_commands.js` for restart, pause, options, locale changes, control changes and desktop quit. Commands that affect deterministic gameplay should cross the existing `PikachuVolleyball`/`GameCore` boundary rather than reimplement the rule in the menu layer. Persist supported application settings through the settings store. Do not reconnect operations through hidden legacy buttons, checkboxes or simulated clicks.
+Use `game_commands.js` for browser restart, pause, options, locale navigation and control changes. Its legacy desktop bridge is not the native command owner; ordinary browser play has no Quit action. Commands that affect deterministic gameplay should cross the existing `PikachuVolleyball`/`GameCore` boundary rather than reimplement the rule in the menu layer. Persist supported application settings through the settings store. Do not reconnect operations through hidden legacy buttons, checkboxes or simulated clicks.
 
-### Desktop boundary
+### Native composition and desktop boundary
 
-- `desktop/main.js`;
-- `desktop/preload.js`.
+- `src/resources/js/native_app.js` composes the same shared core with semantic input,
+  settings, audio effects and native menu commands inside QuickJS.
+- `src/resources/js/native_render_state.js` converts core effects into serializable
+  render commands; `desktop/native/native_main.c` executes them with SDL3.
+- `src/resources/js/native_menu_state.js` owns native menu state, section/item/modal
+  geometry, navigation, pointer targets and platform-command requests.
+- `desktop/native/native_menu_renderer.c` draws those bounds and presentation roles;
+  `desktop/native/native_accessibility.c` maps the same state and bounds to
+  AccessKit/AT-SPI. Keep focus, hover, hit targets and accessible bounds aligned.
+- `desktop/native/native_audio.c` executes audio; `native_startup.c` owns startup
+  locale/error handling. The C host owns atomic preference files, allowlisted
+  external links without shell interpolation, window events and process Quit.
+- `src/resources/js/native_preferences.cjs` sanitizes/serializes schema 1 settings,
+  controls and the optional saved locale. Preserve storage identities and the
+  bounded, idempotent legacy Electron importer.
 
-The renderer remains sandboxed with context isolation enabled and Node.js integration disabled. Desktop-only features must be exposed through narrow preload APIs and explicit IPC handlers.
+There is no DOM, preload/IPC bridge, Node or Electron runtime in the native host.
+Web CSS changes do not style SDL; native drawing changes do not style Web. Keep
+shared command semantics and translated copy aligned without duplicating game rules.
 
-Do not use `executeJavaScript` to control the renderer.
+### Menu interaction and typography
+
+The browser launcher is `integrated_menu_launcher.js`; the DOM menu remains in
+`integrated_menu.js`. Modal labels/descriptions, initial/return focus, Tab trapping,
+background inertness and the live status region belong to that DOM surface.
+Native focus and modal geometry belong to `native_menu_state.js` and its C consumers.
+Destructive confirmations start on Cancel and require a fresh confirmation press;
+repeat protection must not change gameplay held-key/edge semantics.
+
+Native fonts are pinned by `scripts/build-native-toolchain.sh` (Inter plus Unicode
+fallback); Web typography is owned by CSS. Preserve glyph coverage across all five
+locales and measure wrapping rather than shrinking translations to hide overflow.
+
+Production packaging is owned by `scripts/build-native-appimage.sh` and
+`webpack.native.js`. Feasibility/spike builders are historical evidence only.
 
 ## Recommended future workflow
 
@@ -191,7 +222,7 @@ Do not use `executeJavaScript` to control the renderer.
 2. Update the smallest owning layer.
 3. Verify Sharp and Soft rendering.
 4. Check 800×600 minimum desktop size and maximized windows.
-5. Check Firefox, Chromium and packaged Electron rendering while Electron remains the fallback.
+5. Check Firefox, Chromium and the production SDL3 + QuickJS AppImage. Include compact Web layouts, 200% browser zoom and native HiDPI when available.
 6. Record screenshots and affected preservation-matrix rows in the PR.
 
 ## Required checks
@@ -211,4 +242,4 @@ For any future presentation change:
 
 ## Decision record
 
-The project intentionally modernizes the application shell without coupling those changes to the reverse-engineered gameplay model. Phase 4 established one host-neutral deterministic gameplay authority in `GameCore`, with `pikavolley.js` as the browser/Electron adapter and `game_runtime.js` as the composition root. Future visual work should build on those boundaries rather than putting scoring/timing/physics rules back into host adapters, reconnecting legacy DOM controls, or mixing desktop packaging concerns into gameplay state.
+The project intentionally modernizes the application shell without coupling those changes to the reverse-engineered gameplay model. The historical v3 restart Phase 4 established one host-neutral deterministic gameplay authority in `GameCore`, with `pikavolley.js` as the browser adapter and `game_runtime.js` as the composition root. Future visual work should build on those boundaries rather than putting scoring/timing/physics rules back into host adapters, reconnecting legacy DOM controls, or mixing desktop packaging concerns into gameplay state.

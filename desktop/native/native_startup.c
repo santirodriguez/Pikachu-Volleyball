@@ -138,7 +138,7 @@ void native_startup_report_error(const char *locale, NativeStartupError error,
   }
   fprintf(stderr, "%s\n", combined);
   if (window) {
-    (void)SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Pikachu Volleyball",
+    (void)SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Pikachu Volleyball for Linux",
                                    combined, window);
   }
 }

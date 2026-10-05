@@ -88,6 +88,26 @@ static char *get_string(JSContext *context, JSValueConst object,
   return copy;
 }
 
+static char *get_optional_string(JSContext *context,
+                                 JSValueConst object,
+                                 const char *name) {
+  JSValue value = JS_GetPropertyStr(context, object, name);
+  if (JS_IsException(value)) {
+    JS_FreeValue(context, value);
+    return NULL;
+  }
+  if (JS_IsNull(value) || JS_IsUndefined(value)) {
+    JS_FreeValue(context, value);
+    return strdup("");
+  }
+  const char *text = JS_ToCString(context, value);
+  JS_FreeValue(context, value);
+  if (!text) return NULL;
+  char *copy = strdup(text);
+  JS_FreeCString(context, text);
+  return copy;
+}
+
 static bool get_array_length(JSContext *context, JSValueConst array,
                              uint32_t *length_out) {
   JSValue length = JS_GetPropertyStr(context, array, "length");
@@ -331,6 +351,8 @@ static bool render_item(NativeMenuRenderer *menu, SDL_Renderer *renderer,
   double height = 0;
   bool focused = false;
   bool disabled = false;
+  bool selected = false;
+  bool hovered = false;
   if (!get_double(context, item, "x", &x) ||
       !get_double(context, item, "y", &y) ||
       !get_double(context, item, "width", &width) ||
@@ -339,24 +361,62 @@ static bool render_item(NativeMenuRenderer *menu, SDL_Renderer *renderer,
       !get_bool(context, item, "disabled", &disabled)) {
     return false;
   }
+  JSValue selected_value = JS_GetPropertyStr(context, item, "selected");
+  if (!JS_IsException(selected_value) && !JS_IsUndefined(selected_value)) {
+    int converted = JS_ToBool(context, selected_value);
+    if (converted >= 0) selected = converted != 0;
+  }
+  JS_FreeValue(context, selected_value);
+  JSValue hovered_value = JS_GetPropertyStr(context, item, "hovered");
+  if (!JS_IsException(hovered_value) && !JS_IsUndefined(hovered_value)) {
+    int converted = JS_ToBool(context, hovered_value);
+    if (converted >= 0) hovered = converted != 0;
+  }
+  JS_FreeValue(context, hovered_value);
 
   char *label = get_string(context, item, "label");
   char *kind = get_string(context, item, "kind");
   char *id = get_string(context, item, "id");
-  if (!label || !kind || !id) {
+  char *display_label = get_optional_string(context, item, "displayLabel");
+  char *secondary_label = get_optional_string(context, item, "secondaryLabel");
+  char *group_label = get_optional_string(context, item, "groupLabel");
+  if (!label || !kind || !id || !display_label || !secondary_label ||
+      !group_label) {
     free(label);
     free(kind);
     free(id);
+    free(display_label);
+    free(secondary_label);
+    free(group_label);
     return false;
   }
 
+  const char *primary_label = display_label[0] != '\0' ? display_label : label;
   bool is_nav = strcmp(kind, "nav") == 0;
   bool is_modal = strcmp(kind, "modal") == 0;
-  SDL_Color fill = is_nav ? palette->nav_panel : palette->item_fill;
-  SDL_Color border = is_nav ? palette->shell_inner : palette->item_border;
-  SDL_Color text_color = is_nav ? palette->nav_text : palette->item_text;
-  float font_size = is_nav ? 6.3f : (is_modal ? 6.2f : 5.3f);
+  bool is_control = strcmp(kind, "control") == 0;
+  bool is_trigger = strcmp(kind, "trigger") == 0;
+  SDL_Color fill =
+      is_trigger ? palette->footer
+                 : (is_nav ? palette->nav_panel : palette->item_fill);
+  SDL_Color border =
+      is_trigger ? palette->accent_yellow
+                 : (is_nav ? palette->shell_inner : palette->item_border);
+  SDL_Color text_color =
+      is_trigger ? palette->cream
+                 : (is_nav ? palette->nav_text : palette->item_text);
+  if (is_trigger) fill.a = 160;
+  float font_size =
+      is_trigger ? 5.8f
+                 : (is_nav ? 6.8f
+                           : (is_modal ? 6.7f
+                                       : (is_control ? 6.0f : 6.3f)));
 
+  if (is_nav && selected && !focused) border = palette->accent_yellow;
+  if (hovered && !focused) {
+    border = palette->accent_cyan;
+    if (is_trigger) fill = palette->shell;
+  }
   if (is_modal && !focused) {
     if (strcmp(id, "modal:accept") == 0) {
       fill = palette->accent_red;
@@ -367,13 +427,20 @@ static bool render_item(NativeMenuRenderer *menu, SDL_Renderer *renderer,
     }
   }
 
+  if (group_label[0] != '\0' &&
+      !render_menu_text(menu, renderer, canvas, group_label, (float)x + 2.0f,
+                        (float)y - 10.0f, (int)width - 4, 5.2f,
+                        palette->detail_text)) {
+    free(label); free(kind); free(id); free(display_label);
+    free(secondary_label); free(group_label);
+    return false;
+  }
+
   if (focused) {
     if (!fill_menu_rect(renderer, canvas, (float)x + 2.5f, (float)y + 2.5f,
-                        (float)width, (float)height,
-                        palette->focus_shadow)) {
-      free(label);
-      free(kind);
-      free(id);
+                        (float)width, (float)height, palette->focus_shadow)) {
+      free(label); free(kind); free(id); free(display_label);
+      free(secondary_label); free(group_label);
       return false;
     }
     fill = palette->focus_fill;
@@ -381,28 +448,44 @@ static bool render_item(NativeMenuRenderer *menu, SDL_Renderer *renderer,
     text_color = palette->focus_text;
   }
 
-  bool ok =
-      fill_menu_rect(renderer, canvas, (float)x, (float)y, (float)width,
-                     (float)height, fill) &&
-      outline_menu_rect(renderer, canvas, (float)x, (float)y, (float)width,
-                        (float)height, 1.0f, border);
+  bool ok = fill_menu_rect(renderer, canvas, (float)x, (float)y,
+                           (float)width, (float)height, fill) &&
+            outline_menu_rect(renderer, canvas, (float)x, (float)y,
+                              (float)width, (float)height, 1.0f, border);
 
-  if (ok && focused && is_nav) {
+  if (ok && is_nav && selected) {
     ok = fill_menu_rect(renderer, canvas, (float)x, (float)y, 3.0f,
                         (float)height, palette->accent_red);
   }
 
   if (ok) {
     SDL_Color final_text = disabled ? palette->detail_muted : text_color;
+    float key_width = secondary_label[0] != '\0' ? (is_control ? 44.0f : 72.0f) : 0.0f;
+    float label_width = (float)width - key_width - 14.0f;
+    if (label_width < 28.0f) label_width = (float)width - 12.0f;
     float text_y = (float)y + ((float)height - font_size * 1.18f) / 2.0f;
     if (text_y < (float)y + 1.0f) text_y = (float)y + 1.0f;
-    ok = render_menu_text(menu, renderer, canvas, label, (float)x + 6.0f,
-                          text_y, 0, font_size, final_text);
+    ok = render_menu_text(menu, renderer, canvas, primary_label,
+                          (float)x + 6.0f, text_y, (int)label_width,
+                          font_size, final_text);
+    if (ok && secondary_label[0] != '\0') {
+      float key_x = (float)x + (float)width - key_width - 4.0f;
+      float key_y = (float)y + 3.0f;
+      float key_height = (float)height - 6.0f;
+      SDL_Color key_fill = focused ? palette->accent_cyan : palette->cream;
+      ok = fill_menu_rect(renderer, canvas, key_x, key_y, key_width,
+                          key_height, key_fill) &&
+           outline_menu_rect(renderer, canvas, key_x, key_y, key_width,
+                             key_height, 1.0f, palette->shell_border) &&
+           render_menu_text(menu, renderer, canvas, secondary_label,
+                            key_x + 4.0f, key_y + 1.0f,
+                            (int)key_width - 8, font_size - 0.4f,
+                            palette->detail_text);
+    }
   }
 
-  free(label);
-  free(kind);
-  free(id);
+  free(label); free(kind); free(id); free(display_label);
+  free(secondary_label); free(group_label);
   return ok;
 }
 
@@ -427,56 +510,45 @@ static bool render_menu_chrome(NativeMenuRenderer *menu,
                                SDL_Renderer *renderer,
                                const NativeMenuCanvas *canvas,
                                const NativeMenuPalette *palette,
+                               const char *product_name,
                                const char *title,
+                               const char *panel_kicker,
                                const char *panel_title,
                                const char *panel_body,
-                               const char *status) {
+                               const char *panel_poster,
+                               const char *panel_help,
+                               const char *status,
+                               const char *navigation_hint) {
   SDL_FRect full = canvas->presentation;
-  if (!set_draw_color(renderer, palette->dim) ||
-      !SDL_RenderFillRect(renderer, &full)) {
-    return false;
-  }
-
-  if (!fill_menu_rect(renderer, canvas, 9, 11, 416, 286,
-                      palette->shell_shadow) ||
+  if (!set_draw_color(renderer, palette->dim) || !SDL_RenderFillRect(renderer, &full)) return false;
+  if (!fill_menu_rect(renderer, canvas, 9, 11, 416, 286, palette->shell_shadow) ||
       !fill_menu_rect(renderer, canvas, 6, 8, 416, 286, palette->shell) ||
-      !outline_menu_rect(renderer, canvas, 6, 8, 416, 286, 2.0f,
-                         palette->shell_border) ||
-      !outline_menu_rect(renderer, canvas, 9, 11, 410, 280, 1.0f,
-                         palette->shell_inner) ||
-      !fill_menu_rect(renderer, canvas, 10, 12, 138, 266,
-                      palette->nav_panel) ||
-      !fill_menu_rect(renderer, canvas, 150, 12, 272, 266,
-                      palette->detail_panel) ||
-      !outline_menu_rect(renderer, canvas, 150, 12, 272, 266, 2.0f,
-                         palette->shell_border)) {
-    return false;
-  }
-
-  if (!fill_menu_rect(renderer, canvas, 154, 17, 4, 22,
-                      palette->accent_red) ||
-      !fill_menu_rect(renderer, canvas, 10, 278, 196, 4,
-                      palette->accent_yellow) ||
+      !outline_menu_rect(renderer, canvas, 6, 8, 416, 286, 2.0f, palette->shell_border) ||
+      !outline_menu_rect(renderer, canvas, 9, 11, 410, 280, 1.0f, palette->shell_inner) ||
+      !fill_menu_rect(renderer, canvas, 10, 12, 138, 266, palette->nav_panel) ||
+      !fill_menu_rect(renderer, canvas, 150, 12, 272, 266, palette->detail_panel) ||
+      !outline_menu_rect(renderer, canvas, 150, 12, 272, 266, 2.0f, palette->shell_border)) return false;
+  if (!fill_menu_rect(renderer, canvas, 154, 17, 4, 22, palette->accent_red) ||
+      !fill_menu_rect(renderer, canvas, 10, 278, 196, 4, palette->accent_yellow) ||
       !fill_menu_rect(renderer, canvas, 206, 278, 10, 4, palette->cream) ||
-      !fill_menu_rect(renderer, canvas, 216, 278, 206, 4,
-                      palette->accent_red) ||
-      !fill_menu_rect(renderer, canvas, 10, 282, 412, 12, palette->footer)) {
-    return false;
-  }
+      !fill_menu_rect(renderer, canvas, 216, 278, 206, 4, palette->accent_red) ||
+      !fill_menu_rect(renderer, canvas, 10, 282, 412, 12, palette->footer)) return false;
 
-  if (!render_menu_text(menu, renderer, canvas, "PIKACHU VOLLEYBALL", 18, 17,
-                        0, 4.9f, palette->accent_cyan) ||
-      !render_menu_text(menu, renderer, canvas, title, 18, 28, 122, 8.0f,
-                        palette->cream) ||
-      !render_menu_text(menu, renderer, canvas, panel_title, 164, 19, 246,
-                        8.2f, palette->detail_text) ||
-      !render_menu_text(menu, renderer, canvas, panel_body, 164, 34, 246,
-                        5.2f, palette->detail_muted) ||
-      !render_menu_text(menu, renderer, canvas, status, 18, 284, 394, 4.6f,
-                        palette->accent_yellow)) {
-    return false;
-  }
+  if (!render_menu_text(menu, renderer, canvas, product_name, 18, 17, 120, 5.1f, palette->accent_cyan) ||
+      !render_menu_text(menu, renderer, canvas, title, 18, 42, 120, 7.6f, palette->nav_text) ||
+      !render_menu_text(menu, renderer, canvas, panel_kicker, 164, 18, 242, 5.0f, palette->accent_red) ||
+      !render_menu_text(menu, renderer, canvas, panel_title, 164, 29, 242, 8.0f, palette->detail_text) ||
+      !render_menu_text(menu, renderer, canvas, panel_body, 164, 48, 242, 5.7f, palette->detail_muted) ||
+      !render_menu_text(menu, renderer, canvas, status, 18, 284, 232, 5.0f, palette->accent_yellow) ||
+      !render_menu_text(menu, renderer, canvas, navigation_hint, 260, 284, 150, 4.8f, palette->cream)) return false;
 
+  if (panel_poster[0] != '\0') {
+    if (!fill_menu_rect(renderer, canvas, 164, 96, 244, 42, palette->accent_yellow) ||
+        !outline_menu_rect(renderer, canvas, 164, 96, 244, 42, 1.0f, palette->shell_border) ||
+        !render_menu_text(menu, renderer, canvas, panel_poster, 176, 106, 220, 7.0f, palette->detail_text)) return false;
+  }
+  if (panel_help[0] != '\0' &&
+      !render_menu_text(menu, renderer, canvas, panel_help, 170, 148, 232, 5.8f, palette->detail_text)) return false;
   return true;
 }
 
@@ -486,8 +558,16 @@ static bool render_modal(NativeMenuRenderer *menu, SDL_Renderer *renderer,
                          const NativeMenuPalette *palette) {
   char *modal_title = get_string(context, modal, "title");
   char *modal_message = get_string(context, modal, "message");
+  double x = 0;
+  double y = 0;
+  double width = 0;
+  double height = 0;
   JSValue items = JS_GetPropertyStr(context, modal, "items");
-  if (!modal_title || !modal_message || JS_IsException(items)) {
+  if (!modal_title || !modal_message || JS_IsException(items) ||
+      !get_double(context, modal, "x", &x) ||
+      !get_double(context, modal, "y", &y) ||
+      !get_double(context, modal, "width", &width) ||
+      !get_double(context, modal, "height", &height)) {
     free(modal_title);
     free(modal_message);
     JS_FreeValue(context, items);
@@ -498,22 +578,25 @@ static bool render_modal(NativeMenuRenderer *menu, SDL_Renderer *renderer,
   bool ok =
       set_draw_color(renderer, palette->modal_dim) &&
       SDL_RenderFillRect(renderer, &full) &&
-      fill_menu_rect(renderer, canvas, 84, 93, 272, 132,
-                     palette->focus_shadow) &&
-      fill_menu_rect(renderer, canvas, 80, 89, 272, 132,
-                     palette->modal_panel) &&
-      outline_menu_rect(renderer, canvas, 80, 89, 272, 132, 2.0f,
-                        palette->shell_border) &&
-      outline_menu_rect(renderer, canvas, 83, 92, 266, 126, 1.0f,
+      fill_menu_rect(renderer, canvas, (float)x + 4.0f, (float)y + 4.0f,
+                     (float)width, (float)height, palette->focus_shadow) &&
+      fill_menu_rect(renderer, canvas, (float)x, (float)y, (float)width,
+                     (float)height, palette->modal_panel) &&
+      outline_menu_rect(renderer, canvas, (float)x, (float)y, (float)width,
+                        (float)height, 2.0f, palette->shell_border) &&
+      outline_menu_rect(renderer, canvas, (float)x + 3.0f, (float)y + 3.0f,
+                        (float)width - 6.0f, (float)height - 6.0f, 1.0f,
                         palette->cream) &&
-      fill_menu_rect(renderer, canvas, 95, 101, 22, 12,
-                     palette->accent_red) &&
-      render_menu_text(menu, renderer, canvas, "!", 103, 100, 0, 6.4f,
-                       palette->cream) &&
-      render_menu_text(menu, renderer, canvas, modal_title, 124, 99, 210,
-                       8.2f, palette->modal_text) &&
-      render_menu_text(menu, renderer, canvas, modal_message, 95, 118, 242,
-                       5.6f, palette->modal_text) &&
+      fill_menu_rect(renderer, canvas, (float)x + 15.0f, (float)y + 12.0f,
+                     22.0f, 12.0f, palette->accent_red) &&
+      render_menu_text(menu, renderer, canvas, "!", (float)x + 23.0f,
+                       (float)y + 11.0f, 0, 6.4f, palette->cream) &&
+      render_menu_text(menu, renderer, canvas, modal_title,
+                       (float)x + 44.0f, (float)y + 10.0f,
+                       (int)width - 62, 8.2f, palette->modal_text) &&
+      render_menu_text(menu, renderer, canvas, modal_message,
+                       (float)x + 15.0f, (float)y + 29.0f,
+                       (int)width - 30, 6.1f, palette->modal_text) &&
       render_item_array(menu, renderer, canvas, context, items, palette);
 
   free(modal_title);
@@ -628,22 +711,12 @@ bool native_menu_renderer_render(NativeMenuRenderer *menu,
 
   bool visible = false;
   if (!get_bool(context, frame, "visible", &visible)) return false;
-  if (!visible) return true;
 
   char *locale = get_string(context, frame, "locale");
   char *color_scheme = get_string(context, frame, "colorScheme");
-  char *title = get_string(context, frame, "title");
-  char *panel_title = get_string(context, frame, "panelTitle");
-  char *panel_body = get_string(context, frame, "panelBody");
-  char *status = get_string(context, frame, "status");
-  if (!locale || !color_scheme || !title || !panel_title || !panel_body ||
-      !status) {
+  if (!locale || !color_scheme) {
     free(locale);
     free(color_scheme);
-    free(title);
-    free(panel_title);
-    free(panel_body);
-    free(status);
     return false;
   }
 
@@ -657,10 +730,6 @@ bool native_menu_renderer_render(NativeMenuRenderer *menu,
             SDL_GetError());
     free(locale);
     free(color_scheme);
-    free(title);
-    free(panel_title);
-    free(panel_body);
-    free(status);
     return false;
   }
 
@@ -668,44 +737,72 @@ bool native_menu_renderer_render(NativeMenuRenderer *menu,
   if (!begin_menu_canvas(renderer, &canvas)) {
     free(locale);
     free(color_scheme);
-    free(title);
-    free(panel_title);
-    free(panel_body);
-    free(status);
     return false;
   }
 
   SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-  bool ok = render_menu_chrome(menu, renderer, &canvas, &palette, title,
-                               panel_title, panel_body, status);
+  bool ok = true;
 
-  JSValue nav_items = JS_GetPropertyStr(context, frame, "navItems");
-  JSValue panel_items = JS_GetPropertyStr(context, frame, "panelItems");
-  if (ok) {
-    ok = !JS_IsException(nav_items) && !JS_IsException(panel_items) &&
-         render_item_array(menu, renderer, &canvas, context, nav_items,
-                           &palette) &&
-         render_item_array(menu, renderer, &canvas, context, panel_items,
-                           &palette);
+  if (!visible) {
+    JSValue trigger = JS_GetPropertyStr(context, frame, "trigger");
+    ok = !JS_IsException(trigger) && !JS_IsNull(trigger) &&
+         !JS_IsUndefined(trigger) &&
+         render_item(menu, renderer, &canvas, context, trigger, &palette);
+    JS_FreeValue(context, trigger);
+  } else {
+    char *product_name = get_string(context, frame, "productName");
+    char *title = get_string(context, frame, "title");
+    char *panel_kicker = get_string(context, frame, "panelKicker");
+    char *panel_title = get_string(context, frame, "panelTitle");
+    char *panel_body = get_string(context, frame, "panelBody");
+    char *panel_poster = get_string(context, frame, "panelPoster");
+    char *panel_help = get_string(context, frame, "panelHelp");
+    char *status = get_string(context, frame, "status");
+    char *navigation_hint = get_string(context, frame, "navigationHint");
+
+    if (!product_name || !title || !panel_kicker || !panel_title ||
+        !panel_body || !panel_poster || !panel_help || !status ||
+        !navigation_hint) {
+      ok = false;
+    } else {
+      ok = render_menu_chrome(
+          menu, renderer, &canvas, &palette, product_name, title, panel_kicker,
+          panel_title, panel_body, panel_poster, panel_help, status,
+          navigation_hint);
+    }
+
+    JSValue nav_items = JS_GetPropertyStr(context, frame, "navItems");
+    JSValue panel_items = JS_GetPropertyStr(context, frame, "panelItems");
+    if (ok) {
+      ok = !JS_IsException(nav_items) && !JS_IsException(panel_items) &&
+           render_item_array(menu, renderer, &canvas, context, nav_items,
+                             &palette) &&
+           render_item_array(menu, renderer, &canvas, context, panel_items,
+                             &palette);
+    }
+
+    JSValue modal = JS_GetPropertyStr(context, frame, "modal");
+    if (ok && !JS_IsNull(modal) && !JS_IsUndefined(modal)) {
+      ok = render_modal(menu, renderer, &canvas, context, modal, &palette);
+    }
+
+    JS_FreeValue(context, modal);
+    JS_FreeValue(context, nav_items);
+    JS_FreeValue(context, panel_items);
+    free(product_name);
+    free(title);
+    free(panel_kicker);
+    free(panel_title);
+    free(panel_body);
+    free(panel_poster);
+    free(panel_help);
+    free(status);
+    free(navigation_hint);
   }
 
-  JSValue modal = JS_GetPropertyStr(context, frame, "modal");
-  if (ok && !JS_IsNull(modal) && !JS_IsUndefined(modal)) {
-    ok = render_modal(menu, renderer, &canvas, context, modal, &palette);
-  }
-
-  JS_FreeValue(context, modal);
-  JS_FreeValue(context, nav_items);
-  JS_FreeValue(context, panel_items);
   SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
   bool restored = end_menu_canvas(renderer, &canvas);
-
   free(locale);
   free(color_scheme);
-  free(title);
-  free(panel_title);
-  free(panel_body);
-  free(status);
-
   return ok && restored;
 }
