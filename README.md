@@ -14,7 +14,7 @@
 
 <p align="center">
   <a href="https://github.com/santirodriguez/pikachu-volleyball/releases"><img alt="Linux AppImage" src="https://img.shields.io/badge/Linux-AppImage-F7C948?style=for-the-badge&logo=linux&logoColor=111827"></a>
-  <img alt="Candidate 3.0.1" src="https://img.shields.io/badge/Candidate-3.0.1-E63946?style=for-the-badge">
+  <img alt="Version 3.0.1" src="https://img.shields.io/badge/Version-3.0.1-E63946?style=for-the-badge">
   <img alt="Five languages" src="https://img.shields.io/badge/Languages-5-4EA8DE?style=for-the-badge">
 </p>
 
@@ -63,7 +63,7 @@ This edition is simply my way of looking after a game I remember fondly. The ori
 2. Download the latest `.AppImage` for `x86_64` and `SHA256SUMS.txt`.
 3. Verify the checksum, allow the AppImage to run as a program and open it.
 
-The latest published download and this branch's candidate are separate: [3.0.1 candidate notes](docs/releases/v3.0.1.md). Development candidates come from [Release Candidate Readiness](https://github.com/santirodriguez/pikachu-volleyball/actions/workflows/release-candidate-readiness.yml); preparing a candidate does not publish a release.
+See the [3.0.1 release notes](docs/releases/v3.0.1.md). Release candidates are built and validated by [Release Candidate Readiness](https://github.com/santirodriguez/pikachu-volleyball/actions/workflows/release-candidate-readiness.yml); publishing a GitHub Release triggers the definitive AppImage build and checksum attachment.
 
 ## Controls
 
